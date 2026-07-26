@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "dev.totem.vanillatweaks.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "AbstractFurnaceBlockEntityAccessor",
+    "ConcretePowderItemEntityMixin",
+    "HopperBlockEntityMixin",
+    "RecipeManagerMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

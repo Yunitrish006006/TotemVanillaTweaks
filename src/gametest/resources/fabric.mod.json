@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "totem-vanilla-tweaks-gametest",
+  "version": "1.0.0",
+  "name": "TotemVanillaTweaks GameTests",
+  "environment": "server",
+  "entrypoints": {
+    "fabric-gametest": [
+      "dev.totem.vanillatweaks.gametest.ConcretePowderItemHardeningGameTest",
+      "dev.totem.vanillatweaks.gametest.LecternGameplayGameTest",
+      "dev.totem.vanillatweaks.gametest.HopperFurnaceExperienceGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "*",
+    "totem-vanilla-tweaks": "*"
+  }
+}
