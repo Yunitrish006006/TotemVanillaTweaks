@@ -1,5 +1,7 @@
 package dev.totem.vanillatweaks;
 
+import dev.totem.vanillatweaks.bookshelf.BookshelfInventoryRule;
+import dev.totem.vanillatweaks.network.VanillaTweaksPayloadRegistration;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +13,8 @@ public final class TotemVanillaTweaks implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        VanillaTweaksPayloadRegistration.register();
+        BookshelfInventoryRule.register();
         LOGGER.info("TotemVanillaTweaks initialized without DeadRecall implementation dependency");
     }
 }

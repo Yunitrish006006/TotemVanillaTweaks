@@ -1,0 +1,10 @@
+{
+  "advancements.deadrecall.vanilla_tweaks_root.title": "Totem Vanilla Tweaks",
+  "advancements.deadrecall.vanilla_tweaks_root.description": "探索更貼心的原版便利功能。",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.title": "重新認識講台",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.description": "使用調整後的配方製作講台。",
+  "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
+  "key.deadrecall.sort_backpack": "整理背包",
+  "message.deadrecall.sort_backpack.success": "背包已整理！",
+  "message.deadrecall.sort_backpack.need_backpack": "請在容器介面中使用整理快捷鍵"
+}

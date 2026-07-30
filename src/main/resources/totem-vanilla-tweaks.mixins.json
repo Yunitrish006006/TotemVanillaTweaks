@@ -6,7 +6,8 @@
     "AbstractFurnaceBlockEntityAccessor",
     "ConcretePowderItemEntityMixin",
     "HopperBlockEntityMixin",
-    "RecipeManagerMixin"
+    "RecipeManagerMixin",
+    "StructureTemplateMixin"
   ],
   "client": [],
   "injectors": {

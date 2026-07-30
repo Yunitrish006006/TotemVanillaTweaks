@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.totem.vanillatweaks.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "OptionsMixin",
+    "AbstractContainerScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

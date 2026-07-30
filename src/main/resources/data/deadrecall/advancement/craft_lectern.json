@@ -1,0 +1,27 @@
+{
+  "parent": "deadrecall:vanilla_tweaks_root",
+  "criteria": {
+    "crafted_lectern": {
+      "conditions": {
+        "recipe_id": "minecraft:lectern"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_craft_lectern.description"
+    },
+    "icon": {
+      "id": "minecraft:lectern"
+    },
+    "title": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_craft_lectern.title"
+    }
+  },
+  "requirements": [
+    [
+      "crafted_lectern"
+    ]
+  ]
+}

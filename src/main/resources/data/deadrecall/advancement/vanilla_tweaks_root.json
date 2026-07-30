@@ -1,0 +1,27 @@
+{
+  "parent": "deadrecall:root",
+  "criteria": {
+    "ready": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "background": "minecraft:gui/advancements/backgrounds/stone",
+    "description": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_root.description"
+    },
+    "icon": {
+      "id": "minecraft:hopper"
+    },
+    "show_toast": false,
+    "title": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_root.title"
+    }
+  },
+  "requirements": [
+    [
+      "ready"
+    ]
+  ]
+}

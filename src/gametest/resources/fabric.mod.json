@@ -8,7 +8,9 @@
     "fabric-gametest": [
       "dev.totem.vanillatweaks.gametest.ConcretePowderItemHardeningGameTest",
       "dev.totem.vanillatweaks.gametest.LecternGameplayGameTest",
-      "dev.totem.vanillatweaks.gametest.HopperFurnaceExperienceGameTest"
+      "dev.totem.vanillatweaks.gametest.HopperFurnaceExperienceGameTest",
+      "dev.totem.vanillatweaks.gametest.ContainerSortGameTest",
+      "dev.totem.vanillatweaks.gametest.BookshelfInventoryRuleGameTest"
     ]
   },
   "depends": {
