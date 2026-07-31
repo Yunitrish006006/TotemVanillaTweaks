@@ -3,25 +3,25 @@
 TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容器整理、
 講台／書櫃規則、混凝土粉末硬化，以及漏斗取出熔爐成品時釋放經驗。
 
-目前候選版本為 **0.1.3**，精確搭配 TotemCore **0.2.0**。
+目前候選版本為 **0.1.4**，精確搭配 TotemCore **0.3.0**。
 
 ## 安裝
 
 Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
-2. TotemCore `0.2.0`
-3. TotemVanillaTweaks `0.1.3`
+2. TotemCore `0.3.0`
+3. TotemVanillaTweaks `0.1.4`
 
 | 項目 | 需求 |
 | --- | --- |
 | Minecraft | 26.2 |
 | Fabric Loader | 0.19.3+ |
 | Java | 25+ |
-| 必要 Totem 模組 | `totem-core =0.2.0` |
+| 必要 Totem 模組 | `totem-core =0.3.0` |
 
 Server 負責所有規則與整理 transaction；Client 模組提供整理按鍵與目標
-選擇。使用 DeadRecall 2.4.4 整合 JAR 時不要再安裝獨立
+選擇。使用 DeadRecall 2.4.6 整合 JAR 時不要再安裝獨立
 TotemVanillaTweaks。
 
 ## 容器整理
@@ -94,6 +94,6 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 ./gradlew build
 ```
 
-0.1.3 已通過 13/13 required Fabric GameTests，涵蓋 lectern recipe、
+0.1.4 已通過 13/13 required Fabric GameTests，涵蓋 lectern recipe、
 bookshelf inventory／structure、混凝土粉末、hopper furnace XP 與兩側
 容器整理。所有權與驗證契約見 [EXTRACTION.md](EXTRACTION.md)。
