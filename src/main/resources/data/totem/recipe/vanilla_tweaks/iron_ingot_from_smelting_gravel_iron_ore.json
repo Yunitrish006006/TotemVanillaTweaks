@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "category": "misc",
+  "cookingtime": 200,
+  "experience": 0.25,
+  "group": "gravel_iron_ore",
+  "ingredient": "totem:vanilla_tweaks/gravel_iron_ore",
+  "result": {
+    "id": "minecraft:iron_ingot"
+  }
+}

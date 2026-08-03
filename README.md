@@ -3,7 +3,7 @@
 TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容器整理、
 講台／書櫃規則、混凝土粉末硬化，以及漏斗取出熔爐成品時釋放經驗。
 
-目前候選版本為 **0.1.5**，精確搭配 TotemCore **0.4.0**。
+目前候選版本為 **0.1.6**，精確搭配 TotemCore **0.4.0**。
 
 ## 安裝
 
@@ -11,7 +11,7 @@ Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
 2. TotemCore `0.4.0`
-3. TotemVanillaTweaks `0.1.5`
+3. TotemVanillaTweaks `0.1.6`
 
 | 項目 | 需求 |
 | --- | --- |
@@ -94,6 +94,8 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 ./gradlew build
 ```
 
-0.1.5 已通過 13/13 required Fabric GameTests，涵蓋 lectern recipe、
-bookshelf inventory／structure、混凝土粉末、hopper furnace XP 與兩側
-容器整理。所有權與驗證契約見 [EXTRACTION.md](EXTRACTION.md)。
+0.1.6 加入 canonical `totem:vanilla_tweaks/*` 的礫石鐵礦、煙燻腐肉與
+熟河豚，並通過 16/16 required Fabric GameTests，涵蓋配方、戰利品、
+標籤、lectern recipe、bookshelf inventory／structure、混凝土粉末、hopper
+furnace XP 與兩側容器整理。所有權與驗證契約見
+[EXTRACTION.md](EXTRACTION.md)。
