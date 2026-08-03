@@ -1,0 +1,27 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_rotten_flesh": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:rotten_flesh"
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "totem:vanilla_tweaks/smoked_rotten_flesh_from_smoker"
+      }
+    }
+  },
+  "requirements": [
+    ["has_the_recipe", "has_rotten_flesh"]
+  ],
+  "rewards": {
+    "recipes": ["totem:vanilla_tweaks/smoked_rotten_flesh_from_smoker"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_gravel_iron_ore": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "totem:vanilla_tweaks/gravel_iron_ore"
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "totem:vanilla_tweaks/iron_ingot_from_blasting_gravel_iron_ore"
+      }
+    }
+  },
+  "requirements": [
+    ["has_the_recipe", "has_gravel_iron_ore"]
+  ],
+  "rewards": {
+    "recipes": ["totem:vanilla_tweaks/iron_ingot_from_blasting_gravel_iron_ore"]
+  }
+}

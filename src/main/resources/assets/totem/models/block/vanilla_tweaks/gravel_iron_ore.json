@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "totem:block/vanilla_tweaks/gravel_iron_ore"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_pufferfish": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:pufferfish"
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "totem:vanilla_tweaks/cooked_pufferfish_from_smoker"
+      }
+    }
+  },
+  "requirements": [
+    ["has_the_recipe", "has_pufferfish"]
+  ],
+  "rewards": {
+    "recipes": ["totem:vanilla_tweaks/cooked_pufferfish_from_smoker"]
+  }
+}
