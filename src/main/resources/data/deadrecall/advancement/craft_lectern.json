@@ -1,5 +1,5 @@
 {
-  "parent": "deadrecall:vanilla_tweaks_root",
+  "parent": "deadrecall:vanilla_tweaks_manual",
   "criteria": {
     "crafted_lectern": {
       "conditions": {

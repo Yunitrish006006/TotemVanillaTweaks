@@ -1,0 +1,24 @@
+{
+  "parent": "deadrecall:vanilla_tweaks_root",
+  "criteria": {
+    "has_manual": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_manual.description"
+    },
+    "icon": {
+      "id": "minecraft:written_book"
+    },
+    "title": {
+      "translate": "advancements.deadrecall.vanilla_tweaks_manual.title"
+    }
+  },
+  "requirements": [
+    [
+      "has_manual"
+    ]
+  ]
+}
