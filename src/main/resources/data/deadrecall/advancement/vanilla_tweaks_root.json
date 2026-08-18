@@ -1,8 +1,11 @@
 {
   "parent": "deadrecall:root",
   "criteria": {
-    "ready": {
-      "trigger": "minecraft:tick"
+    "crafted_lectern": {
+      "conditions": {
+        "recipe_id": "minecraft:lectern"
+      },
+      "trigger": "minecraft:recipe_crafted"
     }
   },
   "display": {
@@ -12,16 +15,16 @@
       "translate": "advancements.deadrecall.vanilla_tweaks_root.description"
     },
     "icon": {
-      "id": "minecraft:hopper"
+      "id": "minecraft:lectern"
     },
-    "show_toast": false,
+    "show_toast": true,
     "title": {
       "translate": "advancements.deadrecall.vanilla_tweaks_root.title"
     }
   },
   "requirements": [
     [
-      "ready"
+      "crafted_lectern"
     ]
   ]
 }

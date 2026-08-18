@@ -11,7 +11,8 @@
       "dev.totem.vanillatweaks.gametest.HopperFurnaceExperienceGameTest",
       "dev.totem.vanillatweaks.gametest.ContainerSortGameTest",
       "dev.totem.vanillatweaks.gametest.BookshelfInventoryRuleGameTest",
-      "dev.totem.vanillatweaks.gametest.CanonicalContentGameTest"
+      "dev.totem.vanillatweaks.gametest.CanonicalContentGameTest",
+      "dev.totem.vanillatweaks.gametest.VanillaTweaksManualGameTest"
     ]
   },
   "depends": {
