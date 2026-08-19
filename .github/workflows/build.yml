@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: c39da3cdc3b4eff16f63798dc3eae4a49e41d105
+          ref: 6f0d146379c3e0d7ed8fc6a665fc896c877afb90
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -41,7 +41,7 @@ jobs:
           chmod +x .lockstep/TotemCore/gradlew gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test -n "$core_version"
+          test "$core_version" = '0.6.1'
           test -f ".lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
 
       - name: Compile and test VanillaTweaks
