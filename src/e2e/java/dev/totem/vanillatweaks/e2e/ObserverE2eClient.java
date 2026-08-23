@@ -7,7 +7,10 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
@@ -20,9 +23,11 @@ import java.nio.file.Path;
 public final class ObserverE2eClient implements ClientModInitializer {
     private static final Class<?> CLIENT = ObserverUiClient.class;
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 120;
+    private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
     private static int ticks;
+    private static boolean connectionStarted;
     private static boolean targetReady;
     private static boolean targetCaptureSeen;
     private static boolean targetScreenOpened;
@@ -54,9 +59,14 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 failAndStop(minecraft, "Timed out after " + CLIENT_TIMEOUT_TICKS + " client ticks");
                 return;
             }
+
             if (minecraft.player == null || minecraft.level == null) {
+                if (!connectionStarted && ticks >= 5) {
+                    connectToDedicatedServer(minecraft);
+                }
                 return;
             }
+
             if (role.equals("target")) {
                 tickTarget(minecraft);
             } else {
@@ -65,6 +75,21 @@ public final class ObserverE2eClient implements ClientModInitializer {
         } catch (Throwable error) {
             failAndStop(minecraft, error.toString());
         }
+    }
+
+    private static void connectToDedicatedServer(Minecraft minecraft) {
+        connectionStarted = true;
+        ServerData serverData = new ServerData(
+                "Totem Observer E2E",
+                E2E_SERVER.toString(),
+                ServerData.Type.OTHER
+        );
+        Screen parent = minecraft.gui.screen();
+        ConnectScreen.startConnecting(parent, minecraft, E2E_SERVER, serverData, false, null);
+        ObserverE2eCommon.marker(
+                role + "-connect-started.txt",
+                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570.\n"
+        );
     }
 
     private static void tickTarget(Minecraft minecraft) {
