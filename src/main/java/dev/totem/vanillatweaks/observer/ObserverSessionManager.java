@@ -20,7 +20,9 @@ import java.util.UUID;
 /** Server-authoritative observer-to-target relationships and UI frame relay. */
 public final class ObserverSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
+    private static final long MIN_NEW_FRAME_INTERVAL_NANOS = 250_000_000L;
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
+    private static final Map<UUID, FrameGate> FRAME_GATE_BY_TARGET = new HashMap<>();
 
     private ObserverSessionManager() {
     }
@@ -67,6 +69,7 @@ public final class ObserverSessionManager {
         ServerPlayNetworking.send(observer,
                 new ObserverPayloads.Session(true, target.getUUID(), target.getGameProfile().name()));
         if (observerCount(target.getUUID()) == 1) {
+            FRAME_GATE_BY_TARGET.remove(target.getUUID());
             ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(
                     true,
                     ObserverFrameRules.MAX_WIDTH,
@@ -93,6 +96,7 @@ public final class ObserverSessionManager {
         }
         sendInactive(observer);
         if (observerCount(targetId) == 0) {
+            FRAME_GATE_BY_TARGET.remove(targetId);
             MinecraftServer server = observer.level().getServer();
             ServerPlayer target = server.getPlayerList().getPlayer(targetId);
             if (target != null && ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
@@ -112,7 +116,9 @@ public final class ObserverSessionManager {
     public static void acceptFrameChunk(ServerPlayer target, ObserverPayloads.FrameChunk payload) {
         if (!ObserverFrameRules.validChunk(
                 payload.chunkIndex(), payload.chunkCount(), payload.frameWidth(), payload.frameHeight(),
-                payload.sourceWidth(), payload.sourceHeight(), payload.data().length)) {
+                payload.sourceWidth(), payload.sourceHeight(), payload.data().length)
+                || observerCount(target.getUUID()) == 0
+                || !acceptFrameId(target.getUUID(), payload.frameId())) {
             return;
         }
         forEachObserver(target.level().getServer(), target.getUUID(), observer ->
@@ -125,6 +131,23 @@ public final class ObserverSessionManager {
 
     public static void acceptStop(ServerPlayer observer) {
         stop(observer, true);
+    }
+
+    private static boolean acceptFrameId(UUID targetId, long frameId) {
+        long now = System.nanoTime();
+        FrameGate gate = FRAME_GATE_BY_TARGET.get(targetId);
+        if (gate == null) {
+            FRAME_GATE_BY_TARGET.put(targetId, new FrameGate(frameId, now));
+            return true;
+        }
+        if (frameId == gate.frameId()) {
+            return true;
+        }
+        if (frameId < gate.frameId() || now - gate.acceptedAtNanos() < MIN_NEW_FRAME_INTERVAL_NANOS) {
+            return false;
+        }
+        FRAME_GATE_BY_TARGET.put(targetId, new FrameGate(frameId, now));
+        return true;
     }
 
     private static void cleanup(MinecraftServer server) {
@@ -143,6 +166,7 @@ public final class ObserverSessionManager {
     private static void removeOfflineObserver(MinecraftServer server, UUID observerId, UUID targetId) {
         TARGET_BY_OBSERVER.remove(observerId);
         if (targetId != null && observerCount(targetId) == 0) {
+            FRAME_GATE_BY_TARGET.remove(targetId);
             ServerPlayer target = server.getPlayerList().getPlayer(targetId);
             if (target != null && ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
                 ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(false, 0, 0, 0));
@@ -177,5 +201,8 @@ public final class ObserverSessionManager {
         if (ServerPlayNetworking.canSend(observer, ObserverPayloads.Session.TYPE)) {
             ServerPlayNetworking.send(observer, new ObserverPayloads.Session(false, EMPTY_TARGET, ""));
         }
+    }
+
+    private record FrameGate(long frameId, long acceptedAtNanos) {
     }
 }
