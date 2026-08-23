@@ -15,7 +15,9 @@ public final class VanillaTweaksManual {
             "book.deadrecall.vanilla_tweaks_manual.title",
             List.of(
                     "book.deadrecall.vanilla_tweaks_manual.page.1",
-                    "book.deadrecall.vanilla_tweaks_manual.page.2"
+                    "book.deadrecall.vanilla_tweaks_manual.page.2",
+                    "book.deadrecall.vanilla_tweaks_manual.page.3",
+                    "book.deadrecall.vanilla_tweaks_manual.page.4"
             )
     );
 
