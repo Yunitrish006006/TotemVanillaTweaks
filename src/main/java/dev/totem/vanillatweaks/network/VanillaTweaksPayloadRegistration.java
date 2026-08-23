@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.network;
 
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
+import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
@@ -17,6 +18,30 @@ public final class VanillaTweaksPayloadRegistration {
                 SortBackpackPayload.TYPE,
                 (payload, context) -> context.server().execute(() ->
                         ContainerSortService.sortOpenContainer(context.player(), payload.target()))
+        );
+
+        PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.ScreenState.TYPE, ObserverPayloads.ScreenState.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.FrameChunk.TYPE, ObserverPayloads.FrameChunk.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.Stop.TYPE, ObserverPayloads.Stop.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.CaptureControl.TYPE, ObserverPayloads.CaptureControl.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.Session.TYPE, ObserverPayloads.Session.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.ScreenRelay.TYPE, ObserverPayloads.ScreenRelay.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.FrameRelay.TYPE, ObserverPayloads.FrameRelay.CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverPayloads.ScreenState.TYPE,
+                (payload, context) -> context.server().execute(() ->
+                        ObserverSessionManager.acceptScreenState(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverPayloads.FrameChunk.TYPE,
+                (payload, context) -> context.server().execute(() ->
+                        ObserverSessionManager.acceptFrameChunk(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverPayloads.Stop.TYPE,
+                (payload, context) -> context.server().execute(() ->
+                        ObserverSessionManager.acceptStop(context.player()))
         );
     }
 }
