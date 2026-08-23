@@ -1,0 +1,6 @@
+{
+  "version": "0.1.14",
+  "release_ref": "e81b86615583d591580a146f48b77aa57f37f769",
+  "dry_run": false,
+  "reason": "Publish the last stable TotemVanillaTweaks release before Observer View."
+}
