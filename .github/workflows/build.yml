@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava --no-daemon --stacktrace
+          ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
@@ -108,7 +108,9 @@ jobs:
           }
           trap cleanup EXIT
 
-          ./gradlew -PtotemCoreJar="$core_jar" runE2eServer --no-daemon --stacktrace > build/e2e/server.log 2>&1 &
+          ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-server" \
+            runE2eServer --no-daemon --stacktrace > build/e2e/server.log 2>&1 &
           server_pid=$!
 
           ready=false
@@ -130,9 +132,37 @@ jobs:
             exit 1
           fi
 
-          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runE2eTarget --no-daemon --stacktrace > build/e2e/target.log 2>&1 &
+          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-target" \
+            runE2eTarget --no-daemon --stacktrace > build/e2e/target.log 2>&1 &
           target_pid=$!
-          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runE2eObserver --no-daemon --stacktrace > build/e2e/observer.log 2>&1 &
+
+          target_ready=false
+          for _ in $(seq 1 180); do
+            if compgen -G "$results/failure-*.txt" >/dev/null; then
+              cat "$results"/failure-*.txt >&2 || true
+              exit 1
+            fi
+            if [[ -f "$results/target-ready.txt" && -f "$results/target-screen-open.txt" ]]; then
+              target_ready=true
+              break
+            fi
+            if ! kill -0 "$target_pid" 2>/dev/null; then
+              echo 'E2E Target exited before entering the dedicated-server world.' >&2
+              tail -n 200 build/e2e/target.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$target_ready" != true ]]; then
+            echo 'Timed out waiting for E2E Target to enter the world and open its UI.' >&2
+            tail -n 200 build/e2e/target.log >&2 || true
+            exit 1
+          fi
+
+          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-observer" \
+            runE2eObserver --no-daemon --stacktrace > build/e2e/observer.log 2>&1 &
           observer_pid=$!
 
           complete=false
@@ -144,8 +174,10 @@ jobs:
             fi
 
             if [[ -f "$results/server-session-started.txt" \
+               && -f "$results/target-ready.txt" \
                && -f "$results/target-capture-enabled.txt" \
                && -f "$results/observer-frame-ok.txt" \
+               && -f "$results/observer-screenshot-saved.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" \
@@ -186,7 +218,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM E2E passed.' \
-            'Verified client state isolation, real framebuffer relay, Mirror render, Stop, CaptureControl(false), and server cleanup.'
+            'Verified production session start, client state isolation, real framebuffer relay, Mirror render, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
