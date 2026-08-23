@@ -48,10 +48,8 @@ loom {
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
             programArg '--username'
             programArg 'Target'
-            programArg '--server'
-            programArg '127.0.0.1'
-            programArg '--port'
-            programArg '25570'
+            programArg '--quickPlayMultiplayer'
+            programArg '127.0.0.1:25570'
         }
         e2eObserver {
             client()
@@ -63,10 +61,8 @@ loom {
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
             programArg '--username'
             programArg 'Observer'
-            programArg '--server'
-            programArg '127.0.0.1'
-            programArg '--port'
-            programArg '25570'
+            programArg '--quickPlayMultiplayer'
+            programArg '127.0.0.1:25570'
         }
     }
 }
