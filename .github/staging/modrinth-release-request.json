@@ -2,6 +2,6 @@
   "version": "0.1.14",
   "release_ref": "e81b86615583d591580a146f48b77aa57f37f769",
   "dry_run": false,
-  "request_id": "modrinth-0.1.14-20260824-0310",
+  "request_id": "modrinth-0.1.14-20260824-0318",
   "reason": "Publish the last stable TotemVanillaTweaks release before Observer View."
 }
