@@ -264,8 +264,20 @@ public final class ObserverUiClient {
 
     private static void installFrameTexture(byte[] png) {
         Minecraft minecraft = Minecraft.getInstance();
+        NativeImage image = null;
+        boolean installed = false;
         try {
-            NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
+            image = NativeImage.read(new ByteArrayInputStream(png));
+            if (image.getWidth() != frameWidth
+                    || image.getHeight() != frameHeight
+                    || image.getWidth() > ObserverFrameRules.MAX_WIDTH
+                    || image.getHeight() > ObserverFrameRules.MAX_HEIGHT) {
+                TotemVanillaTweaks.LOGGER.warn(
+                        "Rejected observer UI frame with decoded size {}x{} (declared {}x{})",
+                        image.getWidth(), image.getHeight(), frameWidth, frameHeight
+                );
+                return;
+            }
             if (textureRegistered) {
                 minecraft.getTextureManager().release(FRAME_TEXTURE);
             }
@@ -274,8 +286,13 @@ public final class ObserverUiClient {
                     new DynamicTexture(FRAME_TEXTURE::toString, image)
             );
             textureRegistered = true;
+            installed = true;
         } catch (IOException error) {
             TotemVanillaTweaks.LOGGER.warn("Failed to decode observer UI frame", error);
+        } finally {
+            if (!installed && image != null) {
+                image.close();
+            }
         }
     }
 
