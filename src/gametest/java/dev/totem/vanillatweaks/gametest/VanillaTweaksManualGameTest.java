@@ -20,8 +20,8 @@ public final class VanillaTweaksManualGameTest {
             helper.fail("VanillaTweaks manual section was not registered");
             return;
         }
-        if (section.order() != 700 || section.pageKeys().size() != 4) {
-            helper.fail("VanillaTweaks manual section did not include the skeleton combat reference pages");
+        if (section.order() != 700 || section.pageKeys().size() != 3) {
+            helper.fail("VanillaTweaks manual section did not include the skeleton quiver reference page");
             return;
         }
         var manual = TotemManualAssembler.create(List.of(section));
