@@ -23,9 +23,11 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
     private static String role;
     private static int ticks;
+    private static boolean targetReady;
     private static boolean targetCaptureSeen;
     private static boolean targetScreenOpened;
     private static boolean observerFrameSeen;
+    private static volatile boolean observerScreenshotSaved;
     private static boolean observerStopRequested;
     private static boolean finished;
 
@@ -73,6 +75,20 @@ public final class ObserverE2eClient implements ClientModInitializer {
             throw new AssertionError("Target JVM incorrectly installed observer mirror texture");
         }
 
+        if (!targetReady) {
+            targetReady = true;
+            ObserverE2eCommon.marker(
+                    "target-ready.txt",
+                    "Target joined the dedicated server with observer-only client state disabled.\n"
+            );
+        }
+
+        if (!targetScreenOpened) {
+            minecraft.setScreenAndShow(new TargetScreen());
+            targetScreenOpened = true;
+            ObserverE2eCommon.marker("target-screen-open.txt", "Target opened the E2E source Screen.\n");
+        }
+
         boolean captureEnabled = getBoolean("captureEnabled");
         if (captureEnabled && !targetCaptureSeen) {
             targetCaptureSeen = true;
@@ -82,16 +98,13 @@ public final class ObserverE2eClient implements ClientModInitializer {
             );
         }
 
-        if (targetCaptureSeen && !targetScreenOpened) {
-            minecraft.setScreenAndShow(new TargetScreen());
-            targetScreenOpened = true;
-            ObserverE2eCommon.marker("target-screen-open.txt", "Target opened the E2E source Screen.\n");
-        }
-
         if (targetCaptureSeen && !captureEnabled) {
+            if (getLong("nextFrameId") <= 0L) {
+                throw new AssertionError("Target capture was enabled and then stopped without sending any frame");
+            }
             ObserverE2eCommon.marker(
                     "target-complete.txt",
-                    "Target received CaptureControl(false) after observer stopped.\n"
+                    "Target sent at least one framebuffer and received CaptureControl(false) after observer stopped.\n"
             );
             finished = true;
             stopMinecraft(minecraft);
@@ -131,7 +144,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             saveMirrorScreenshot(minecraft);
         }
 
-        if (observerFrameSeen && !observerStopRequested) {
+        if (observerFrameSeen && observerScreenshotSaved && !observerStopRequested) {
             Screen current = minecraft.gui.screen();
             if (current == null || !current.getClass().getName().contains("ObserverMirrorScreen")) {
                 throw new AssertionError("Observer mirror closed before production Stop was requested");
@@ -169,6 +182,11 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 Path output = ObserverE2eCommon.resultsDir().resolve("observer-two-client-e2e.png");
                 Files.createDirectories(output.getParent());
                 owned.writeToFile(output);
+                observerScreenshotSaved = true;
+                ObserverE2eCommon.marker(
+                        "observer-screenshot-saved.txt",
+                        "Observer Mirror screenshot was flushed to disk before Stop.\n"
+                );
             } catch (IOException error) {
                 ObserverE2eCommon.fail("observer", "Failed to save E2E screenshot: " + error);
             }
