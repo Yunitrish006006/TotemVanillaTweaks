@@ -93,7 +93,8 @@ public final class ObserverSessionManager {
         }
         sendInactive(observer);
         if (observerCount(targetId) == 0) {
-            ServerPlayer target = observer.server.getPlayerList().getPlayer(targetId);
+            MinecraftServer server = observer.level().getServer();
+            ServerPlayer target = server.getPlayerList().getPlayer(targetId);
             if (target != null && ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
                 ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(false, 0, 0, 0));
             }
@@ -102,7 +103,7 @@ public final class ObserverSessionManager {
     }
 
     public static void acceptScreenState(ServerPlayer target, ObserverPayloads.ScreenState payload) {
-        forEachObserver(target.server, target.getUUID(), observer ->
+        forEachObserver(target.level().getServer(), target.getUUID(), observer ->
                 ServerPlayNetworking.send(observer, new ObserverPayloads.ScreenRelay(
                         target.getUUID(), payload.open(), payload.screenClass(), payload.title()
                 )));
@@ -114,7 +115,7 @@ public final class ObserverSessionManager {
                 payload.sourceWidth(), payload.sourceHeight(), payload.data().length)) {
             return;
         }
-        forEachObserver(target.server, target.getUUID(), observer ->
+        forEachObserver(target.level().getServer(), target.getUUID(), observer ->
                 ServerPlayNetworking.send(observer, new ObserverPayloads.FrameRelay(
                         target.getUUID(), payload.frameId(), payload.chunkIndex(), payload.chunkCount(),
                         payload.frameWidth(), payload.frameHeight(), payload.sourceWidth(), payload.sourceHeight(),
