@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-and-gametest:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Check out VanillaTweaks
         uses: actions/checkout@v4
@@ -59,3 +59,19 @@ jobs:
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
+
+      - name: Run client GameTests
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
+
+      - name: Upload client GameTest screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-client-gametest-screenshots
+          path: run/screenshots/
+          if-no-files-found: warn
