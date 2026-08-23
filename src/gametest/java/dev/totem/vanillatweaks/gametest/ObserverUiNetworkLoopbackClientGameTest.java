@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.gametest;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.observer.ObserverFrameRules;
@@ -7,14 +8,16 @@ import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -25,8 +28,11 @@ import java.util.UUID;
  * Runs the production Observer View payload path in both directions over a real integrated-server connection.
  *
  * <p>The test deliberately injects a self-observe relationship on the server, bypassing only the command's
- * self-observe guard. Everything after that point is production networking: target capture -> server receiver ->
- * frame gate -> server relay -> client assembly -> DynamicTexture -> mirror screen -> Stop payload cleanup.
+ * self-observe guard. A real target and observer normally have independent client state. Because this loopback has
+ * only one client process, automatic capture ticks are disabled after CaptureControl is verified; otherwise the
+ * mirror screen itself would immediately be reported as ScreenState(false) by the target side. The test then sends
+ * ScreenState and a frame through the production encoder/network stack and verifies the complete server relay,
+ * client assembly, DynamicTexture render, Stop payload, and cleanup path.
  */
 public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClientGameTest {
     private static final Class<?> CLIENT = ObserverUiClient.class;
@@ -72,21 +78,18 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     && getClientBoolean("captureEnabled")
                     && expectedTarget.equals(getClientObject("targetId")), 100);
 
-            context.setScreen(() -> new Screen(Component.literal("Observer Network Loopback Source")) {
-                @Override
-                public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-                    graphics.fill(0, 0, width, height, 0xFF172433);
-                    graphics.fill(width / 5, height / 4, width * 4 / 5, height * 3 / 4, 0xFF3D6B91);
-                    graphics.text(font, Component.literal("Observer network loopback source"), 12, 12, 0xFFFFFFFF);
-                }
-
-                @Override
-                public boolean isPauseScreen() {
-                    return false;
-                }
+            // A one-process loopback cannot leave the automatic target capture tick enabled after the mirror opens:
+            // ObserverMirrorScreen is intentionally excluded from capture, which would feed ScreenState(false) back
+            // into this same observer. Real target/observer clients do not share this state.
+            context.runOnClient(minecraft -> setClientBoolean("captureEnabled", false));
+            context.runOnClient(minecraft -> {
+                ClientPlayNetworking.send(new ObserverPayloads.ScreenState(
+                        true,
+                        "gametest.ObserverNetworkLoopbackSource",
+                        "Observer Network Loopback Source"
+                ));
+                encodeAndSendTestFrame(minecraft);
             });
-            context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && "Observer Network Loopback Source".equals(minecraft.gui.screen().getTitle().getString()));
 
             context.waitFor(minecraft -> getClientBoolean("textureRegistered")
                     && getClientLong("lastFrameId") >= 0L
@@ -114,11 +117,15 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     "observer-ui-network-loopback.png"
             );
 
+            // Restore the target-side enabled state immediately before stopping, so the server's real
+            // CaptureControl(false) response must be observed for this test to finish.
+            context.runOnClient(minecraft -> setClientBoolean("captureEnabled", true));
             context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+
+            context.waitFor(minecraft -> !getClientBoolean("sessionActive"), 100);
+            context.waitFor(minecraft -> !getClientBoolean("captureEnabled"), 100);
+            context.waitFor(minecraft -> !getClientBoolean("textureRegistered"), 100);
             context.waitForScreen(null);
-            context.waitFor(minecraft -> !getClientBoolean("sessionActive")
-                    && !getClientBoolean("captureEnabled")
-                    && !getClientBoolean("textureRegistered"), 100);
 
             boolean serverCleanedUp = singleplayer.getServer().computeOnServer(server ->
                     !targetMap().containsKey(expectedTarget) && !frameGateMap().containsKey(expectedTarget));
@@ -129,6 +136,31 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             cleanupServer(singleplayer, playerId);
             forceClientCleanup(context);
             singleplayer.close();
+        }
+    }
+
+    private static void encodeAndSendTestFrame(Minecraft minecraft) {
+        try (NativeImage image = new NativeImage(160, 90, false)) {
+            for (int y = 0; y < image.getHeight(); y++) {
+                for (int x = 0; x < image.getWidth(); x++) {
+                    boolean checker = ((x / 10) + (y / 10)) % 2 == 0;
+                    image.setPixel(x, y, checker ? 0xFF3D6B91 : 0xFF172433);
+                }
+            }
+            Method method = CLIENT.getDeclaredMethod("encodeAndSendFrame", Minecraft.class, NativeImage.class);
+            method.setAccessible(true);
+            method.invoke(null, minecraft, image);
+        } catch (InvocationTargetException error) {
+            Throwable cause = error.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error fatal) {
+                throw fatal;
+            }
+            throw new RuntimeException("Production Observer frame encoder failed", cause);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to invoke ObserverUiClient.encodeAndSendFrame", error);
         }
     }
 
@@ -251,7 +283,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
 
     private static void invokeClient(String name) {
         try {
-            var method = CLIENT.getDeclaredMethod(name);
+            Method method = CLIENT.getDeclaredMethod(name);
             method.setAccessible(true);
             method.invoke(null);
         } catch (ReflectiveOperationException error) {
