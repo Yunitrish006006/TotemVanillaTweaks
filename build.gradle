@@ -14,11 +14,11 @@ def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
 
 sourceSets {
     e2e {
-        // Reuse production bytecode and dependency configurations, but do not merge
-        // src/main/resources into the E2E resource output. Loom loads the main mod
-        // source set separately, so this avoids a duplicate fabric.mod.json.
+        // Reuse production bytecode and dependency configurations without merging main
+        // resources into processE2eResources. At runtime, main.output is kept as a separate
+        // classpath root so Fabric Loader can discover the real production fabric.mod.json.
         compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
-        runtimeClasspath += output + sourceSets.main.output.classesDirs + configurations.runtimeClasspath
+        runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
     }
 }
 
@@ -179,6 +179,23 @@ tasks.matching { task ->
     ]
 }.configureEach {
     dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
+}
+
+tasks.named('runE2eServer').configure {
+    doFirst {
+        File dir = file('build/e2e/server')
+        dir.mkdirs()
+        new File(dir, 'eula.txt').text = 'eula=true\n'
+        new File(dir, 'server.properties').text = '''server-port=25570
+online-mode=false
+enforce-secure-profile=false
+spawn-protection=0
+view-distance=2
+simulation-distance=2
+max-players=4
+motd=Totem Observer E2E
+'''
+    }
 }
 
 java {
