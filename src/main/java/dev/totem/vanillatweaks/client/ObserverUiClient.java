@@ -184,6 +184,8 @@ public final class ObserverUiClient {
             output = scaled;
         }
 
+        int encodedWidth = output.getWidth();
+        int encodedHeight = output.getHeight();
         byte[] png;
         Path temp = Files.createTempFile("totem-observer-", ".png");
         try {
@@ -209,8 +211,6 @@ public final class ObserverUiClient {
         int windowHeight = Math.max(1, minecraft.getWindow().getScreenHeight());
         int mouseX = (int) Math.round(minecraft.mouseHandler.xpos());
         int mouseY = (int) Math.round(minecraft.mouseHandler.ypos());
-        int encodedWidth = output.getWidth();
-        int encodedHeight = output.getHeight();
 
         for (int index = 0; index < chunkCount; index++) {
             int from = index * ObserverFrameRules.CHUNK_BYTES;
