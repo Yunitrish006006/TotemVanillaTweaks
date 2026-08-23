@@ -8,7 +8,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
-/** Integration coverage for the recovered VanillaTweaks section in the shared Totem Manual. */
+/** Integration coverage for the VanillaTweaks section in the shared Totem Manual. */
 public final class VanillaTweaksManualGameTest {
     private static final Identifier SECTION_ID =
             Identifier.fromNamespaceAndPath("totem", "vanilla_tweaks/manual");
@@ -20,8 +20,8 @@ public final class VanillaTweaksManualGameTest {
             helper.fail("VanillaTweaks manual section was not registered");
             return;
         }
-        if (section.order() != 700 || section.pageKeys().size() != 2) {
-            helper.fail("VanillaTweaks manual section metadata did not match the recovered 0.1.8 contract");
+        if (section.order() != 700 || section.pageKeys().size() != 4) {
+            helper.fail("VanillaTweaks manual section did not include the skeleton combat reference pages");
             return;
         }
         var manual = TotemManualAssembler.create(List.of(section));
