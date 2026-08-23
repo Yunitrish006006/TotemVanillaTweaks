@@ -25,6 +25,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 120;
     private static final int MAX_CONNECTION_ATTEMPTS = 5;
     private static final int RECONNECT_DELAY_TICKS = 20 * 2;
+    private static final int MIRROR_SETTLE_TICKS = 20;
     private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
@@ -36,6 +37,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean targetCaptureSeen;
     private static boolean targetScreenOpened;
     private static boolean observerFrameSeen;
+    private static int observerMirrorStableTicks;
+    private static boolean observerScreenshotRequested;
     private static volatile boolean observerScreenshotSaved;
     private static boolean observerStopRequested;
     private static boolean finished;
@@ -196,11 +199,28 @@ public final class ObserverE2eClient implements ClientModInitializer {
             }
 
             observerFrameSeen = true;
+            observerMirrorStableTicks = 0;
             ObserverE2eCommon.marker(
                     "observer-frame-ok.txt",
                     "Observer received and installed a real relayed Target framebuffer.\n"
             );
-            saveMirrorScreenshot(minecraft);
+        }
+
+        if (observerFrameSeen && !observerScreenshotRequested) {
+            if (sessionActive && mirrorOpen && textureRegistered && getBoolean("remoteScreenOpen")) {
+                observerMirrorStableTicks++;
+                if (observerMirrorStableTicks >= MIRROR_SETTLE_TICKS) {
+                    observerScreenshotRequested = true;
+                    ObserverE2eCommon.marker(
+                            "observer-mirror-settled.txt",
+                            "Observer Mirror remained open with a live relayed texture for "
+                                    + MIRROR_SETTLE_TICKS + " client ticks before capture.\n"
+                    );
+                    saveMirrorScreenshot(minecraft);
+                }
+            } else {
+                observerMirrorStableTicks = 0;
+            }
         }
 
         if (observerFrameSeen && observerScreenshotSaved && !observerStopRequested) {
@@ -244,7 +264,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 observerScreenshotSaved = true;
                 ObserverE2eCommon.marker(
                         "observer-screenshot-saved.txt",
-                        "Observer Mirror screenshot was flushed to disk before Stop.\n"
+                        "Observer Mirror screenshot was flushed to disk after the settled mirror gate.\n"
                 );
             } catch (IOException error) {
                 ObserverE2eCommon.fail("observer", "Failed to save E2E screenshot: " + error);
