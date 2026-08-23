@@ -118,7 +118,7 @@ public final class ObserverSessionManager {
                 payload.chunkIndex(), payload.chunkCount(), payload.frameWidth(), payload.frameHeight(),
                 payload.sourceWidth(), payload.sourceHeight(), payload.data().length)
                 || observerCount(target.getUUID()) == 0
-                || !acceptFrameId(target.getUUID(), payload.frameId())) {
+                || !acceptFrameChunk(target.getUUID(), payload)) {
             return;
         }
         forEachObserver(target.level().getServer(), target.getUUID(), observer ->
@@ -133,21 +133,23 @@ public final class ObserverSessionManager {
         stop(observer, true);
     }
 
-    private static boolean acceptFrameId(UUID targetId, long frameId) {
+    private static boolean acceptFrameChunk(UUID targetId, ObserverPayloads.FrameChunk payload) {
         long now = System.nanoTime();
         FrameGate gate = FRAME_GATE_BY_TARGET.get(targetId);
         if (gate == null) {
-            FRAME_GATE_BY_TARGET.put(targetId, new FrameGate(frameId, now));
-            return true;
+            gate = new FrameGate(payload, now);
+            FRAME_GATE_BY_TARGET.put(targetId, gate);
+            return gate.accept(payload);
         }
-        if (frameId == gate.frameId()) {
-            return true;
+        if (payload.frameId() == gate.frameId) {
+            return gate.accept(payload);
         }
-        if (frameId < gate.frameId() || now - gate.acceptedAtNanos() < MIN_NEW_FRAME_INTERVAL_NANOS) {
+        if (payload.frameId() < gate.frameId || now - gate.acceptedAtNanos < MIN_NEW_FRAME_INTERVAL_NANOS) {
             return false;
         }
-        FRAME_GATE_BY_TARGET.put(targetId, new FrameGate(frameId, now));
-        return true;
+        gate = new FrameGate(payload, now);
+        FRAME_GATE_BY_TARGET.put(targetId, gate);
+        return gate.accept(payload);
     }
 
     private static void cleanup(MinecraftServer server) {
@@ -203,6 +205,42 @@ public final class ObserverSessionManager {
         }
     }
 
-    private record FrameGate(long frameId, long acceptedAtNanos) {
+    private static final class FrameGate {
+        private final long frameId;
+        private final long acceptedAtNanos;
+        private final int chunkCount;
+        private final int frameWidth;
+        private final int frameHeight;
+        private final int sourceWidth;
+        private final int sourceHeight;
+        private final boolean[] seenChunks;
+
+        private FrameGate(ObserverPayloads.FrameChunk payload, long acceptedAtNanos) {
+            this.frameId = payload.frameId();
+            this.acceptedAtNanos = acceptedAtNanos;
+            this.chunkCount = payload.chunkCount();
+            this.frameWidth = payload.frameWidth();
+            this.frameHeight = payload.frameHeight();
+            this.sourceWidth = payload.sourceWidth();
+            this.sourceHeight = payload.sourceHeight();
+            this.seenChunks = new boolean[chunkCount];
+        }
+
+        private boolean accept(ObserverPayloads.FrameChunk payload) {
+            if (payload.frameId() != frameId
+                    || payload.chunkCount() != chunkCount
+                    || payload.frameWidth() != frameWidth
+                    || payload.frameHeight() != frameHeight
+                    || payload.sourceWidth() != sourceWidth
+                    || payload.sourceHeight() != sourceHeight) {
+                return false;
+            }
+            int index = payload.chunkIndex();
+            if (seenChunks[index]) {
+                return false;
+            }
+            seenChunks[index] = true;
+            return true;
+        }
     }
 }
