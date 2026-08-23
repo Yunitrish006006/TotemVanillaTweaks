@@ -3,7 +3,6 @@ package dev.totem.vanillatweaks.mixin;
 import dev.totem.vanillatweaks.skeleton.SkeletonAmmo;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.skeleton.AbstractSkeleton;
-import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -33,19 +32,6 @@ public abstract class AbstractSkeletonAmmoMixin {
         AbstractSkeleton skeleton = (AbstractSkeleton) (Object) this;
         if (!SkeletonAmmo.hasAmmo(skeleton)) {
             cir.setReturnValue(false);
-        }
-    }
-
-    @Inject(method = "getArrow", at = @At("RETURN"))
-    private void totem$allowSkeletonArrowPickup(
-            ItemStack projectile,
-            float power,
-            ItemStack firingWeapon,
-            CallbackInfoReturnable<AbstractArrow> cir
-    ) {
-        AbstractArrow arrow = cir.getReturnValue();
-        if (arrow != null) {
-            arrow.pickup = AbstractArrow.Pickup.ALLOWED;
         }
     }
 }
