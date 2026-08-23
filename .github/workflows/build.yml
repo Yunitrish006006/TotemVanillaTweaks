@@ -143,19 +143,19 @@ jobs:
               cat "$results"/failure-*.txt >&2 || true
               exit 1
             fi
-            if [[ -f "$results/target-ready.txt" && -f "$results/target-screen-open.txt" ]]; then
+            if [[ -f "$results/target-world-ready.txt" ]]; then
               target_ready=true
               break
             fi
             if ! kill -0 "$target_pid" 2>/dev/null; then
-              echo 'E2E Target exited before entering the dedicated-server world.' >&2
+              echo 'E2E Target exited before stabilizing in gameplay view.' >&2
               tail -n 200 build/e2e/target.log >&2 || true
               exit 1
             fi
             sleep 1
           done
           if [[ "$target_ready" != true ]]; then
-            echo 'Timed out waiting for E2E Target to enter the world and open its UI.' >&2
+            echo 'Timed out waiting for E2E Target gameplay view to stabilize.' >&2
             tail -n 200 build/e2e/target.log >&2 || true
             exit 1
           fi
@@ -174,9 +174,11 @@ jobs:
             fi
 
             if [[ -f "$results/server-session-started.txt" \
-               && -f "$results/target-ready.txt" \
+               && -f "$results/target-world-ready.txt" \
                && -f "$results/target-capture-enabled.txt" \
                && -f "$results/observer-frame-ok.txt" \
+               && -f "$results/observer-relayed-frame-saved.txt" \
+               && -f "$results/observer-relayed-frame.png" \
                && -f "$results/observer-screenshot-saved.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
@@ -217,8 +219,8 @@ jobs:
           fi
 
           printf '%s\n' \
-            'Dedicated server + Target JVM + Observer JVM E2E passed.' \
-            'Verified production session start, client state isolation, real framebuffer relay, Mirror render, Stop, CaptureControl(false), and server cleanup.'
+            'Dedicated server + Target JVM + Observer JVM gameplay-frame E2E passed.' \
+            'Verified live gameplay framebuffer relay with no Target Screen open, Mirror render, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
