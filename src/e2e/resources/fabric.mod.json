@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "totem-vanilla-tweaks-e2e",
+  "version": "1.0.0",
+  "name": "TotemVanillaTweaks Observer E2E",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.totem.vanillatweaks.e2e.ObserverE2eCommon"
+    ],
+    "client": [
+      "dev.totem.vanillatweaks.e2e.ObserverE2eClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "*",
+    "totem-vanilla-tweaks": "*"
+  }
+}

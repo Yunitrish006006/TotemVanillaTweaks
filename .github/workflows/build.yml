@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-and-gametest:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
     steps:
       - name: Check out VanillaTweaks
         uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava --no-daemon --stacktrace
+          ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
@@ -59,3 +59,181 @@ jobs:
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
+
+      - name: Run client GameTests
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
+
+      - name: Run dedicated-server two-client Observer E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          results="${GITHUB_WORKSPACE}/build/e2e/results"
+          mkdir -p build/e2e/server build/e2e/target build/e2e/observer "$results"
+          rm -f "$results"/*
+
+          printf 'eula=true\n' > build/e2e/server/eula.txt
+          cat > build/e2e/server/server.properties <<'EOF'
+          server-port=25570
+          online-mode=false
+          enforce-secure-profile=false
+          spawn-protection=0
+          view-distance=2
+          simulation-distance=2
+          max-players=4
+          motd=Totem Observer E2E
+          EOF
+
+          server_pid=''
+          target_pid=''
+          observer_pid=''
+          cleanup() {
+            set +e
+            for pid in "$observer_pid" "$target_pid" "$server_pid"; do
+              if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+              fi
+            done
+            for pid in "$observer_pid" "$target_pid" "$server_pid"; do
+              if [[ -n "$pid" ]]; then
+                wait "$pid" 2>/dev/null || true
+              fi
+            done
+          }
+          trap cleanup EXIT
+
+          ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-server" \
+            runE2eServer --no-daemon --stacktrace > build/e2e/server.log 2>&1 &
+          server_pid=$!
+
+          ready=false
+          for _ in $(seq 1 180); do
+            if (echo > /dev/tcp/127.0.0.1/25570) >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo 'E2E server exited before opening port 25570.' >&2
+              tail -n 200 build/e2e/server.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then
+            echo 'Timed out waiting for E2E server port 25570.' >&2
+            tail -n 200 build/e2e/server.log >&2 || true
+            exit 1
+          fi
+
+          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-target" \
+            runE2eTarget --no-daemon --stacktrace > build/e2e/target.log 2>&1 &
+          target_pid=$!
+
+          target_ready=false
+          for _ in $(seq 1 180); do
+            if compgen -G "$results/failure-*.txt" >/dev/null; then
+              cat "$results"/failure-*.txt >&2 || true
+              exit 1
+            fi
+            if [[ -f "$results/target-ready.txt" && -f "$results/target-screen-open.txt" ]]; then
+              target_ready=true
+              break
+            fi
+            if ! kill -0 "$target_pid" 2>/dev/null; then
+              echo 'E2E Target exited before entering the dedicated-server world.' >&2
+              tail -n 200 build/e2e/target.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$target_ready" != true ]]; then
+            echo 'Timed out waiting for E2E Target to enter the world and open its UI.' >&2
+            tail -n 200 build/e2e/target.log >&2 || true
+            exit 1
+          fi
+
+          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
+            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-observer" \
+            runE2eObserver --no-daemon --stacktrace > build/e2e/observer.log 2>&1 &
+          observer_pid=$!
+
+          complete=false
+          for _ in $(seq 1 240); do
+            if compgen -G "$results/failure-*.txt" >/dev/null; then
+              echo 'Observer E2E reported a failure:' >&2
+              cat "$results"/failure-*.txt >&2 || true
+              exit 1
+            fi
+
+            if [[ -f "$results/server-session-started.txt" \
+               && -f "$results/target-ready.txt" \
+               && -f "$results/target-capture-enabled.txt" \
+               && -f "$results/observer-frame-ok.txt" \
+               && -f "$results/observer-screenshot-saved.txt" \
+               && -f "$results/observer-complete.txt" \
+               && -f "$results/target-complete.txt" \
+               && -f "$results/server-cleanup-ok.txt" \
+               && -f "$results/observer-two-client-e2e.png" ]]; then
+              complete=true
+              break
+            fi
+
+            for spec in "$server_pid:server" "$target_pid:target" "$observer_pid:observer"; do
+              pid="${spec%%:*}"
+              name="${spec##*:}"
+              if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+                if [[ "$name" == target && -f "$results/target-complete.txt" ]]; then
+                  continue
+                fi
+                if [[ "$name" == observer && -f "$results/observer-complete.txt" ]]; then
+                  continue
+                fi
+                echo "E2E ${name} process exited before success markers completed." >&2
+                tail -n 200 "build/e2e/${name}.log" >&2 || true
+                exit 1
+              fi
+            done
+            sleep 1
+          done
+
+          if [[ "$complete" != true ]]; then
+            echo 'Timed out waiting for the Observer E2E success markers.' >&2
+            find "$results" -maxdepth 1 -type f -print -exec cat {} \; >&2 || true
+            echo '--- server log ---' >&2
+            tail -n 200 build/e2e/server.log >&2 || true
+            echo '--- target log ---' >&2
+            tail -n 200 build/e2e/target.log >&2 || true
+            echo '--- observer log ---' >&2
+            tail -n 200 build/e2e/observer.log >&2 || true
+            exit 1
+          fi
+
+          printf '%s\n' \
+            'Dedicated server + Target JVM + Observer JVM E2E passed.' \
+            'Verified production session start, client state isolation, real framebuffer relay, Mirror render, Stop, CaptureControl(false), and server cleanup.'
+
+      - name: Upload client GameTest screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-client-gametest-screenshots
+          path: build/client-gametest-screenshots/*.png
+          if-no-files-found: error
+
+      - name: Upload Observer two-client E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-two-client-e2e
+          path: |
+            build/e2e/results/*
+            build/e2e/*.log
+          if-no-files-found: error

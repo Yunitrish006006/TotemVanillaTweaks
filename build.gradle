@@ -10,8 +10,65 @@ base { archivesName = project.archives_base_name }
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
         .getOrElse('../TotemCore/build/libs/totem-core-0.7.0.jar'))
 
+def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
+
+sourceSets {
+    e2e {
+        // Gradle already assigns conventional source dirs when a SourceSet is created.
+        // Replace them explicitly so Loom cannot accumulate the same E2E resource root twice.
+        java.setSrcDirs(['src/e2e/java'])
+        resources.setSrcDirs(['src/e2e/resources'])
+        // Compile the test-only driver against production code, while keeping its
+        // classes/resources in a distinct Fabric local-mod classpath group.
+        compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
+        runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
+    }
+}
+
 loom {
-    mods { 'totem-vanilla-tweaks' { sourceSet sourceSets.main } }
+    mods {
+        'totem-vanilla-tweaks' { sourceSet sourceSets.main }
+        'totem-vanilla-tweaks-e2e' { sourceSet sourceSets.e2e }
+    }
+    runs {
+        e2eServer {
+            server()
+            configName = 'Observer E2E Server'
+            runDir = 'build/e2e/server'
+            // Loom run configurations select one primary SourceSet. Keep production
+            // main as the primary run source, then append the E2E mod output to the
+            // run task classpath below so Fabric Loader discovers both mod IDs.
+            source = sourceSets.main
+            vmArg '-Dtotem.observer.e2e.enabled=true'
+            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
+        }
+        e2eTarget {
+            client()
+            configName = 'Observer E2E Target'
+            runDir = 'build/e2e/target'
+            source = sourceSets.main
+            vmArg '-Dtotem.observer.e2e.enabled=true'
+            vmArg '-Dtotem.observer.e2e.role=target'
+            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
+            programArg '--username'
+            programArg 'Target'
+            programArg '--quickPlayMultiplayer'
+            programArg '127.0.0.1:25570'
+        }
+        e2eObserver {
+            client()
+            configName = 'Observer E2E Observer'
+            runDir = 'build/e2e/observer'
+            source = sourceSets.main
+            vmArg '-Dtotem.observer.e2e.enabled=true'
+            vmArg '-Dtotem.observer.e2e.role=observer'
+            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
+            programArg '--username'
+            programArg 'Observer'
+            programArg '--quickPlayMultiplayer'
+            programArg '127.0.0.1:25570'
+        }
+    }
 }
 
 fabricApi {
@@ -19,7 +76,7 @@ fabricApi {
         createSourceSet = true
         modId = 'totem-vanilla-tweaks-gametest'
         enableGameTests = true
-        enableClientGameTests = false
+        enableClientGameTests = true
         eula = true
     }
 }
@@ -118,9 +175,37 @@ tasks.register("normalizeFabricApiTweakersForNamedDevRuntime") {
 }
 
 tasks.matching { task ->
-    task.name in ["runClient", "runServer", "runDatagen", "runGameTest"]
+    task.name in [
+            "runClient", "runServer", "runDatagen", "runGameTest", "runClientGametest",
+            "runE2eServer", "runE2eTarget", "runE2eObserver"
+    ]
 }.configureEach {
     dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
+}
+
+// A Loom run has exactly one primary SourceSet. The E2E runs use main so the
+// production mod is discovered normally, then append only the test mod output.
+// `loom.mods` above supplies separate classpath groups for both mod IDs.
+tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
+    dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
+    classpath(sourceSets.e2e.output)
+}
+
+tasks.named('runE2eServer').configure {
+    doFirst {
+        File dir = file('build/e2e/server')
+        dir.mkdirs()
+        new File(dir, 'eula.txt').text = 'eula=true\n'
+        new File(dir, 'server.properties').text = '''server-port=25570
+online-mode=false
+enforce-secure-profile=false
+spawn-protection=0
+view-distance=2
+simulation-distance=2
+max-players=4
+motd=Totem Observer E2E
+'''
+    }
 }
 
 java {

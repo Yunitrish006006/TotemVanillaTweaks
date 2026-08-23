@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
@@ -19,12 +20,12 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category")
         );
-        sortBackpackKey = new KeyMapping(
+        sortBackpackKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.deadrecall.sort_backpack",
                 InputConstants.Type.MOUSE,
                 GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
                 category
-        );
+        ));
         ObserverUiClient.register();
     }
 }
