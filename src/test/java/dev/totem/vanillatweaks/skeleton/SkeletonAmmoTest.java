@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SkeletonAmmoTest {
     @Test
     void peacefulSkeletonsHaveNoArrows() {
-        assertEquals(0, SkeletonAmmo.initialArrowCount(Difficulty.PEACEFUL, RandomSource.create(1L)));
+        assertEquals(0, SkeletonAmmoRules.initialArrowCount(Difficulty.PEACEFUL, RandomSource.create(1L)));
     }
 
     @Test
@@ -24,7 +24,7 @@ class SkeletonAmmoTest {
         boolean sawMin = false;
         boolean sawMax = false;
         for (long seed = 0; seed < 4096; seed++) {
-            int value = SkeletonAmmo.initialArrowCount(difficulty, RandomSource.create(seed));
+            int value = SkeletonAmmoRules.initialArrowCount(difficulty, RandomSource.create(seed));
             assertTrue(value >= min && value <= max,
                     () -> difficulty + " rolled " + value + " outside " + min + "-" + max);
             sawMin |= value == min;
