@@ -24,7 +24,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
 
-/** Client-side capture and read-only rendering for privileged spectator UI observation. */
+/** Client-side live framebuffer capture and read-only rendering for privileged spectator observation. */
 public final class ObserverUiClient {
     private static final Identifier FRAME_TEXTURE =
             Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "observer/live_frame");
@@ -94,7 +94,9 @@ public final class ObserverUiClient {
         remoteScreenOpen = false;
         assembly = null;
         lastFrameId = -1L;
-        if (!sessionActive) {
+        if (sessionActive) {
+            ensureMirrorScreen();
+        } else {
             closeMirrorScreen();
             releaseFrameTexture();
         }
@@ -105,19 +107,14 @@ public final class ObserverUiClient {
             return;
         }
         remoteScreenOpen = payload.open();
-        assembly = null;
-        if (remoteScreenOpen) {
-            ensureMirrorScreen();
-        } else {
-            closeMirrorScreen();
-            releaseFrameTexture();
-        }
+        ensureMirrorScreen();
     }
 
     private static void tickCapture(Minecraft minecraft) {
         if (!captureEnabled || minecraft.player == null || minecraft.level == null) {
             return;
         }
+
         Screen screen = minecraft.gui.screen();
         boolean screenOpen = screen != null && !(screen instanceof ObserverMirrorScreen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
@@ -127,10 +124,10 @@ public final class ObserverUiClient {
             lastScreenKey = key;
             ClientPlayNetworking.send(new ObserverPayloads.ScreenState(screenOpen, screenClass, title));
         }
-        if (!screenOpen || captureInFlight) {
+
+        if (captureInFlight) {
             return;
         }
-
         long now = System.nanoTime();
         long interval = 1_000_000_000L / Math.max(1, captureFps);
         if (now - lastCaptureNanos < interval) {
@@ -153,7 +150,7 @@ public final class ObserverUiClient {
                 }
                 encodeAndSendFrame(minecraft, image);
             } catch (Throwable error) {
-                TotemVanillaTweaks.LOGGER.warn("Observer UI capture failed", error);
+                TotemVanillaTweaks.LOGGER.warn("Observer framebuffer capture failed", error);
             } finally {
                 if (image != null) {
                     image.close();
@@ -232,7 +229,7 @@ public final class ObserverUiClient {
     }
 
     private static void acceptFrameChunk(ObserverPayloads.FrameRelay payload) {
-        if (!sessionActive || !remoteScreenOpen || targetId == null || !targetId.equals(payload.targetId())) {
+        if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
         if (!ObserverFrameRules.validChunk(
@@ -273,7 +270,7 @@ public final class ObserverUiClient {
                     || image.getWidth() > ObserverFrameRules.MAX_WIDTH
                     || image.getHeight() > ObserverFrameRules.MAX_HEIGHT) {
                 TotemVanillaTweaks.LOGGER.warn(
-                        "Rejected observer UI frame with decoded size {}x{} (declared {}x{})",
+                        "Rejected observer framebuffer with decoded size {}x{} (declared {}x{})",
                         image.getWidth(), image.getHeight(), frameWidth, frameHeight
                 );
                 return;
@@ -288,7 +285,7 @@ public final class ObserverUiClient {
             textureRegistered = true;
             installed = true;
         } catch (IOException error) {
-            TotemVanillaTweaks.LOGGER.warn("Failed to decode observer UI frame", error);
+            TotemVanillaTweaks.LOGGER.warn("Failed to decode observer framebuffer", error);
         } finally {
             if (!installed && image != null) {
                 image.close();
@@ -298,7 +295,7 @@ public final class ObserverUiClient {
 
     private static void ensureMirrorScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!sessionActive || !remoteScreenOpen) {
+        if (!sessionActive) {
             return;
         }
         if (!(minecraft.gui.screen() instanceof ObserverMirrorScreen)) {
@@ -418,7 +415,7 @@ public final class ObserverUiClient {
                         frameHeight
                 );
 
-                if (sourceWidth > 0 && sourceHeight > 0) {
+                if (remoteScreenOpen && sourceWidth > 0 && sourceHeight > 0) {
                     int cursorX = drawX + Math.round((remoteMouseX / (float) sourceWidth) * drawWidth);
                     int cursorY = drawY + Math.round((remoteMouseY / (float) sourceHeight) * drawHeight);
                     graphics.fill(cursorX - 5, cursorY - 1, cursorX + 6, cursorY + 2, 0xFF000000);
