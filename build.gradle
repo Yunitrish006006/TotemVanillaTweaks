@@ -19,7 +19,7 @@ fabricApi {
         createSourceSet = true
         modId = 'totem-vanilla-tweaks-gametest'
         enableGameTests = true
-        enableClientGameTests = false
+        enableClientGameTests = true
         eula = true
     }
 }
@@ -118,7 +118,7 @@ tasks.register("normalizeFabricApiTweakersForNamedDevRuntime") {
 }
 
 tasks.matching { task ->
-    task.name in ["runClient", "runServer", "runDatagen", "runGameTest"]
+    task.name in ["runClient", "runServer", "runDatagen", "runGameTest", "runClientGametest"]
 }.configureEach {
     dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
 }
