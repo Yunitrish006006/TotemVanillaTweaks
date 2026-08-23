@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.monster.skeleton.AbstractSkeleton;
 
@@ -26,7 +25,10 @@ public final class SkeletonAmmo {
             if (entity instanceof AbstractSkeleton skeleton) {
                 AttachmentTarget target = attachments(skeleton);
                 if (target.getAttached(REMAINING_ARROWS) == null) {
-                    target.setAttached(REMAINING_ARROWS, initialArrowCount(level.getDifficulty(), skeleton.getRandom()));
+                    target.setAttached(
+                            REMAINING_ARROWS,
+                            SkeletonAmmoRules.initialArrowCount(level.getDifficulty(), skeleton.getRandom())
+                    );
                 }
             }
         });
@@ -47,7 +49,7 @@ public final class SkeletonAmmo {
         Integer remaining = target.getAttached(REMAINING_ARROWS);
         if (remaining == null) {
             Difficulty difficulty = skeleton.level().getDifficulty();
-            remaining = initialArrowCount(difficulty, skeleton.getRandom());
+            remaining = SkeletonAmmoRules.initialArrowCount(difficulty, skeleton.getRandom());
         }
         if (remaining <= 0) {
             target.setAttached(REMAINING_ARROWS, 0);
@@ -62,21 +64,7 @@ public final class SkeletonAmmo {
         }
     }
 
-    /** Rolls the reserve once when a skeleton first enters the server world. */
-    public static int initialArrowCount(Difficulty difficulty, RandomSource random) {
-        return switch (difficulty) {
-            case PEACEFUL -> 0;
-            case EASY -> betweenInclusive(random, 4, 7);
-            case NORMAL -> betweenInclusive(random, 7, 12);
-            case HARD -> betweenInclusive(random, 12, 20);
-        };
-    }
-
     private static AttachmentTarget attachments(AbstractSkeleton skeleton) {
         return (AttachmentTarget) (Object) skeleton;
-    }
-
-    private static int betweenInclusive(RandomSource random, int min, int max) {
-        return min + random.nextInt(max - min + 1);
     }
 }
