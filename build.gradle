@@ -14,6 +14,10 @@ def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
 
 sourceSets {
     e2e {
+        // Gradle already assigns conventional source dirs when a SourceSet is created.
+        // Replace them explicitly so Loom cannot accumulate the same E2E resource root twice.
+        java.setSrcDirs(['src/e2e/java'])
+        resources.setSrcDirs(['src/e2e/resources'])
         // Compile the test-only driver against production code, while keeping its
         // classes/resources in a distinct Fabric local-mod classpath group.
         compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
