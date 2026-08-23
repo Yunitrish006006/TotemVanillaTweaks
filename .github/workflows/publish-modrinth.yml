@@ -11,13 +11,14 @@ concurrency: {group: 'modrinth-${{ github.workflow }}-${{ github.ref }}', cancel
 env:
   MODULE_ID: totem-vanilla-tweaks
   CORE_REF: a8cedca207f9d4444ae4a52fd384ebd830fbd026
+  RELEASE_REF: e81b86615583d591580a146f48b77aa57f37f769
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
+        with: {ref: '${{ env.RELEASE_REF }}', fetch-depth: 0}
       - id: release
         shell: bash
         env: {EVENT_NAME: '${{ github.event_name }}', BEFORE_SHA: '${{ github.event.before }}', REQUESTED_DRY_RUN: '${{ inputs.dry_run }}'}
