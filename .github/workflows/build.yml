@@ -73,5 +73,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: observer-client-gametest-screenshots
-          path: '**/screenshots/observer-ui-*.png'
+          path: build/client-gametest-screenshots/*.png
           if-no-files-found: error
