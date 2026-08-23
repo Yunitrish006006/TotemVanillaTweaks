@@ -46,7 +46,7 @@ class SkeletonAmmoTest {
     @Test
     void intermediateRegionsProduceProbabilisticBonus() {
         DifficultyInstance normal = new DifficultyInstance(Difficulty.NORMAL, 792_000L, 1_800_000L, 0.5F);
-        DifficultyInstance hard = new DifficultyInstance(Difficulty.HARD, 792_000L, 1_800_000L, 0.5F);
+        DifficultyInstance hard = new DifficultyInstance(Difficulty.HARD, 0L, 900_000L, 0.0F);
 
         assertTrue(SkeletonAmmoRules.regionalScale(normal) > 0.0F
                 && SkeletonAmmoRules.regionalScale(normal) < 1.0F);
