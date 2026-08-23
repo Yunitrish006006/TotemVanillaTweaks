@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.totem.vanillatweaks.e2e",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ObserverUiClientE2eMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
