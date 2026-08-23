@@ -8,6 +8,8 @@
   "book.deadrecall.vanilla_tweaks_manual.title": "Vanilla Tweaks Method Guide",
   "book.deadrecall.vanilla_tweaks_manual.page.1": "INVENTORIES\n\nHover the player or container side of an open menu and press the Sort Backpack key (middle mouse by default). The server validates the target.",
   "book.deadrecall.vanilla_tweaks_manual.page.2": "WORLD\n\nLecterns use four slabs and one book. Bookshelves become Chiseled Bookshelves; wet Concrete Powder hardens, and hopper-smelted output releases recipe XP.",
+  "book.deadrecall.vanilla_tweaks_manual.page.3": "SKELETON QUIVERS\n\nBow skeletons spawn with a finite random reserve: Easy 4–7, Normal 7–12, Hard 12–20. Their arrows are collectible; when empty they switch to melee.",
+  "book.deadrecall.vanilla_tweaks_manual.page.4": "BANE OF ARTHROPODS\n\nBane of Arthropods now treats skeletons as valid targets, so both its bonus damage and Slowness apply to skeleton variants.",
   "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
   "key.deadrecall.sort_backpack": "Sort Backpack",
   "message.deadrecall.sort_backpack.success": "Backpack sorted!",
