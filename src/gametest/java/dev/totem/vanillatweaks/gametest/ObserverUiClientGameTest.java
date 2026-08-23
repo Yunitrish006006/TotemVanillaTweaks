@@ -14,6 +14,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 /**
@@ -37,7 +38,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             });
             context.waitFor(mc -> mc.gui.screen() != null
                     && "Observer Capture Target".equals(mc.gui.screen().getTitle().getString()));
-            context.takeScreenshot("observer-ui-source-screen");
+            persistForCi(context.takeScreenshot("observer-ui-source-screen"), "observer-ui-source-screen.png");
 
             exerciseFramebufferCapture(context);
 
@@ -92,11 +93,25 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
         context.waitFor(minecraft -> minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("ObserverMirrorScreen"));
         context.waitTicks(2);
-        context.takeScreenshot("observer-ui-mirror-screen");
+        persistForCi(context.takeScreenshot("observer-ui-mirror-screen"), "observer-ui-mirror-screen.png");
 
         context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         context.waitForScreen(null);
         context.waitFor(minecraft -> !getBoolean("sessionActive") && !getBoolean("textureRegistered"), 100);
+    }
+
+    private static void persistForCi(Path screenshot, String fileName) {
+        String workspace = System.getenv("GITHUB_WORKSPACE");
+        if (workspace == null || workspace.isBlank()) {
+            return;
+        }
+        try {
+            Path destinationDir = Path.of(workspace).resolve("build/client-gametest-screenshots");
+            Files.createDirectories(destinationDir);
+            Files.copy(screenshot, destinationDir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception error) {
+            throw new RuntimeException("Failed to persist client gametest screenshot " + screenshot, error);
+        }
     }
 
     private static byte[] createTestPng() {
