@@ -1,11 +1,11 @@
 package dev.totem.vanillatweaks.e2e;
 
 import dev.totem.vanillatweaks.network.ObserverPayloads;
-import dev.totem.vanillatweaks.observer.ObserverFrameRules;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -65,24 +65,20 @@ public final class ObserverE2eCommon implements ModInitializer {
                 }
 
                 setSpectator(observer);
-                observer.setCamera(target);
+                int result = invokeProductionStart(observer, target);
+                if (result != 1) {
+                    throw new AssertionError("ObserverSessionManager.start returned " + result);
+                }
+
                 targetId = target.getUUID();
                 observerId = observer.getUUID();
-                targetMap().put(observerId, targetId);
-                frameGateMap().remove(targetId);
-
-                ServerPlayNetworking.send(observer,
-                        new ObserverPayloads.Session(true, targetId, target.getGameProfile().name()));
-                ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(
-                        true,
-                        ObserverFrameRules.MAX_WIDTH,
-                        ObserverFrameRules.MAX_HEIGHT,
-                        ObserverFrameRules.TARGET_FPS
-                ));
+                if (!targetId.equals(targetMap().get(observerId))) {
+                    throw new AssertionError("Production start did not register observer -> target session");
+                }
 
                 started = true;
                 marker("server-session-started.txt",
-                        "observer=" + observerId + "\ntarget=" + targetId + "\n");
+                        "observer=" + observerId + "\ntarget=" + targetId + "\nproduction_start=true\n");
                 return;
             }
 
@@ -103,6 +99,26 @@ public final class ObserverE2eCommon implements ModInitializer {
                 && ServerPlayNetworking.canSend(observer, ObserverPayloads.Session.TYPE)
                 && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE)
                 && ServerPlayNetworking.canSend(observer, ObserverPayloads.FrameRelay.TYPE);
+    }
+
+    private static int invokeProductionStart(ServerPlayer observer, ServerPlayer target) {
+        try {
+            Method method = ObserverSessionManager.class.getDeclaredMethod(
+                    "start",
+                    CommandSourceStack.class,
+                    ServerPlayer.class,
+                    ServerPlayer.class
+            );
+            method.setAccessible(true);
+            return (Integer) method.invoke(
+                    null,
+                    observer.createCommandSourceStack(),
+                    observer,
+                    target
+            );
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to invoke ObserverSessionManager.start", error);
+        }
     }
 
     private static void setSpectator(ServerPlayer player) {
