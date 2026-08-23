@@ -15,7 +15,8 @@
       "dev.totem.vanillatweaks.gametest.VanillaTweaksManualGameTest"
     ],
     "fabric-client-gametest": [
-      "dev.totem.vanillatweaks.gametest.ObserverUiClientGameTest"
+      "dev.totem.vanillatweaks.gametest.ObserverUiClientGameTest",
+      "dev.totem.vanillatweaks.gametest.ObserverUiNetworkLoopbackClientGameTest"
     ]
   },
   "depends": {
