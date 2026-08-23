@@ -38,11 +38,14 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
         UUID playerId = null;
         try {
             context.waitTicks(2);
-            singleplayer.getConnection().waitForChunksRender();
+            singleplayer.getClientLevel().waitForChunksRender();
 
             singleplayer.getServer().runCommand("gamemode spectator @a");
             playerId = singleplayer.getServer().computeOnServer(server -> {
-                ServerPlayer player = singleplayer.getConnection().getServerPlayer();
+                if (server.getPlayerList().getPlayers().size() != 1) {
+                    throw new AssertionError("Loopback test expected exactly one connected player");
+                }
+                ServerPlayer player = server.getPlayerList().getPlayers().get(0);
                 if (!player.isSpectator()) {
                     throw new AssertionError("Loopback observer player did not enter spectator mode");
                 }
@@ -116,8 +119,12 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             context.waitFor(minecraft -> !getClientBoolean("sessionActive")
                     && !getClientBoolean("captureEnabled")
                     && !getClientBoolean("textureRegistered"), 100);
-            singleplayer.getServer().waitFor(server ->
-                    !targetMap().containsKey(expectedTarget) && !frameGateMap().containsKey(expectedTarget), 100);
+
+            boolean serverCleanedUp = singleplayer.getServer().computeOnServer(server ->
+                    !targetMap().containsKey(expectedTarget) && !frameGateMap().containsKey(expectedTarget));
+            if (!serverCleanedUp) {
+                throw new AssertionError("Observer Stop payload did not clean server session/frame state");
+            }
         } finally {
             cleanupServer(singleplayer, playerId);
             forceClientCleanup(context);
