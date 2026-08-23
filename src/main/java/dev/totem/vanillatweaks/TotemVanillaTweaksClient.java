@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
@@ -24,5 +25,6 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
                 GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
                 category
         );
+        ObserverUiClient.register();
     }
 }
