@@ -5,6 +5,7 @@ import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -57,16 +58,11 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             setInt("captureMaxHeight", 360);
             setInt("captureFps", 1);
             setLong("lastCaptureNanos", System.nanoTime());
-            invoke("captureFrame", new Class<?>[]{minecraft.getClass()}, minecraft);
+            invoke("captureFrame", new Class<?>[]{Minecraft.class}, minecraft);
         });
 
-        context.waitFor(minecraft -> {
-            try {
-                return !getBoolean("captureInFlight") && getLong("nextFrameId") > previousFrameId[0];
-            } catch (ReflectiveOperationException error) {
-                throw new RuntimeException(error);
-            }
-        }, 100);
+        context.waitFor(minecraft ->
+                !getBoolean("captureInFlight") && getLong("nextFrameId") > previousFrameId[0], 100);
 
         context.runOnClient(minecraft -> setBoolean("captureEnabled", false));
     }
@@ -100,13 +96,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
 
         context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         context.waitForScreen(null);
-        context.waitFor(minecraft -> {
-            try {
-                return !getBoolean("sessionActive") && !getBoolean("textureRegistered");
-            } catch (ReflectiveOperationException error) {
-                throw new RuntimeException(error);
-            }
-        }, 100);
+        context.waitFor(minecraft -> !getBoolean("sessionActive") && !getBoolean("textureRegistered"), 100);
     }
 
     private static byte[] createTestPng() {
@@ -148,43 +138,79 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static Field field(String name) throws ReflectiveOperationException {
-        Field field = OBSERVER.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
+    private static Field field(String name) {
+        try {
+            Field field = OBSERVER.getDeclaredField(name);
+            field.setAccessible(true);
+            return field;
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Missing ObserverUiClient field: " + name, error);
+        }
     }
 
-    private static Method method(String name, Class<?>... parameterTypes) throws ReflectiveOperationException {
-        Method method = OBSERVER.getDeclaredMethod(name, parameterTypes);
-        method.setAccessible(true);
-        return method;
+    private static Method method(String name, Class<?>... parameterTypes) {
+        try {
+            Method method = OBSERVER.getDeclaredMethod(name, parameterTypes);
+            method.setAccessible(true);
+            return method;
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Missing ObserverUiClient method: " + name, error);
+        }
     }
 
-    private static void invoke(String name, Class<?>[] parameterTypes, Object... args) throws ReflectiveOperationException {
-        method(name, parameterTypes).invoke(null, args);
+    private static void invoke(String name, Class<?>[] parameterTypes, Object... args) {
+        try {
+            method(name, parameterTypes).invoke(null, args);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to invoke ObserverUiClient." + name, error);
+        }
     }
 
-    private static boolean getBoolean(String name) throws ReflectiveOperationException {
-        return field(name).getBoolean(null);
+    private static boolean getBoolean(String name) {
+        try {
+            return field(name).getBoolean(null);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 
-    private static long getLong(String name) throws ReflectiveOperationException {
-        return field(name).getLong(null);
+    private static long getLong(String name) {
+        try {
+            return field(name).getLong(null);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 
-    private static void setBoolean(String name, boolean value) throws ReflectiveOperationException {
-        field(name).setBoolean(null, value);
+    private static void setBoolean(String name, boolean value) {
+        try {
+            field(name).setBoolean(null, value);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 
-    private static void setInt(String name, int value) throws ReflectiveOperationException {
-        field(name).setInt(null, value);
+    private static void setInt(String name, int value) {
+        try {
+            field(name).setInt(null, value);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 
-    private static void setLong(String name, long value) throws ReflectiveOperationException {
-        field(name).setLong(null, value);
+    private static void setLong(String name, long value) {
+        try {
+            field(name).setLong(null, value);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 
-    private static void setObject(String name, Object value) throws ReflectiveOperationException {
-        field(name).set(null, value);
+    private static void setObject(String name, Object value) {
+        try {
+            field(name).set(null, value);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
     }
 }
