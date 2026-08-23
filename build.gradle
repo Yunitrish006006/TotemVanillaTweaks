@@ -14,8 +14,11 @@ def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
 
 sourceSets {
     e2e {
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += output + compileClasspath + sourceSets.main.runtimeClasspath
+        // Reuse production bytecode and dependency configurations, but do not merge
+        // src/main/resources into the E2E resource output. Loom loads the main mod
+        // source set separately, so this avoids a duplicate fabric.mod.json.
+        compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
+        runtimeClasspath += output + sourceSets.main.output.classesDirs + configurations.runtimeClasspath
     }
 }
 
