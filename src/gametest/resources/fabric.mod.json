@@ -3,7 +3,7 @@
   "id": "totem-vanilla-tweaks-gametest",
   "version": "1.0.0",
   "name": "TotemVanillaTweaks GameTests",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "fabric-gametest": [
       "dev.totem.vanillatweaks.gametest.ConcretePowderItemHardeningGameTest",
@@ -13,6 +13,9 @@
       "dev.totem.vanillatweaks.gametest.BookshelfInventoryRuleGameTest",
       "dev.totem.vanillatweaks.gametest.CanonicalContentGameTest",
       "dev.totem.vanillatweaks.gametest.VanillaTweaksManualGameTest"
+    ],
+    "fabric-client-gametest": [
+      "dev.totem.vanillatweaks.gametest.ObserverUiClientGameTest"
     ]
   },
   "depends": {
