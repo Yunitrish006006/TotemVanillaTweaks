@@ -14,9 +14,8 @@ def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
 
 sourceSets {
     e2e {
-        // Reuse production bytecode and dependency configurations without merging main
-        // resources into processE2eResources. At runtime, main.output is kept as a separate
-        // classpath root so Fabric Loader can discover the real production fabric.mod.json.
+        // Compile the test-only driver against production code, while keeping its
+        // classes/resources in a distinct Fabric local-mod classpath group.
         compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
         runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
     }
@@ -32,7 +31,10 @@ loom {
             server()
             configName = 'Observer E2E Server'
             runDir = 'build/e2e/server'
-            source = sourceSets.e2e
+            // Loom run configurations select one primary SourceSet. Keep production
+            // main as the primary run source, then append the E2E mod output to the
+            // run task classpath below so Fabric Loader discovers both mod IDs.
+            source = sourceSets.main
             vmArg '-Dtotem.observer.e2e.enabled=true'
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
         }
@@ -40,7 +42,7 @@ loom {
             client()
             configName = 'Observer E2E Target'
             runDir = 'build/e2e/target'
-            source = sourceSets.e2e
+            source = sourceSets.main
             vmArg '-Dtotem.observer.e2e.enabled=true'
             vmArg '-Dtotem.observer.e2e.role=target'
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
@@ -55,7 +57,7 @@ loom {
             client()
             configName = 'Observer E2E Observer'
             runDir = 'build/e2e/observer'
-            source = sourceSets.e2e
+            source = sourceSets.main
             vmArg '-Dtotem.observer.e2e.enabled=true'
             vmArg '-Dtotem.observer.e2e.role=observer'
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
@@ -179,6 +181,14 @@ tasks.matching { task ->
     ]
 }.configureEach {
     dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
+}
+
+// A Loom run has exactly one primary SourceSet. The E2E runs use main so the
+// production mod is discovered normally, then append only the test mod output.
+// `loom.mods` above supplies separate classpath groups for both mod IDs.
+tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
+    dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
+    classpath(sourceSets.e2e.output)
 }
 
 tasks.named('runE2eServer').configure {
