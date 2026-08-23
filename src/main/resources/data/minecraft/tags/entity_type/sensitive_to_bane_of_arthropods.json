@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "#minecraft:skeletons",
+    "minecraft:skeleton_horse",
     "minecraft:parched"
   ]
 }
