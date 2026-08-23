@@ -8,7 +8,7 @@
   "book.deadrecall.vanilla_tweaks_manual.title": "Vanilla Tweaks 方法手冊",
   "book.deadrecall.vanilla_tweaks_manual.page.1": "物品欄\n\n開啟選單後，把游標放在玩家或容器一側，按下整理背包鍵（預設滑鼠中鍵）。伺服器會驗證目標。",
   "book.deadrecall.vanilla_tweaks_manual.page.2": "世界\n\n講台使用四個半磚與一本書；書櫃會轉為雕紋書櫃，接觸水的混凝土粉末會硬化，漏斗取出熔煉成品也會釋放經驗。",
-  "book.deadrecall.vanilla_tweaks_manual.page.3": "骷髏箭袋\n\n弓骷髏的箭有限且出生時依難度隨機：簡單 4–7、普通 7–12、困難 12–20。射出的箭可以撿；用完後會改用近戰。附魔有效目標的改動請查閱 Enchanting 章節。",
+  "book.deadrecall.vanilla_tweaks_manual.page.3": "骷髏箭袋\n\n出生時先依世界難度隨機取得基礎箭數：簡單 4–7、普通 7–12、困難 12–20；再依出生位置的原版區域難度增加，成熟區域最高可到 7–10、13–18、22–30。箭可撿，用完後改用近戰。附魔有效目標請查閱 Enchanting 章節。",
   "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
   "key.deadrecall.sort_backpack": "整理背包",
   "message.deadrecall.sort_backpack.success": "背包已整理！",

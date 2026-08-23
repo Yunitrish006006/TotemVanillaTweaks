@@ -8,7 +8,7 @@
   "book.deadrecall.vanilla_tweaks_manual.title": "Vanilla Tweaks Method Guide",
   "book.deadrecall.vanilla_tweaks_manual.page.1": "INVENTORIES\n\nHover the player or container side of an open menu and press the Sort Backpack key (middle mouse by default). The server validates the target.",
   "book.deadrecall.vanilla_tweaks_manual.page.2": "WORLD\n\nLecterns use four slabs and one book. Bookshelves become Chiseled Bookshelves; wet Concrete Powder hardens, and hopper-smelted output releases recipe XP.",
-  "book.deadrecall.vanilla_tweaks_manual.page.3": "SKELETON QUIVERS\n\nBow skeletons spawn with a finite random reserve: Easy 4–7, Normal 7–12, Hard 12–20. Their arrows are collectible; when empty they switch to melee. See the Enchanting chapter for enchantment target changes.",
+  "book.deadrecall.vanilla_tweaks_manual.page.3": "SKELETON QUIVERS\n\nSkeletons first roll a base reserve from world difficulty: Easy 4–7, Normal 7–12, Hard 12–20. Vanilla local difficulty at the spawn position then adds ammo; mature regions can reach 7–10, 13–18, and 22–30. Arrows are collectible and empty archers switch to melee. See Enchanting for target changes.",
   "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
   "key.deadrecall.sort_backpack": "Sort Backpack",
   "message.deadrecall.sort_backpack.success": "Backpack sorted!",
