@@ -26,7 +26,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
             context.waitTicks(2);
-            singleplayer.getConnection().waitForChunksRender();
+            singleplayer.getClientLevel().waitForChunksRender();
 
             context.setScreen(() -> new Screen(Component.literal("Observer Capture Target")) {
                 @Override
