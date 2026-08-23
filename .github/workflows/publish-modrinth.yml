@@ -223,3 +223,22 @@ jobs:
           old="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" | jq -r '.sha // empty')"
           payload="$(jq -n --arg m "release: record Modrinth ${MOD_VERSION}" --arg c "$enc" --arg b main --arg s "$old" 'if $s=="" then {message:$m,content:$c,branch:$b} else {message:$m,content:$c,branch:$b,sha:$s} end')"
           curl --fail -sS -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$payload" >/dev/null
+
+      - name: Record publication attempt on main
+        if: always() && steps.release.outputs.should_publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          MOD_VERSION: '${{ steps.release.outputs.version }}'
+          RELEASE_REF: '${{ steps.release.outputs.release_ref }}'
+          JOB_STATUS: '${{ job.status }}'
+          PUBLISH_OUTCOME: '${{ steps.modrinth.outcome }}'
+        run: |
+          set -euo pipefail
+          marker=".github/staging/modrinth-attempt-${MOD_VERSION}.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${marker}"
+          body="$(jq -n --arg v "$MOD_VERSION" --arg ref "$RELEASE_REF" --arg run "$GITHUB_RUN_ID" --arg status "$JOB_STATUS" --arg publish "$PUBLISH_OUTCOME" '{version:$v,release_ref:$ref,run:$run,status:$status,publish_step:$publish}')"
+          enc="$(printf '%s\n' "$body" | base64 -w0)"
+          old="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" | jq -r '.sha // empty')"
+          payload="$(jq -n --arg m "ci: record Modrinth attempt ${MOD_VERSION}" --arg c "$enc" --arg b main --arg s "$old" 'if $s=="" then {message:$m,content:$c,branch:$b} else {message:$m,content:$c,branch:$b,sha:$s} end')"
+          curl --fail -sS -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$payload" >/dev/null
