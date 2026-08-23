@@ -23,11 +23,15 @@ import java.nio.file.Path;
 public final class ObserverE2eClient implements ClientModInitializer {
     private static final Class<?> CLIENT = ObserverUiClient.class;
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 120;
+    private static final int MAX_CONNECTION_ATTEMPTS = 5;
+    private static final int RECONNECT_DELAY_TICKS = 20 * 2;
     private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
     private static int ticks;
     private static boolean connectionStarted;
+    private static int connectionAttempts;
+    private static int nextConnectionTick = 5;
     private static boolean targetReady;
     private static boolean targetCaptureSeen;
     private static boolean targetScreenOpened;
@@ -61,9 +65,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             }
 
             if (minecraft.player == null || minecraft.level == null) {
-                if (!connectionStarted && ticks >= 5) {
-                    connectToDedicatedServer(minecraft);
-                }
+                handleConnectionState(minecraft);
                 return;
             }
 
@@ -77,8 +79,39 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
     }
 
+    private static void handleConnectionState(Minecraft minecraft) {
+        Screen current = minecraft.gui.screen();
+        boolean disconnected = current != null
+                && current.getClass().getSimpleName().contains("Disconnected");
+
+        if (connectionStarted && disconnected) {
+            connectionStarted = false;
+            nextConnectionTick = ticks + RECONNECT_DELAY_TICKS;
+            ObserverE2eCommon.marker(
+                    role + "-reconnect-" + connectionAttempts + ".txt",
+                    role + " connection attempt " + connectionAttempts
+                            + " failed; retrying after " + RECONNECT_DELAY_TICKS + " ticks.\n"
+            );
+        }
+
+        if (connectionStarted || ticks < nextConnectionTick) {
+            return;
+        }
+
+        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+            failAndStop(
+                    minecraft,
+                    "Failed to connect to dedicated server after " + MAX_CONNECTION_ATTEMPTS + " attempts"
+            );
+            return;
+        }
+
+        connectToDedicatedServer(minecraft);
+    }
+
     private static void connectToDedicatedServer(Minecraft minecraft) {
         connectionStarted = true;
+        connectionAttempts++;
         ServerData serverData = new ServerData(
                 "Totem Observer E2E",
                 E2E_SERVER.toString(),
@@ -88,7 +121,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
         ConnectScreen.startConnecting(parent, minecraft, E2E_SERVER, serverData, false, null);
         ObserverE2eCommon.marker(
                 role + "-connect-started.txt",
-                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570.\n"
+                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570; attempt "
+                        + connectionAttempts + ".\n"
         );
     }
 
