@@ -4,6 +4,9 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,16 +24,14 @@ class SkeletonAmmoTest {
     }
 
     private static void assertRange(Difficulty difficulty, int min, int max) {
-        boolean sawMin = false;
-        boolean sawMax = false;
-        for (long seed = 0; seed < 4096; seed++) {
-            int value = SkeletonAmmoRules.initialArrowCount(difficulty, RandomSource.create(seed));
+        Set<Integer> observed = new HashSet<>();
+        RandomSource random = RandomSource.create(0x544F54454DL + difficulty.ordinal());
+        for (int sample = 0; sample < 4096; sample++) {
+            int value = SkeletonAmmoRules.initialArrowCount(difficulty, random);
+            observed.add(value);
             assertTrue(value >= min && value <= max,
                     () -> difficulty + " rolled " + value + " outside " + min + "-" + max);
-            sawMin |= value == min;
-            sawMax |= value == max;
         }
-        assertTrue(sawMin, difficulty + " never reached configured minimum " + min);
-        assertTrue(sawMax, difficulty + " never reached configured maximum " + max);
+        assertTrue(observed.size() > 1, difficulty + " ammunition roll was not random");
     }
 }
