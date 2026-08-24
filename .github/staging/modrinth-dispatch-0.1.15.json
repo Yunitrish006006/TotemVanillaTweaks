@@ -1,0 +1,9 @@
+{
+  "helper_run": "32703187917",
+  "helper_sha": "d8ee4171e9c02e70e16c183ff143e07e213b0bbc",
+  "dispatch": "failed",
+  "exit_code": 1,
+  "output": "failed to run git: fatal: not a git repository (or any of the parent directories): .git",
+  "dry_run": true,
+  "release_type": "beta"
+}
