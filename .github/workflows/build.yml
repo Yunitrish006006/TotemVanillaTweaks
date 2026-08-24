@@ -180,9 +180,11 @@ jobs:
                && -f "$results/target-native-no-frame.txt" \
                && -f "$results/observer-native-state-ok.txt" \
                && -f "$results/observer-native-camera-ok.txt" \
+               && -f "$results/observer-native-hud-ok.txt" \
                && -f "$results/observer-native-world-settled.txt" \
                && -f "$results/observer-native-world-saved.txt" \
                && -f "$results/observer-native-world.png" \
+               && -f "$results/observer-native-hud.png" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -222,7 +224,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM protocol-native gameplay E2E passed.' \
-            'Verified structured state relay, vanilla Target camera rendering, zero gameplay PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
+            'Verified protocol-v2 structured state relay, local HUD extraction, vanilla Target camera rendering, zero gameplay PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
