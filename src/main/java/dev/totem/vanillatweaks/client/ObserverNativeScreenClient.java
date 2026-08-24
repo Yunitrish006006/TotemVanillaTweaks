@@ -21,13 +21,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Protocol-native container screen transport. The Target sends logical slot state only;
- * the Observer reconstructs item icons and layout locally with its own Minecraft renderer.
+ * Protocol-native screen transport. Known container screens use semantic slot snapshots;
+ * unknown screens use metadata-only local placeholders. Neither path receives pixels.
  */
 public final class ObserverNativeScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
+    private static final int GENERIC_SCREEN_DELAY_TICKS = 3;
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
@@ -42,8 +43,15 @@ public final class ObserverNativeScreenClient {
     private static int remoteMouseX;
     private static int remoteMouseY;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
+
+    private static boolean remoteGenericOpen;
+    private static String remoteGenericClass = "";
+    private static String remoteGenericTitle = "";
+    private static int genericScreenTicks;
+
     private static boolean suppressMirrorStop;
     private static long extractedFrames;
+    private static long genericExtractedFrames;
 
     private ObserverNativeScreenClient() {
     }
@@ -68,12 +76,42 @@ public final class ObserverNativeScreenClient {
         return screen instanceof NativeContainerMirrorScreen;
     }
 
+    static boolean isNativeGenericMirror(Screen screen) {
+        return screen instanceof NativeGenericMirrorScreen;
+    }
+
+    static boolean isNativeMirrorScreen(Screen screen) {
+        return isNativeContainerMirror(screen) || isNativeGenericMirror(screen);
+    }
+
     static long extractedFrames() {
         return extractedFrames;
     }
 
+    static long genericExtractedFrames() {
+        return genericExtractedFrames;
+    }
+
     static long lastRemoteSequence() {
         return lastRemoteSequence;
+    }
+
+    static void applyGenericScreenState(boolean open, String screenClass, String title) {
+        if (!ObserverNativeClient.observerSessionActive()) {
+            clearRemoteGeneric();
+            return;
+        }
+        if (!open) {
+            clearRemoteGeneric();
+            if (!remoteContainerOpen) {
+                closeNativeScreen();
+            }
+            return;
+        }
+        remoteGenericOpen = true;
+        remoteGenericClass = screenClass == null ? "" : screenClass;
+        remoteGenericTitle = title == null ? "" : title;
+        genericScreenTicks = 0;
     }
 
     private static void tick(Minecraft minecraft) {
@@ -84,9 +122,22 @@ public final class ObserverNativeScreenClient {
             tickTarget(minecraft);
         }
 
-        if (!ObserverNativeClient.observerSessionActive() && remoteContainerOpen) {
-            clearRemoteContainer();
-            closeMirrorScreen();
+        if (!ObserverNativeClient.observerSessionActive()) {
+            if (remoteContainerOpen || remoteGenericOpen || isNativeMirrorScreen(minecraft.gui.screen())) {
+                clearRemoteContainer();
+                clearRemoteGeneric();
+                closeNativeScreen();
+            }
+            return;
+        }
+
+        if (remoteContainerOpen) {
+            ensureContainerScreen();
+        } else if (remoteGenericOpen) {
+            genericScreenTicks++;
+            if (genericScreenTicks >= GENERIC_SCREEN_DELAY_TICKS) {
+                ensureGenericScreen();
+            }
         }
     }
 
@@ -181,7 +232,11 @@ public final class ObserverNativeScreenClient {
         lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemoteContainer();
-            closeMirrorScreen();
+            if (remoteGenericOpen) {
+                ensureGenericScreen();
+            } else {
+                closeNativeScreen();
+            }
             return;
         }
 
@@ -193,22 +248,41 @@ public final class ObserverNativeScreenClient {
         remoteMouseX = payload.mouseX();
         remoteMouseY = payload.mouseY();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirrorScreen();
+        ensureContainerScreen();
     }
 
-    private static void ensureMirrorScreen() {
+    private static void ensureContainerScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteContainerOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
         if (!(minecraft.gui.screen() instanceof NativeContainerMirrorScreen)) {
-            minecraft.setScreenAndShow(new NativeContainerMirrorScreen());
+            replaceNativeScreen(new NativeContainerMirrorScreen());
         }
     }
 
-    private static void closeMirrorScreen() {
+    private static void ensureGenericScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeContainerMirrorScreen)) {
+        if (!remoteGenericOpen || remoteContainerOpen || !ObserverNativeClient.observerSessionActive()) {
+            return;
+        }
+        if (!(minecraft.gui.screen() instanceof NativeGenericMirrorScreen)) {
+            replaceNativeScreen(new NativeGenericMirrorScreen());
+        }
+    }
+
+    private static void replaceNativeScreen(Screen next) {
+        suppressMirrorStop = true;
+        try {
+            Minecraft.getInstance().setScreenAndShow(next);
+        } finally {
+            suppressMirrorStop = false;
+        }
+    }
+
+    private static void closeNativeScreen() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!isNativeMirrorScreen(minecraft.gui.screen())) {
             return;
         }
         suppressMirrorStop = true;
@@ -230,12 +304,22 @@ public final class ObserverNativeScreenClient {
         remoteSlots = List.of();
     }
 
+    private static void clearRemoteGeneric() {
+        remoteGenericOpen = false;
+        remoteGenericClass = "";
+        remoteGenericTitle = "";
+        genericScreenTicks = 0;
+    }
+
     private static ItemStack itemStack(ObserverNativeScreenPayloads.SlotState slot) {
         if (slot.itemId().isBlank() || slot.count() <= 0) {
             return ItemStack.EMPTY;
         }
         try {
             Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(slot.itemId()));
+            if (item == null) {
+                return ItemStack.EMPTY;
+            }
             ItemStack stack = new ItemStack(item, Math.max(1, slot.count()));
             if (slot.damage() > 0 && stack.isDamageableItem()) {
                 stack.setDamageValue(slot.damage());
@@ -251,7 +335,26 @@ public final class ObserverNativeScreenClient {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static final class NativeContainerMirrorScreen extends Screen {
+    private abstract static class NativeObserverScreen extends Screen {
+        private NativeObserverScreen(Component title) {
+            super(title);
+        }
+
+        @Override
+        public void onClose() {
+            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
+                ClientPlayNetworking.send(new ObserverPayloads.Stop());
+            }
+            super.onClose();
+        }
+
+        @Override
+        public boolean isPauseScreen() {
+            return false;
+        }
+    }
+
+    private static final class NativeContainerMirrorScreen extends NativeObserverScreen {
         private NativeContainerMirrorScreen() {
             super(Component.literal("Observer Container"));
         }
@@ -303,18 +406,43 @@ public final class ObserverNativeScreenClient {
             }
             extractedFrames++;
         }
+    }
 
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
+    private static final class NativeGenericMirrorScreen extends NativeObserverScreen {
+        private NativeGenericMirrorScreen() {
+            super(Component.literal("Observer Remote Screen"));
         }
 
         @Override
-        public boolean isPauseScreen() {
-            return false;
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            graphics.fill(0, 0, width, height, 0xD0101010);
+            int panelWidth = Math.min(360, Math.max(220, width - 80));
+            int panelHeight = 92;
+            int left = (width - panelWidth) / 2;
+            int top = (height - panelHeight) / 2;
+            graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xEE242424);
+            graphics.fill(left, top, left + panelWidth, top + 2, 0xFF808080);
+
+            String title = remoteGenericTitle.isBlank() ? "Remote screen" : remoteGenericTitle;
+            graphics.text(this.minecraft.font, title, left + 10, top + 10, 0xFFFFFFFF, true);
+            graphics.text(this.minecraft.font, remoteGenericClass, left + 10, top + 28, 0xFFB0B0B0, false);
+            graphics.text(
+                    this.minecraft.font,
+                    "No framebuffer transmitted; semantic adapter pending.",
+                    left + 10,
+                    top + 50,
+                    0xFF80CBC4,
+                    false
+            );
+            graphics.text(
+                    this.minecraft.font,
+                    "Press Esc to stop observing.",
+                    left + 10,
+                    top + 66,
+                    0xFF9E9E9E,
+                    false
+            );
+            genericExtractedFrames++;
         }
     }
 }
