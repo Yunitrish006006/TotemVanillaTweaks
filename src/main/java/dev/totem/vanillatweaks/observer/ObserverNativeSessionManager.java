@@ -36,8 +36,9 @@ public final class ObserverNativeSessionManager {
         return true;
     }
 
-    public static void stop(ServerPlayer observer) {
+    public static boolean stop(ServerPlayer observer) {
         UUID targetId = TARGET_BY_OBSERVER.remove(observer.getUUID());
+        boolean wasNative = targetId != null;
         if (ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)) {
             ServerPlayNetworking.send(observer, new ObserverNativePayloads.NativeSession(
                     false,
@@ -49,6 +50,7 @@ public final class ObserverNativeSessionManager {
         if (targetId != null) {
             updateTargetControl(observer.level().getServer(), targetId);
         }
+        return wasNative;
     }
 
     public static void removeOfflineObserver(MinecraftServer server, UUID observerId) {
@@ -58,11 +60,15 @@ public final class ObserverNativeSessionManager {
         }
     }
 
+    public static void refreshTargetControl(MinecraftServer server, UUID targetId) {
+        updateTargetControl(server, targetId);
+    }
+
     public static void acceptViewState(ServerPlayer target, ObserverNativePayloads.NativeViewState payload) {
         if (!valid(payload)) {
             return;
         }
-        int observerCount = observerCount(target.getUUID());
+        int observerCount = nativeObserverCount(target.getUUID());
         if (observerCount == 0) {
             return;
         }
@@ -118,7 +124,7 @@ public final class ObserverNativeSessionManager {
                 && payload.saturation() <= 20.0F;
     }
 
-    private static int observerCount(UUID targetId) {
+    private static int nativeObserverCount(UUID targetId) {
         int count = 0;
         for (UUID value : TARGET_BY_OBSERVER.values()) {
             if (targetId.equals(value)) {
@@ -134,14 +140,17 @@ public final class ObserverNativeSessionManager {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
             return;
         }
-        boolean enabled = observerCount(targetId) > 0;
+        int nativeCount = nativeObserverCount(targetId);
+        boolean enabled = nativeCount > 0;
+        boolean captureGameplayFrames = ObserverSessionManager.observerCount(targetId) > nativeCount;
         if (!enabled) {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
         }
         ServerPlayNetworking.send(target, new ObserverNativePayloads.NativeControl(
                 enabled,
                 ObserverNativePayloads.PROTOCOL_VERSION,
-                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0
+                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0,
+                captureGameplayFrames
         ));
     }
 }
