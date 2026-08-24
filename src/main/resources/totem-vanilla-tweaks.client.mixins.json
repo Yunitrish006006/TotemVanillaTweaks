@@ -5,7 +5,10 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "OptionsMixin",
-    "AbstractContainerScreenMixin"
+    "AbstractContainerScreenMixin",
+    "BookViewScreenAccessor",
+    "BookEditScreenAccessor",
+    "BookSignScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

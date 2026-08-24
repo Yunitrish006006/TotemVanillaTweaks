@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.observer;
 
+import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -19,6 +20,7 @@ public final class ObserverNativeSessionManager {
     private static final Map<UUID, Long> SCREEN_CAPABILITIES_BY_OBSERVER = new HashMap<>();
     private static final Map<UUID, Long> LAST_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_SCREEN_SEQUENCE_BY_TARGET = new HashMap<>();
+    private static final Map<UUID, Long> LAST_BOOK_SEQUENCE_BY_TARGET = new HashMap<>();
 
     private ObserverNativeSessionManager() {
     }
@@ -183,12 +185,57 @@ public final class ObserverNativeSessionManager {
         );
     }
 
+    public static void acceptBookState(ServerPlayer target, ObserverBookScreenPayloads.BookState payload) {
+        long familyCapability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validBook(payload)
+                || familyCapability != ObserverNativeScreenPayloads.CAPABILITY_BOOK
+                || !ObserverNativeScreenPayloads.supports(
+                        screenCapabilitiesForTarget(target.getUUID()),
+                        familyCapability
+                )
+                || nativeObserverCount(target.getUUID()) == 0
+                || !acceptBookSequence(target.getUUID(), payload.sequence())) {
+            return;
+        }
+
+        ObserverBookScreenPayloads.BookRelay relay = new ObserverBookScreenPayloads.BookRelay(
+                target.getUUID(),
+                payload.protocolVersion(),
+                payload.sequence(),
+                payload.open(),
+                payload.familyId(),
+                payload.variant(),
+                payload.screenClass(),
+                payload.title(),
+                payload.pageIndex(),
+                payload.pageCount(),
+                payload.pageText(),
+                payload.bookTitle(),
+                payload.author()
+        );
+        relayToNativeObservers(
+                target,
+                ObserverBookScreenPayloads.BookRelay.TYPE,
+                relay,
+                familyCapability
+        );
+    }
+
     private static boolean acceptScreenSequence(UUID targetId, long sequence) {
         long lastSequence = LAST_SCREEN_SEQUENCE_BY_TARGET.getOrDefault(targetId, -1L);
         if (sequence <= lastSequence) {
             return false;
         }
         LAST_SCREEN_SEQUENCE_BY_TARGET.put(targetId, sequence);
+        return true;
+    }
+
+    private static boolean acceptBookSequence(UUID targetId, long sequence) {
+        long lastSequence = LAST_BOOK_SEQUENCE_BY_TARGET.getOrDefault(targetId, -1L);
+        if (sequence <= lastSequence) {
+            return false;
+        }
+        LAST_BOOK_SEQUENCE_BY_TARGET.put(targetId, sequence);
         return true;
     }
 
@@ -275,6 +322,32 @@ public final class ObserverNativeSessionManager {
         );
     }
 
+    private static boolean validBook(ObserverBookScreenPayloads.BookState payload) {
+        if (payload.protocolVersion() != ObserverBookScreenPayloads.PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_BOOK.equals(payload.familyId())
+                || payload.sequence() < 0L) {
+            return false;
+        }
+        if (!payload.open()) {
+            return payload.pageIndex() == 0 && payload.pageCount() == 0;
+        }
+        if (!validBookVariant(payload.variant())
+                || payload.pageCount() < 0
+                || payload.pageCount() > ObserverBookScreenPayloads.MAX_PAGE_COUNT) {
+            return false;
+        }
+        return payload.pageCount() == 0
+                ? payload.pageIndex() == 0
+                : payload.pageIndex() >= 0 && payload.pageIndex() < payload.pageCount();
+    }
+
+    private static boolean validBookVariant(String variant) {
+        return ObserverBookScreenPayloads.VARIANT_WRITTEN.equals(variant)
+                || ObserverBookScreenPayloads.VARIANT_WRITABLE.equals(variant)
+                || ObserverBookScreenPayloads.VARIANT_LECTERN.equals(variant)
+                || ObserverBookScreenPayloads.VARIANT_SIGNING.equals(variant);
+    }
+
     private static boolean validScreenGeometry(
             boolean open,
             int contentWidth,
@@ -316,6 +389,9 @@ public final class ObserverNativeSessionManager {
         if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.FurnaceRelay.TYPE)) {
             capabilities |= ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
         }
+        if (ServerPlayNetworking.canSend(observer, ObserverBookScreenPayloads.BookRelay.TYPE)) {
+            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_BOOK;
+        }
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
 
@@ -344,6 +420,7 @@ public final class ObserverNativeSessionManager {
         if (target == null || !ServerPlayNetworking.canSend(target, ObserverNativePayloads.NativeControl.TYPE)) {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
             LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
+            LAST_BOOK_SEQUENCE_BY_TARGET.remove(targetId);
             return;
         }
         boolean enabled = nativeObserverCount(targetId) > 0;
@@ -351,6 +428,7 @@ public final class ObserverNativeSessionManager {
         if (!enabled) {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
             LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
+            LAST_BOOK_SEQUENCE_BY_TARGET.remove(targetId);
         }
         ServerPlayNetworking.send(target, new ObserverNativePayloads.NativeControl(
                 enabled,
