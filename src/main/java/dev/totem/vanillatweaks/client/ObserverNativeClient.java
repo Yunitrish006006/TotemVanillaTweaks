@@ -27,6 +27,9 @@ public final class ObserverNativeClient {
     private static float remoteMaxHealth;
     private static int remoteFood;
     private static float remoteSaturation;
+    private static float remoteExperienceProgress;
+    private static int remoteExperienceLevel;
+    private static int remoteSelectedHotbarSlot;
     private static boolean remoteSprinting;
     private static boolean remoteCrouching;
     private static boolean remoteUsingItem;
@@ -74,6 +77,22 @@ public final class ObserverNativeClient {
         return remoteFood;
     }
 
+    static float remoteSaturation() {
+        return remoteSaturation;
+    }
+
+    static float remoteExperienceProgress() {
+        return remoteExperienceProgress;
+    }
+
+    static int remoteExperienceLevel() {
+        return remoteExperienceLevel;
+    }
+
+    static int remoteSelectedHotbarSlot() {
+        return remoteSelectedHotbarSlot;
+    }
+
     static String observerTargetName() {
         return observerTargetName;
     }
@@ -111,6 +130,9 @@ public final class ObserverNativeClient {
             remoteMaxHealth = 0.0F;
             remoteFood = 0;
             remoteSaturation = 0.0F;
+            remoteExperienceProgress = 0.0F;
+            remoteExperienceLevel = 0;
+            remoteSelectedHotbarSlot = 0;
             remoteSprinting = false;
             remoteCrouching = false;
             remoteUsingItem = false;
@@ -137,6 +159,9 @@ public final class ObserverNativeClient {
                 minecraft.player.getMaxHealth(),
                 minecraft.player.getFoodData().getFoodLevel(),
                 minecraft.player.getFoodData().getSaturationLevel(),
+                minecraft.player.experienceProgress,
+                minecraft.player.experienceLevel,
+                minecraft.player.getInventory().getSelectedSlot(),
                 minecraft.player.isSprinting(),
                 minecraft.player.isCrouching(),
                 minecraft.player.isUsingItem()
@@ -158,6 +183,9 @@ public final class ObserverNativeClient {
         remoteMaxHealth = payload.maxHealth();
         remoteFood = payload.food();
         remoteSaturation = payload.saturation();
+        remoteExperienceProgress = payload.experienceProgress();
+        remoteExperienceLevel = payload.experienceLevel();
+        remoteSelectedHotbarSlot = payload.selectedHotbarSlot();
         remoteSprinting = payload.sprinting();
         remoteCrouching = payload.crouching();
         remoteUsingItem = payload.usingItem();
