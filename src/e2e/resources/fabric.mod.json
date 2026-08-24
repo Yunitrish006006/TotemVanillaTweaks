@@ -12,9 +12,6 @@
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient"
     ]
   },
-  "mixins": [
-    "totem-vanilla-tweaks-e2e.mixins.json"
-  ],
   "depends": {
     "fabricloader": "*",
     "fabric-api": "*",
