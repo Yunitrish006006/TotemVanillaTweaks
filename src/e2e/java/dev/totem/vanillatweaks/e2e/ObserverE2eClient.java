@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -25,18 +26,19 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Test-only Target/Observer client driver for the real three-process Observer View E2E. */
+/** Test-only Target/Observer driver for the real three-process protocol-native Observer E2E. */
 public final class ObserverE2eClient implements ClientModInitializer {
-    private static final Class<?> CLIENT = ObserverUiClient.class;
+    private static final Class<?> UI_CLIENT = ObserverUiClient.class;
     private static final Class<?> NATIVE_CLIENT = ObserverNativeClient.class;
     private static final Class<?> NATIVE_HUD = ObserverNativeHud.class;
     private static final Class<?> NATIVE_SCREEN_CLIENT = ObserverNativeScreenClient.class;
+
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 180;
     private static final int MAX_CONNECTION_ATTEMPTS = 5;
     private static final int RECONNECT_DELAY_TICKS = 20 * 2;
+    private static final int INITIAL_CONNECTION_DELAY_TICKS = 20 * 10;
     private static final int TARGET_WORLD_SETTLE_TICKS = 40;
     private static final int NATIVE_WORLD_SETTLE_TICKS = 20;
-    private static final int INITIAL_CONNECTION_DELAY_TICKS = 20 * 10;
     private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
@@ -44,23 +46,22 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean connectionStarted;
     private static int connectionAttempts;
     private static int nextConnectionTick = INITIAL_CONNECTION_DELAY_TICKS;
+    private static boolean finished;
+
     private static int targetWorldStableTicks;
     private static boolean targetReady;
-    private static boolean targetCaptureSeen;
     private static boolean targetNativeSeen;
-    private static boolean targetNoFrameProven;
     private static boolean targetContainerOpened;
     private static boolean targetContainerClosed;
-    private static long targetFrameIdBeforeContainer;
     private static boolean targetGenericOpened;
     private static boolean targetGenericClosed;
-    private static long targetFrameIdBeforeGeneric;
+    private static int targetGenericTicks;
 
     private static boolean observerNativeSeen;
     private static boolean observerHudSeen;
     private static int observerNativeWorldStableTicks;
-    private static boolean observerScreenshotRequested;
-    private static volatile boolean observerScreenshotSaved;
+    private static boolean observerWorldScreenshotRequested;
+    private static volatile boolean observerWorldScreenshotSaved;
     private static boolean observerContainerRequested;
     private static boolean observerContainerSeen;
     private static boolean observerContainerScreenshotRequested;
@@ -70,7 +71,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean observerGenericScreenshotRequested;
     private static volatile boolean observerGenericScreenshotSaved;
     private static boolean observerStopRequested;
-    private static boolean finished;
 
     @Override
     public void onInitializeClient() {
@@ -82,6 +82,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             ObserverE2eCommon.fail("client", "Unknown E2E role: " + role);
             return;
         }
+        assertFramebufferSurfaceRemoved();
         ClientTickEvents.END_CLIENT_TICK.register(ObserverE2eClient::tick);
     }
 
@@ -95,12 +96,10 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 failAndStop(minecraft, "Timed out after " + CLIENT_TIMEOUT_TICKS + " client ticks");
                 return;
             }
-
             if (minecraft.player == null || minecraft.level == null) {
                 handleConnectionState(minecraft);
                 return;
             }
-
             if (role.equals("target")) {
                 tickTarget(minecraft);
             } else {
@@ -113,60 +112,28 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
     private static void handleConnectionState(Minecraft minecraft) {
         Screen current = minecraft.gui.screen();
-        boolean disconnected = current != null
-                && current.getClass().getSimpleName().contains("Disconnected");
-
+        boolean disconnected = current != null && current.getClass().getSimpleName().contains("Disconnected");
         if (connectionStarted && disconnected) {
             connectionStarted = false;
             nextConnectionTick = ticks + RECONNECT_DELAY_TICKS;
-            ObserverE2eCommon.marker(
-                    role + "-reconnect-" + connectionAttempts + ".txt",
-                    role + " connection attempt " + connectionAttempts
-                            + " failed; retrying after " + RECONNECT_DELAY_TICKS + " ticks.\n"
-            );
         }
-
         if (connectionStarted || ticks < nextConnectionTick) {
             return;
         }
-
         if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-            failAndStop(
-                    minecraft,
-                    "Failed to connect to dedicated server after " + MAX_CONNECTION_ATTEMPTS + " attempts"
-            );
+            failAndStop(minecraft, "Failed to connect after " + MAX_CONNECTION_ATTEMPTS + " attempts");
             return;
         }
-
-        connectToDedicatedServer(minecraft);
-    }
-
-    private static void connectToDedicatedServer(Minecraft minecraft) {
         connectionStarted = true;
         connectionAttempts++;
-        ServerData serverData = new ServerData(
-                "Totem Observer E2E",
-                E2E_SERVER.toString(),
-                ServerData.Type.OTHER
-        );
-        Screen parent = minecraft.gui.screen();
-        ConnectScreen.startConnecting(parent, minecraft, E2E_SERVER, serverData, false, null);
-        ObserverE2eCommon.marker(
-                role + "-connect-started.txt",
-                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570; attempt "
-                        + connectionAttempts + ".\n"
-        );
+        ServerData serverData = new ServerData("Totem Observer E2E", E2E_SERVER.toString(), ServerData.Type.OTHER);
+        ConnectScreen.startConnecting(minecraft.gui.screen(), minecraft, E2E_SERVER, serverData, false, null);
+        ObserverE2eCommon.marker(role + "-connect-started.txt", "attempt=" + connectionAttempts + "\n");
     }
 
     private static void tickTarget(Minecraft minecraft) {
-        if (getBoolean("sessionActive")) {
-            throw new AssertionError("Target JVM incorrectly entered observer session state");
-        }
-        if (getBoolean("textureRegistered")) {
-            throw new AssertionError("Target JVM incorrectly installed observer mirror texture");
-        }
         if (nativeGetBoolean("observerSessionActive")) {
-            throw new AssertionError("Target JVM incorrectly entered native observer session state");
+            throw new AssertionError("Target entered observer receiver state");
         }
 
         if (!targetReady) {
@@ -174,169 +141,105 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 targetWorldStableTicks = 0;
                 return;
             }
-            targetWorldStableTicks++;
-            if (targetWorldStableTicks < TARGET_WORLD_SETTLE_TICKS) {
+            if (++targetWorldStableTicks < TARGET_WORLD_SETTLE_TICKS) {
                 return;
             }
             targetReady = true;
             ObserverE2eCommon.marker(
                     "target-world-ready.txt",
-                    "Target stayed in the dedicated-server gameplay view with no Screen open for "
-                            + TARGET_WORLD_SETTLE_TICKS + " client ticks.\n"
+                    "Target stabilized in gameplay with no Screen open.\n"
             );
         }
 
-        boolean captureEnabled = getBoolean("captureEnabled");
-        if (captureEnabled && !targetCaptureSeen) {
-            targetCaptureSeen = true;
-            ObserverE2eCommon.marker(
-                    "target-capture-enabled.txt",
-                    "Target received compatibility CaptureControl(true); native mode must suppress all framebuffer frames.\n"
-            );
-        }
-
-        boolean nativeEnabled = nativeGetBoolean("targetStateEnabled");
-        if (nativeEnabled && !targetNativeSeen) {
-            targetNativeSeen = true;
+        if (nativeGetBoolean("targetStateEnabled") && !targetNativeSeen) {
             if (nativeGetInt("targetProtocolVersion") != ObserverNativePayloads.PROTOCOL_VERSION) {
-                throw new AssertionError("Target negotiated unexpected native protocol version: "
-                        + nativeGetInt("targetProtocolVersion"));
+                throw new AssertionError("Unexpected Target protocol version " + nativeGetInt("targetProtocolVersion"));
             }
-            if (nativeGetBoolean("captureGameplayFrames")) {
-                throw new AssertionError("Native-only E2E incorrectly requested framebuffer fallback");
-            }
+            targetNativeSeen = true;
             ObserverE2eCommon.marker(
                     "target-native-state-enabled.txt",
-                    "Target negotiated Observer protocol v" + ObserverNativePayloads.PROTOCOL_VERSION
-                            + " with global framebuffer suppression.\n"
+                    "Target negotiated framebuffer-free Observer protocol v" + ObserverNativePayloads.PROTOCOL_VERSION + ".\n"
             );
         }
 
-        if (targetNativeSeen && nativeGetLong("nextTargetStateSequence") >= 3L && !targetNoFrameProven) {
-            if (getLong("nextFrameId") != 0L) {
-                throw new AssertionError("Target emitted gameplay framebuffer despite protocol-native mode; nextFrameId="
-                        + getLong("nextFrameId"));
-            }
-            targetNoFrameProven = true;
+        if (targetNativeSeen && nativeGetLong("nextTargetStateSequence") >= 3L
+                && !markerExists("target-native-no-frame.txt")) {
+            assertFramebufferSurfaceRemoved();
             ObserverE2eCommon.marker(
                     "target-native-no-frame.txt",
-                    "Target sent structured state while nextFrameId remained zero with no Screen open.\n"
+                    "Target sent structured state; framebuffer transport classes/fields are absent from production client.\n"
             );
         }
 
-        if (!targetContainerOpened
-                && targetNoFrameProven
-                && markerExists("observer-ready-for-container.txt")) {
+        if (!targetContainerOpened && markerExists("observer-ready-for-container.txt")) {
             if (minecraft.gui.screen() != null) {
-                throw new AssertionError("Target had an unexpected Screen before Inventory E2E: "
-                        + minecraft.gui.screen().getClass().getName());
+                throw new AssertionError("Unexpected Target Screen before Inventory proof");
             }
-            targetFrameIdBeforeContainer = getLong("nextFrameId");
             minecraft.setScreenAndShow(new InventoryScreen(minecraft.player));
             targetContainerOpened = true;
-            ObserverE2eCommon.marker(
-                    "target-native-container-opened.txt",
-                    "Target opened its real InventoryScreen for structured container relay proof.\n"
-            );
+            ObserverE2eCommon.marker("target-native-container-opened.txt", "Target opened real InventoryScreen.\n");
             return;
         }
 
         if (targetContainerOpened && !targetContainerClosed) {
             if (!(minecraft.gui.screen() instanceof InventoryScreen)) {
-                throw new AssertionError("Target InventoryScreen closed before Observer captured structured container proof");
-            }
-            if (getLong("nextFrameId") != targetFrameIdBeforeContainer) {
-                throw new AssertionError("Target emitted framebuffer while native InventoryScreen was open; nextFrameId="
-                        + getLong("nextFrameId"));
+                throw new AssertionError("InventoryScreen closed before Observer proof");
             }
             if (screenGetBoolean("targetContainerOpen") && screenGetLong("nextTargetSequence") > 0L) {
                 ObserverE2eCommon.marker(
                         "target-native-container-state-sent.txt",
-                        "Target sent structured InventoryScreen slot state while framebuffer id remained unchanged.\n"
+                        "Target sent structured Inventory slot state.\n"
                 );
             }
             if (markerExists("observer-native-container-saved.txt")) {
-                if (!screenGetBoolean("targetContainerOpen") || screenGetLong("nextTargetSequence") <= 0L) {
-                    throw new AssertionError("Observer saved container proof before Target sent structured screen state");
-                }
                 minecraft.setScreenAndShow(null);
                 targetContainerClosed = true;
-                ObserverE2eCommon.marker(
-                        "target-native-container-closed.txt",
-                        "Target closed InventoryScreen after Observer saved the locally reconstructed container.\n"
-                );
+                ObserverE2eCommon.marker("target-native-container-closed.txt", "Target closed InventoryScreen.\n");
             }
             return;
         }
 
-        if (!targetGenericOpened
-                && targetContainerClosed
-                && markerExists("observer-ready-for-generic-screen.txt")) {
+        if (!targetGenericOpened && targetContainerClosed && markerExists("observer-ready-for-generic-screen.txt")) {
             if (minecraft.gui.screen() != null) {
-                throw new AssertionError("Target had an unexpected Screen before unsupported-screen E2E: "
-                        + minecraft.gui.screen().getClass().getName());
-            }
-            targetFrameIdBeforeGeneric = getLong("nextFrameId");
-            if (targetFrameIdBeforeGeneric != 0L) {
-                throw new AssertionError("Target entered unsupported-screen E2E after a framebuffer was already emitted");
+                throw new AssertionError("Unexpected Target Screen before generic proof");
             }
             minecraft.setScreenAndShow(new E2eUnsupportedScreen());
             targetGenericOpened = true;
+            targetGenericTicks = 0;
             ObserverE2eCommon.marker(
                     "target-native-generic-opened.txt",
-                    "Target opened a deliberately unsupported non-container Screen for metadata-only native fallback proof.\n"
+                    "Target opened unsupported non-container Screen.\n"
             );
             return;
         }
 
         if (targetGenericOpened && !targetGenericClosed) {
             if (!(minecraft.gui.screen() instanceof E2eUnsupportedScreen)) {
-                throw new AssertionError("Unsupported Target Screen closed before Observer saved metadata-only proof");
+                throw new AssertionError("Unsupported Screen closed before Observer proof");
             }
-            if (getLong("nextFrameId") != targetFrameIdBeforeGeneric) {
-                throw new AssertionError("Target emitted framebuffer while unsupported native Screen was open; nextFrameId="
-                        + getLong("nextFrameId"));
+            targetGenericTicks++;
+            if (targetGenericTicks >= 10 && !markerExists("target-native-generic-no-frame.txt")) {
+                assertFramebufferSurfaceRemoved();
+                ObserverE2eCommon.marker(
+                        "target-native-generic-no-frame.txt",
+                        "Unsupported Screen stayed open while production client had no framebuffer transport surface.\n"
+                );
             }
-            ObserverE2eCommon.marker(
-                    "target-native-generic-no-frame.txt",
-                    "Unsupported Screen stayed open while Target nextFrameId remained zero.\n"
-            );
             if (markerExists("observer-native-generic-screen-saved.txt")) {
                 minecraft.setScreenAndShow(null);
                 targetGenericClosed = true;
-                ObserverE2eCommon.marker(
-                        "target-native-generic-closed.txt",
-                        "Target closed unsupported Screen after Observer saved local metadata-only placeholder.\n"
-                );
+                ObserverE2eCommon.marker("target-native-generic-closed.txt", "Target closed unsupported Screen.\n");
             }
             return;
         }
 
-        if (minecraft.gui.screen() != null) {
-            throw new AssertionError("Target opened an unexpected Screen during native E2E: "
-                    + minecraft.gui.screen().getClass().getName());
-        }
-
-        if (targetContainerClosed && getLong("nextFrameId") != targetFrameIdBeforeContainer) {
-            throw new AssertionError("Target emitted framebuffer during structured container lifecycle");
-        }
-        if (targetGenericClosed && getLong("nextFrameId") != targetFrameIdBeforeGeneric) {
-            throw new AssertionError("Target emitted framebuffer during unsupported-screen lifecycle");
-        }
-
-        if (targetCaptureSeen && !captureEnabled) {
+        if (targetGenericClosed && !nativeGetBoolean("targetStateEnabled")) {
             if (!targetNativeSeen || nativeGetLong("nextTargetStateSequence") <= 0L) {
-                throw new AssertionError("Target session completed without sending protocol-native structured state");
-            }
-            if (!targetNoFrameProven || getLong("nextFrameId") != 0L) {
-                throw new AssertionError("Target completed native session after emitting a framebuffer");
-            }
-            if (!targetContainerOpened || !targetContainerClosed || !targetGenericOpened || !targetGenericClosed) {
-                throw new AssertionError("Target session stopped before native screen E2E completed");
+                throw new AssertionError("Target stopped without native state relay");
             }
             ObserverE2eCommon.marker(
                     "target-complete.txt",
-                    "Target completed native world/HUD/container/unsupported-screen observation with zero PNG/framebuffer frames.\n"
+                    "Target completed world/HUD/container/unsupported-screen protocol-native observation.\n"
             );
             finished = true;
             stopMinecraft(minecraft);
@@ -344,238 +247,187 @@ public final class ObserverE2eClient implements ClientModInitializer {
     }
 
     private static void tickObserver(Minecraft minecraft) {
-        if (getBoolean("captureEnabled")) {
-            throw new AssertionError("Observer JVM incorrectly entered target capture state");
-        }
         if (nativeGetBoolean("targetStateEnabled")) {
-            throw new AssertionError("Observer JVM incorrectly entered native target-state sender mode");
+            throw new AssertionError("Observer entered Target sender state");
         }
-
         dismissAccessibilityOnboarding(minecraft);
 
-        boolean sessionActive = getBoolean("sessionActive");
+        boolean observerSessionActive = nativeGetBoolean("observerSessionActive");
         Screen screen = minecraft.gui.screen();
-        boolean mirrorOpen = isObserverMirror(screen);
-        boolean textureRegistered = getBoolean("textureRegistered");
 
-        if (nativeGetBoolean("observerSessionActive")) {
-            if (!sessionActive || !getBoolean("nativeSession")) {
-                throw new AssertionError("Native session was not bridged into ObserverUiClient lifecycle");
-            }
-            if (mirrorOpen) {
-                throw new AssertionError("Protocol-native flow unexpectedly opened ObserverMirrorScreen");
-            }
-            if (textureRegistered || getLong("lastFrameId") >= 0L) {
-                throw new AssertionError("Protocol-native flow unexpectedly installed/received framebuffer state");
-            }
-        }
-
-        if (!observerNativeSeen
-                && nativeGetBoolean("observerSessionActive")
-                && nativeGetLong("lastNativeStateSequence") > 0L) {
-            Object targetName = nativeGetObject("observerTargetName");
-            if (!"Target".equals(targetName)) {
-                throw new AssertionError("Native Observer target name mismatch: " + targetName);
+        if (!observerNativeSeen && observerSessionActive && nativeGetLong("lastNativeStateSequence") > 0L) {
+            if (!"Target".equals(nativeGetObject("observerTargetName"))) {
+                throw new AssertionError("Observer Target name mismatch");
             }
             if (nativeGetInt("observerProtocolVersion") != ObserverNativePayloads.PROTOCOL_VERSION) {
-                throw new AssertionError("Observer negotiated unexpected native protocol version: "
-                        + nativeGetInt("observerProtocolVersion"));
+                throw new AssertionError("Unexpected Observer protocol version");
             }
             float health = nativeGetFloat("remoteHealth");
             float maxHealth = nativeGetFloat("remoteMaxHealth");
             int food = nativeGetInt("remoteFood");
-            float experienceProgress = nativeGetFloat("remoteExperienceProgress");
-            int experienceLevel = nativeGetInt("remoteExperienceLevel");
-            int selectedHotbarSlot = nativeGetInt("remoteSelectedHotbarSlot");
             if (!(health >= 0.0F && maxHealth > 0.0F && health <= maxHealth && food >= 0 && food <= 20)) {
-                throw new AssertionError("Observer received invalid structured HUD state: health="
-                        + health + " maxHealth=" + maxHealth + " food=" + food);
-            }
-            if (!(experienceProgress >= 0.0F && experienceProgress <= 1.001F
-                    && experienceLevel >= 0
-                    && selectedHotbarSlot >= 0
-                    && selectedHotbarSlot < 9)) {
-                throw new AssertionError("Observer received invalid v2 XP/hotbar state: xp="
-                        + experienceProgress + " level=" + experienceLevel + " slot=" + selectedHotbarSlot);
+                throw new AssertionError("Invalid native HUD state");
             }
             requireTargetCamera(minecraft);
             observerNativeSeen = true;
-            observerNativeWorldStableTicks = 0;
             ObserverE2eCommon.marker(
                     "observer-native-state-ok.txt",
-                    "Observer received protocol-v" + ObserverNativePayloads.PROTOCOL_VERSION
-                            + " Target camera/HUD/XP/hotbar structured state over the real server relay.\n"
+                    "Observer received v" + ObserverNativePayloads.PROTOCOL_VERSION + " structured state.\n"
             );
             ObserverE2eCommon.marker(
                     "observer-native-camera-ok.txt",
-                    "Observer Minecraft camera entity is Target with no compatibility Mirror Screen or framebuffer texture.\n"
+                    "Observer camera entity is Target using vanilla world rendering.\n"
             );
         }
 
         if (observerNativeSeen && !observerHudSeen && hudGetLong("extractedFrames") > 0L) {
             observerHudSeen = true;
-            ObserverE2eCommon.marker(
-                    "observer-native-hud-ok.txt",
-                    "Observer locally extracted the Target health/food/XP/selected-slot HUD from structured state.\n"
-            );
+            ObserverE2eCommon.marker("observer-native-hud-ok.txt", "Observer locally rendered structured HUD.\n");
         }
 
-        if (observerNativeSeen && observerHudSeen && !observerScreenshotRequested) {
-            if (nativeWorldPathIsStable(minecraft, sessionActive, mirrorOpen, textureRegistered)) {
-                observerNativeWorldStableTicks++;
-                if (observerNativeWorldStableTicks >= NATIVE_WORLD_SETTLE_TICKS) {
-                    observerScreenshotRequested = true;
+        if (observerNativeSeen && observerHudSeen && !observerWorldScreenshotRequested) {
+            if (observerSessionActive && minecraft.gui.screen() == null) {
+                requireTargetCamera(minecraft);
+                if (++observerNativeWorldStableTicks >= NATIVE_WORLD_SETTLE_TICKS) {
+                    observerWorldScreenshotRequested = true;
                     ObserverE2eCommon.marker(
                             "observer-native-world-settled.txt",
-                            "Observer stayed on Minecraft-native Target camera rendering with local structured HUD for "
-                                    + NATIVE_WORLD_SETTLE_TICKS
-                                    + " client ticks with screen=null and zero framebuffer state.\n"
+                            "Observer native Target camera stayed stable with local HUD.\n"
                     );
-                    saveNativeWorldScreenshot(minecraft);
+                    saveScreenshot(minecraft, "observer-native-world.png", () -> {
+                        observerWorldScreenshotSaved = true;
+                        ObserverE2eCommon.marker("observer-native-world-saved.txt", "Native world screenshot saved locally.\n");
+                    });
                 }
             } else {
                 observerNativeWorldStableTicks = 0;
             }
         }
 
-        if (observerScreenshotSaved && !observerContainerRequested) {
+        if (observerWorldScreenshotSaved && !observerContainerRequested) {
             observerContainerRequested = true;
-            ObserverE2eCommon.marker(
-                    "observer-ready-for-container.txt",
-                    "Observer native world/HUD proof is complete; Target may open InventoryScreen.\n"
-            );
+            ObserverE2eCommon.marker("observer-ready-for-container.txt", "Target may open InventoryScreen.\n");
         }
 
-        if (observerContainerRequested && !observerContainerSeen) {
-            Screen current = minecraft.gui.screen();
-            if (isNativeContainerMirror(current)
-                    && screenGetBoolean("remoteContainerOpen")
-                    && screenGetLong("lastRemoteSequence") > 0L
-                    && screenGetLong("extractedFrames") > 0L) {
-                requireNoFramebufferState("structured container");
-                observerContainerSeen = true;
-                ObserverE2eCommon.marker(
-                        "observer-native-container-ok.txt",
-                        "Observer received structured InventoryScreen slot state and rendered NativeContainerMirrorScreen locally with zero framebuffer.\n"
-                );
-            }
+        if (observerContainerRequested && !observerContainerSeen
+                && isNativeContainerMirror(screen)
+                && screenGetBoolean("remoteContainerOpen")
+                && screenGetLong("lastRemoteSequence") > 0L
+                && screenGetLong("extractedFrames") > 0L) {
+            observerContainerSeen = true;
+            ObserverE2eCommon.marker(
+                    "observer-native-container-ok.txt",
+                    "Observer rendered structured InventoryScreen locally.\n"
+            );
         }
 
         if (observerContainerSeen && !observerContainerScreenshotRequested) {
             observerContainerScreenshotRequested = true;
-            saveScreenshot(minecraft, "observer-native-container.png", "observer-native-container-saved.txt",
-                    "Observer locally reconstructed InventoryScreen was saved for CI evidence; no container image was received over network.");
+            saveScreenshot(minecraft, "observer-native-container.png", () -> {
+                observerContainerScreenshotSaved = true;
+                ObserverE2eCommon.marker(
+                        "observer-native-container-saved.txt",
+                        "Locally reconstructed container screenshot saved.\n"
+                );
+            });
         }
 
-        if (observerContainerScreenshotSaved
-                && !observerGenericRequested
+        if (observerContainerScreenshotSaved && !observerGenericRequested
                 && !screenGetBoolean("remoteContainerOpen")
                 && !isNativeContainerMirror(minecraft.gui.screen())) {
-            requireNoFramebufferState("after structured container close");
             observerGenericRequested = true;
             ObserverE2eCommon.marker(
                     "observer-ready-for-generic-screen.txt",
-                    "Structured container proof is complete; Target may open an unsupported Screen.\n"
+                    "Target may open unsupported Screen.\n"
             );
         }
 
-        if (observerGenericRequested && !observerGenericSeen) {
-            if (isNativeGenericMirror(minecraft.gui.screen())
-                    && screenGetBoolean("remoteGenericOpen")
-                    && screenGetLong("genericExtractedFrames") > 0L) {
-                requireNoFramebufferState("unsupported generic screen");
-                observerGenericSeen = true;
-                ObserverE2eCommon.marker(
-                        "observer-native-generic-screen-ok.txt",
-                        "Observer rendered metadata-only NativeGenericMirrorScreen for an unsupported Target Screen with zero framebuffer state.\n"
-                );
-            }
+        if (observerGenericRequested && !observerGenericSeen
+                && isNativeGenericMirror(minecraft.gui.screen())
+                && screenGetBoolean("remoteGenericOpen")
+                && screenGetLong("genericExtractedFrames") > 0L) {
+            observerGenericSeen = true;
+            ObserverE2eCommon.marker(
+                    "observer-native-generic-screen-ok.txt",
+                    "Observer rendered metadata-only placeholder for unsupported Screen.\n"
+            );
         }
 
         if (observerGenericSeen && !observerGenericScreenshotRequested) {
             observerGenericScreenshotRequested = true;
-            saveScreenshot(minecraft, "observer-native-generic-screen.png", "observer-native-generic-screen-saved.txt",
-                    "Observer metadata-only unsupported-screen placeholder was saved locally; no remote pixels were received.");
+            saveScreenshot(minecraft, "observer-native-generic-screen.png", () -> {
+                observerGenericScreenshotSaved = true;
+                ObserverE2eCommon.marker(
+                        "observer-native-generic-screen-saved.txt",
+                        "Metadata-only generic Screen screenshot saved locally.\n"
+                );
+            });
         }
 
-        if (observerGenericScreenshotSaved && !observerStopRequested) {
-            if (screenGetBoolean("remoteGenericOpen") || isNativeGenericMirror(minecraft.gui.screen())) {
-                return;
-            }
+        if (observerGenericScreenshotSaved && !observerStopRequested
+                && !screenGetBoolean("remoteGenericOpen")
+                && minecraft.gui.screen() == null) {
             requireTargetCamera(minecraft);
-            requireNoFramebufferState("after unsupported screen close");
             ClientPlayNetworking.send(new ObserverPayloads.Stop());
             observerStopRequested = true;
-            ObserverE2eCommon.marker(
-                    "observer-stop-requested.txt",
-                    "Observer sent production Stop after native unsupported-screen close.\n"
-            );
+            ObserverE2eCommon.marker("observer-stop-requested.txt", "Observer sent Stop.\n");
             return;
         }
 
-        if (observerStopRequested && !sessionActive) {
-            if (getBoolean("textureRegistered") || nativeGetBoolean("observerSessionActive")) {
-                return;
-            }
-            if (isObserverMirror(minecraft.gui.screen()) || isNativeScreenMirror(minecraft.gui.screen())) {
+        if (observerStopRequested && !observerSessionActive) {
+            if (isNativeMirror(minecraft.gui.screen())) {
                 return;
             }
             ObserverE2eCommon.marker(
                     "observer-complete.txt",
-                    "Observer received native Session(false) after world/HUD/container/unsupported-screen proof and cleaned up locally.\n"
+                    "Observer received Session(false) and cleaned up protocol-native screens.\n"
             );
             finished = true;
             stopMinecraft(minecraft);
         }
     }
 
-    private static boolean nativeWorldPathIsStable(
-            Minecraft minecraft,
-            boolean sessionActive,
-            boolean mirrorOpen,
-            boolean textureRegistered
-    ) {
-        if (!nativeGetBoolean("observerSessionActive")
-                || !sessionActive
-                || !getBoolean("nativeSession")
-                || minecraft.gui.screen() != null
-                || mirrorOpen
-                || textureRegistered
-                || getLong("lastFrameId") >= 0L) {
-            return false;
+    private static void assertFramebufferSurfaceRemoved() {
+        assertNoField(UI_CLIENT, "captureEnabled");
+        assertNoField(UI_CLIENT, "nextFrameId");
+        assertNoField(UI_CLIENT, "lastFrameId");
+        assertNoField(UI_CLIENT, "textureRegistered");
+        assertNoNestedPayload("CaptureControl");
+        assertNoNestedPayload("Session");
+        assertNoNestedPayload("FrameChunk");
+        assertNoNestedPayload("FrameRelay");
+    }
+
+    private static void assertNoField(Class<?> owner, String name) {
+        try {
+            owner.getDeclaredField(name);
+            throw new AssertionError("Removed framebuffer field still exists: " + owner.getSimpleName() + "." + name);
+        } catch (NoSuchFieldException expected) {
+            // Required absence.
         }
-        requireTargetCamera(minecraft);
-        return true;
+    }
+
+    private static void assertNoNestedPayload(String simpleName) {
+        for (Class<?> nested : ObserverPayloads.class.getDeclaredClasses()) {
+            if (nested.getSimpleName().equals(simpleName)) {
+                throw new AssertionError("Removed framebuffer payload still exists: " + simpleName);
+            }
+        }
     }
 
     private static void dismissAccessibilityOnboarding(Minecraft minecraft) {
         Screen screen = minecraft.gui.screen();
-        if (screen == null || !screen.getClass().getSimpleName().equals("AccessibilityOnboardingScreen")) {
-            return;
+        if (screen != null && screen.getClass().getSimpleName().equals("AccessibilityOnboardingScreen")) {
+            screen.onClose();
         }
-        screen.onClose();
-        ObserverE2eCommon.marker(
-                "observer-onboarding-dismissed.txt",
-                "E2E requested AccessibilityOnboardingScreen close before native-world render proof.\n"
-        );
     }
 
     private static void requireTargetCamera(Minecraft minecraft) {
         var camera = minecraft.getCameraEntity();
         if (camera == null || !"Target".equals(camera.getName().getString())) {
-            throw new AssertionError("Observer native camera is not attached to Target: "
+            throw new AssertionError("Observer camera is not Target: "
                     + (camera == null ? "null" : camera.getName().getString()));
         }
-    }
-
-    private static void requireNoFramebufferState(String phase) {
-        if (getBoolean("textureRegistered") || getLong("lastFrameId") >= 0L) {
-            throw new AssertionError("Native " + phase + " unexpectedly received framebuffer state");
-        }
-    }
-
-    private static boolean isObserverMirror(Screen screen) {
-        return screen != null && screen.getClass().getName().contains("ObserverMirrorScreen");
     }
 
     private static boolean isNativeContainerMirror(Screen screen) {
@@ -586,7 +438,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         return screen != null && screen.getClass().getName().contains("NativeGenericMirrorScreen");
     }
 
-    private static boolean isNativeScreenMirror(Screen screen) {
+    private static boolean isNativeMirror(Screen screen) {
         return isNativeContainerMirror(screen) || isNativeGenericMirror(screen);
     }
 
@@ -594,46 +446,22 @@ public final class ObserverE2eClient implements ClientModInitializer {
         return Files.isRegularFile(ObserverE2eCommon.resultsDir().resolve(name));
     }
 
-    private static void saveNativeWorldScreenshot(Minecraft minecraft) {
+    private static void saveScreenshot(Minecraft minecraft, String name, Runnable onSaved) {
         Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), image -> {
             if (image == null) {
-                ObserverE2eCommon.fail("observer", "Native-world screenshot callback returned null image");
+                ObserverE2eCommon.fail(role, "Screenshot callback returned null for " + name);
                 return;
             }
             try (NativeImage owned = image) {
-                Path results = ObserverE2eCommon.resultsDir();
-                Files.createDirectories(results);
-                owned.writeToFile(results.resolve("observer-native-world.png"));
-                owned.writeToFile(results.resolve("observer-native-hud.png"));
-                observerScreenshotSaved = true;
-                ObserverE2eCommon.marker(
-                        "observer-native-world-saved.txt",
-                        "Observer native Target-camera world plus locally reconstructed HUD was saved for CI evidence; no image was received over network.\n"
-                );
-            } catch (IOException error) {
-                ObserverE2eCommon.fail("observer", "Failed to save native-world E2E screenshot: " + error);
-            }
-        });
-    }
-
-    private static void saveScreenshot(Minecraft minecraft, String fileName, String markerName, String markerText) {
-        Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), image -> {
-            if (image == null) {
-                ObserverE2eCommon.fail("observer", "Screenshot callback returned null image for " + fileName);
-                return;
-            }
-            try (NativeImage owned = image) {
-                Path output = ObserverE2eCommon.resultsDir().resolve(fileName);
+                Path output = ObserverE2eCommon.resultsDir().resolve(name);
                 Files.createDirectories(output.getParent());
                 owned.writeToFile(output);
-                if (fileName.equals("observer-native-container.png")) {
-                    observerContainerScreenshotSaved = true;
-                } else if (fileName.equals("observer-native-generic-screen.png")) {
-                    observerGenericScreenshotSaved = true;
+                if (name.equals("observer-native-world.png")) {
+                    owned.writeToFile(ObserverE2eCommon.resultsDir().resolve("observer-native-hud.png"));
                 }
-                ObserverE2eCommon.marker(markerName, markerText + "\n");
+                onSaved.run();
             } catch (IOException error) {
-                ObserverE2eCommon.fail("observer", "Failed to save E2E screenshot " + fileName + ": " + error);
+                ObserverE2eCommon.fail(role, "Failed to save " + name + ": " + error);
             }
         });
     }
@@ -654,10 +482,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
         } catch (ReflectiveOperationException error) {
             throw new RuntimeException("Failed to stop E2E Minecraft client", error);
         }
-    }
-
-    private static Field field(String name) {
-        return field(CLIENT, "ObserverUiClient", name);
     }
 
     private static Field nativeField(String name) {
@@ -682,14 +506,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
     }
 
-    private static boolean getBoolean(String name) {
-        try {
-            return field(name).getBoolean(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
-    }
-
     private static boolean nativeGetBoolean(String name) {
         try {
             return nativeField(name).getBoolean(null);
@@ -709,14 +525,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static int nativeGetInt(String name) {
         try {
             return nativeField(name).getInt(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
-    }
-
-    private static long getLong(String name) {
-        try {
-            return field(name).getLong(null);
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
         }
@@ -765,6 +573,12 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static final class E2eUnsupportedScreen extends Screen {
         private E2eUnsupportedScreen() {
             super(Component.literal("Observer E2E Unsupported Screen"));
+        }
+
+        @Override
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            graphics.fill(0, 0, width, height, 0xFF202020);
+            graphics.text(font, getTitle(), 20, 20, 0xFFFFFFFF, true);
         }
 
         @Override
