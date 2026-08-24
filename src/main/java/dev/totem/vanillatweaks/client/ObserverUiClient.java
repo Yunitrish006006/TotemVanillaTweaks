@@ -24,7 +24,10 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
 
-/** Client-side compatibility framebuffer transport plus protocol-native Observer rendering bridge. */
+/**
+ * Legacy framebuffer compatibility transport plus the native Observer lifecycle bridge.
+ * Protocol-native sessions never capture or consume framebuffer pixels.
+ */
 public final class ObserverUiClient {
     private static final Identifier FRAME_TEXTURE =
             Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "observer/live_frame");
@@ -123,14 +126,14 @@ public final class ObserverUiClient {
         }
         remoteScreenOpen = payload.open();
         if (nativeSession) {
-            if (!remoteScreenOpen) {
-                assembly = null;
-                closeMirrorScreen();
-                releaseFrameTexture();
-            }
-            // Native sessions wait for either a structured screen relay or an actual
-            // framebuffer chunk from an unsupported screen. ScreenState alone must
-            // not cover the native world with an empty compatibility Mirror screen.
+            ObserverNativeScreenClient.applyGenericScreenState(
+                    payload.open(),
+                    payload.screenClass(),
+                    payload.title()
+            );
+            assembly = null;
+            closeMirrorScreen();
+            releaseFrameTexture();
             return;
         }
         ensureMirrorScreen();
@@ -144,7 +147,7 @@ public final class ObserverUiClient {
         Screen screen = minecraft.gui.screen();
         boolean screenOpen = screen != null
                 && !(screen instanceof ObserverMirrorScreen)
-                && !ObserverNativeScreenClient.isNativeContainerMirror(screen);
+                && !ObserverNativeScreenClient.isNativeMirrorScreen(screen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
         String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
         String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;
@@ -153,8 +156,10 @@ public final class ObserverUiClient {
             ClientPlayNetworking.send(new ObserverPayloads.ScreenState(screenOpen, screenClass, title));
         }
 
-        boolean structuredScreen = screenOpen && ObserverNativeScreenClient.isStructuredTargetScreen(screen);
-        if (ObserverNativeClient.suppressGameplayFramebuffer() && (!screenOpen || structuredScreen)) {
+        // A native-only target still reports logical screen metadata above, but it
+        // never reads back its RenderTarget. Mixed sessions may keep this legacy
+        // path enabled only for observers that do not support the native protocol.
+        if (ObserverNativeClient.suppressGameplayFramebuffer()) {
             return;
         }
         if (captureInFlight) {
@@ -264,7 +269,9 @@ public final class ObserverUiClient {
         if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
-        if (nativeSession && (!remoteScreenOpen || ObserverNativeScreenClient.hasStructuredRemoteScreen())) {
+        // Native observers never consume pixel relays, even when the server still
+        // forwards compatibility frames for a simultaneous legacy observer.
+        if (nativeSession) {
             return;
         }
         if (!ObserverFrameRules.validChunk(
