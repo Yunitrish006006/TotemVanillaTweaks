@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.totem.vanillatweaks.client.ObserverNativeAnvilScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeBookScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeCraftingScreenClient;
@@ -38,6 +39,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverNativeBookScreenClient.register();
         ObserverNativeCraftingScreenClient.register();
         ObserverNativeMerchantScreenClient.register();
+        ObserverNativeAnvilScreenClient.register();
         ObserverNativeHud.register();
     }
 }

@@ -8,10 +8,12 @@
     "AbstractContainerScreenMixin",
     "ObserverNativeScreenClientCraftingPriorityMixin",
     "ObserverNativeScreenClientMerchantPriorityMixin",
+    "ObserverNativeScreenClientAnvilPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
-    "MerchantScreenAccessor"
+    "MerchantScreenAccessor",
+    "AnvilScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
