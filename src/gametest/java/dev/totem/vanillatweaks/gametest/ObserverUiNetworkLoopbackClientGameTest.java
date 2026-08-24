@@ -51,6 +51,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverNativePayloads.NativeSession.TYPE, "NativeSession v4");
                 assertCanSend(player, ObserverNativePayloads.NativeViewRelay.TYPE, "NativeViewRelay v4");
                 assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay v2");
+                assertCanSend(player, ObserverNativeScreenPayloads.FurnaceRelay.TYPE, "FurnaceRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -67,9 +68,9 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
                     && nativeGetInt("targetProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
                     && nativeGetLong("observerScreenCapabilities")
-                    == ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
+                    == ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
                     && nativeGetLong("targetScreenCapabilities")
-                    == ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS, 100);
+                    == ObserverNativeScreenPayloads.KNOWN_CAPABILITIES, 100);
 
             context.waitFor(minecraft -> nativeGetLong("nextTargetStateSequence") > 0L
                     && nativeGetLong("lastNativeStateSequence") > 0L, 200);
