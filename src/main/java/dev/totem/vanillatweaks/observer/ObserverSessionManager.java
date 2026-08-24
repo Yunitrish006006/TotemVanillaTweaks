@@ -68,6 +68,7 @@ public final class ObserverSessionManager {
         observer.setCamera(target);
         ServerPlayNetworking.send(observer,
                 new ObserverPayloads.Session(true, target.getUUID(), target.getGameProfile().name()));
+        ObserverNativeSessionManager.start(observer, target);
         if (observerCount(target.getUUID()) == 1) {
             FRAME_GATE_BY_TARGET.remove(target.getUUID());
             ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(
@@ -83,6 +84,7 @@ public final class ObserverSessionManager {
 
     public static int stop(ServerPlayer observer, boolean resetCamera) {
         UUID targetId = TARGET_BY_OBSERVER.remove(observer.getUUID());
+        ObserverNativeSessionManager.stop(observer);
         if (targetId == null) {
             if (resetCamera) {
                 observer.setCamera(null);
@@ -167,6 +169,7 @@ public final class ObserverSessionManager {
 
     private static void removeOfflineObserver(MinecraftServer server, UUID observerId, UUID targetId) {
         TARGET_BY_OBSERVER.remove(observerId);
+        ObserverNativeSessionManager.removeOfflineObserver(server, observerId);
         if (targetId != null && observerCount(targetId) == 0) {
             FRAME_GATE_BY_TARGET.remove(targetId);
             ServerPlayer target = server.getPlayerList().getPlayer(targetId);
