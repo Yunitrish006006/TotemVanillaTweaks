@@ -176,14 +176,16 @@ jobs:
             if [[ -f "$results/server-session-started.txt" \
                && -f "$results/target-world-ready.txt" \
                && -f "$results/target-capture-enabled.txt" \
-               && -f "$results/observer-frame-ok.txt" \
-               && -f "$results/observer-relayed-frame-saved.txt" \
-               && -f "$results/observer-relayed-frame.png" \
-               && -f "$results/observer-screenshot-saved.txt" \
+               && -f "$results/target-native-state-enabled.txt" \
+               && -f "$results/target-native-no-frame.txt" \
+               && -f "$results/observer-native-state-ok.txt" \
+               && -f "$results/observer-native-camera-ok.txt" \
+               && -f "$results/observer-native-world-settled.txt" \
+               && -f "$results/observer-native-world-saved.txt" \
+               && -f "$results/observer-native-world.png" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
-               && -f "$results/server-cleanup-ok.txt" \
-               && -f "$results/observer-two-client-e2e.png" ]]; then
+               && -f "$results/server-cleanup-ok.txt" ]]; then
               complete=true
               break
             fi
@@ -219,8 +221,8 @@ jobs:
           fi
 
           printf '%s\n' \
-            'Dedicated server + Target JVM + Observer JVM gameplay-frame E2E passed.' \
-            'Verified live gameplay framebuffer relay with no Target Screen open, Mirror render, Stop, CaptureControl(false), and server cleanup.'
+            'Dedicated server + Target JVM + Observer JVM protocol-native gameplay E2E passed.' \
+            'Verified structured state relay, vanilla Target camera rendering, zero gameplay PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
