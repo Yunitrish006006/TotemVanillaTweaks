@@ -1,7 +1,8 @@
 {
-  "version": "0.1.14",
-  "release_ref": "e81b86615583d591580a146f48b77aa57f37f769",
-  "dry_run": false,
-  "request_id": "modrinth-0.1.14-20260824-0318",
-  "reason": "Publish the last stable TotemVanillaTweaks release before Observer View."
+  "version": "0.1.15",
+  "release_ref": "d5bef305ca2961d691156c9023c5f4237d256546",
+  "release_type": "beta",
+  "dry_run": true,
+  "request_id": "modrinth-0.1.15-beta-dry-run-20260824",
+  "reason": "Validate TotemVanillaTweaks 0.1.15 Beta and its required dependency metadata before publication."
 }
