@@ -166,7 +166,7 @@ jobs:
           observer_pid=$!
 
           complete=false
-          for _ in $(seq 1 240); do
+          for _ in $(seq 1 300); do
             if compgen -G "$results/failure-*.txt" >/dev/null; then
               echo 'Observer E2E reported a failure:' >&2
               cat "$results"/failure-*.txt >&2 || true
@@ -185,6 +185,13 @@ jobs:
                && -f "$results/observer-native-world-saved.txt" \
                && -f "$results/observer-native-world.png" \
                && -f "$results/observer-native-hud.png" \
+               && -f "$results/observer-ready-for-container.txt" \
+               && -f "$results/target-native-container-opened.txt" \
+               && -f "$results/target-native-container-state-sent.txt" \
+               && -f "$results/observer-native-container-ok.txt" \
+               && -f "$results/observer-native-container-saved.txt" \
+               && -f "$results/observer-native-container.png" \
+               && -f "$results/target-native-container-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -223,8 +230,8 @@ jobs:
           fi
 
           printf '%s\n' \
-            'Dedicated server + Target JVM + Observer JVM protocol-native gameplay E2E passed.' \
-            'Verified protocol-v2 structured state relay, local HUD extraction, vanilla Target camera rendering, zero gameplay PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
+            'Dedicated server + Target JVM + Observer JVM protocol-native Observer E2E passed.' \
+            'Verified protocol-v2 world/HUD state, local HUD extraction, vanilla Target camera rendering, structured InventoryScreen reconstruction, zero PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
