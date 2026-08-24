@@ -18,6 +18,15 @@ on:
         required: true
         default: true
         type: boolean
+      release_type:
+        description: Modrinth release channel
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - beta
+          - alpha
 
 permissions:
   contents: write
@@ -28,8 +37,12 @@ concurrency:
 
 env:
   MODULE_ID: totem-vanilla-tweaks
-  CORE_REF: a8cedca207f9d4444ae4a52fd384ebd830fbd026
+  # Match the minimum 0.7.x Core used by the normal build/E2E gate.
+  CORE_REF: 5be940a1fb91d250bb6781193bd49f0f24b40a43
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
+  FABRIC_API_PROJECT_ID: P7dR8mSH
+  # Public TotemCore 0.7.11 Modrinth version ID; used only to resolve its project ID.
+  TOTEM_CORE_REFERENCE_VERSION_ID: iOzAgHtL
 
 jobs:
   publish:
@@ -49,6 +62,7 @@ jobs:
           BEFORE_SHA: '${{ github.event.before }}'
           REQUESTED_REF: '${{ inputs.release_ref }}'
           REQUESTED_DRY_RUN: '${{ inputs.dry_run }}'
+          REQUESTED_RELEASE_TYPE: '${{ inputs.release_type }}'
         run: |
           set -euo pipefail
 
@@ -56,10 +70,12 @@ jobs:
           dry_run=false
           release_ref="$GITHUB_SHA"
           expected_version=""
+          release_type=release
 
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
             should_publish=true
             dry_run="${REQUESTED_DRY_RUN:-true}"
+            release_type="${REQUESTED_RELEASE_TYPE:-release}"
             if [[ -n "${REQUESTED_REF:-}" ]]; then
               release_ref="$REQUESTED_REF"
             fi
@@ -71,6 +87,7 @@ jobs:
               release_ref="$(jq -er '.release_ref' "$RELEASE_REQUEST")"
               expected_version="$(jq -er '.version' "$RELEASE_REQUEST")"
               dry_run="$(jq -r '.dry_run // false' "$RELEASE_REQUEST")"
+              release_type="$(jq -r '.release_type // "release"' "$RELEASE_REQUEST")"
               should_publish=true
             elif grep -Fxq 'gradle.properties' <<<"$changed"; then
               current="$(sed -n 's/^mod_version=//p' gradle.properties)"
@@ -80,6 +97,11 @@ jobs:
               fi
             fi
           fi
+
+          case "$release_type" in
+            release|beta|alpha) ;;
+            *) echo "Unsupported release_type: $release_type" >&2; exit 1 ;;
+          esac
 
           if [[ "$should_publish" == true ]]; then
             git cat-file -e "${release_ref}^{commit}"
@@ -96,6 +118,7 @@ jobs:
           echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
           echo "release_ref=$release_ref" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_type=$release_type" >> "$GITHUB_OUTPUT"
 
       - if: steps.release.outputs.should_publish == 'true'
         uses: actions/setup-java@v5
@@ -133,7 +156,7 @@ jobs:
           chmod +x gradlew .lockstep/TotemCore/gradlew
           ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core" = 0.7.2
+          test "$core" = 0.7.0
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
           test -f "$core_jar"
           ./gradlew -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
@@ -149,6 +172,7 @@ jobs:
         env:
           DRY_RUN: '${{ steps.release.outputs.dry_run }}'
           EXPECTED_VERSION: '${{ steps.release.outputs.version }}'
+          RELEASE_TYPE: '${{ steps.release.outputs.release_type }}'
           MODRINTH_TOKEN: '${{ secrets.MODRINTH_TOKEN }}'
           MODRINTH_PROJECT_ID: '${{ secrets.MODRINTH_PROJECT_ID }}'
         run: |
@@ -168,12 +192,28 @@ jobs:
             /tmp/fabric.mod.json >/dev/null
 
           api=https://api.modrinth.com/v2
-          args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/3.0")
+          args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/4.0")
           curl "${args[@]}" "$api/project/${MODRINTH_PROJECT_ID}" >/tmp/project.json
           p="$(jq -er .id /tmp/project.json)"
           sha="$(sha512sum "$artifact" | awk '{print $1}')"
 
+          # Resolve TotemCore project identity from a known public 0.7.x version ID.
+          curl "${args[@]}" "$api/version/${TOTEM_CORE_REFERENCE_VERSION_ID}" >/tmp/totem-core-version.json
+          core_project="$(jq -er .project_id /tmp/totem-core-version.json)"
+          fabric_project="$FABRIC_API_PROJECT_ID"
+          deps="$(jq -nc --arg fabric "$fabric_project" --arg core "$core_project" \
+            '[{project_id:$fabric,dependency_type:"required"},{project_id:$core,dependency_type:"required"}]')"
+
+          changelog_file=".github/staging/modrinth-changelog-${v}.md"
+          if [[ -f "$changelog_file" ]]; then
+            c="$(cat "$changelog_file")"
+          else
+            c="$(git log -1 --format=%B)"
+          fi
+          test -n "$c"
+
           if [[ "$DRY_RUN" == true ]]; then
+            echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); Fabric API=${fabric_project}; TotemCore=${core_project}."
             echo "version=$v" >> "$GITHUB_OUTPUT"
             echo "sha512=$sha" >> "$GITHUB_OUTPUT"
             exit 0
@@ -188,8 +228,15 @@ jobs:
             rsha="$(jq -er --arg v "$v" '.[] | select(.version_number==$v) | (([.files[] | select(.primary==true)][0] // .files[0]).hashes.sha512)' /tmp/versions.json)"
             test "$rsha" = "$sha"
           else
-            c="$(git log -1 --format=%B)"
-            data="$(jq -nc --arg n "${MODULE_ID} ${v}" --arg v "$v" --arg c "$c" --arg p "$p" --arg mc "$mc" '{name:$n,version_number:$v,changelog:$c,dependencies:[],game_versions:[$mc],version_type:"release",loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"
+            data="$(jq -nc \
+              --arg n "${MODULE_ID} ${v}" \
+              --arg v "$v" \
+              --arg c "$c" \
+              --arg p "$p" \
+              --arg mc "$mc" \
+              --arg t "$RELEASE_TYPE" \
+              --argjson deps "$deps" \
+              '{name:$n,version_number:$v,changelog:$c,dependencies:$deps,game_versions:[$mc],version_type:$t,loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"
             curl "${args[@]}" -X POST "$api/version" \
               -F "data=${data};type=application/json" \
               -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" \
@@ -198,8 +245,24 @@ jobs:
           fi
 
           curl "${args[@]}" "$api/version/$id" >/tmp/remote.json
-          jq -e --arg p "$p" --arg v "$v" --arg mc "$mc" --arg f "$(basename "$artifact")" --arg sha "$sha" \
-            '.project_id==$p and .version_number==$v and .game_versions==[$mc] and .loaders==["fabric"] and (([.files[]|select(.primary==true)][0]//.files[0]).filename==$f) and (([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512==$sha)' \
+          jq -e \
+            --arg p "$p" \
+            --arg v "$v" \
+            --arg mc "$mc" \
+            --arg f "$(basename "$artifact")" \
+            --arg sha "$sha" \
+            --arg t "$RELEASE_TYPE" \
+            --arg fabric "$fabric_project" \
+            --arg core "$core_project" \
+            '.project_id==$p
+             and .version_number==$v
+             and .version_type==$t
+             and .game_versions==[$mc]
+             and .loaders==["fabric"]
+             and (([.files[]|select(.primary==true)][0]//.files[0]).filename==$f)
+             and (([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512==$sha)
+             and ([.dependencies[] | select(.project_id==$fabric and .dependency_type=="required")] | length)==1
+             and ([.dependencies[] | select(.project_id==$core and .dependency_type=="required")] | length)==1' \
             /tmp/remote.json >/dev/null
 
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -214,11 +277,12 @@ jobs:
           MOD_VERSION: '${{ steps.modrinth.outputs.version }}'
           VERSION_ID: '${{ steps.modrinth.outputs.version_id }}'
           SHA512: '${{ steps.modrinth.outputs.sha512 }}'
+          RELEASE_TYPE: '${{ steps.release.outputs.release_type }}'
         run: |
           set -euo pipefail
           marker=".github/staging/modrinth-published-${MOD_VERSION}.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${marker}"
-          body="$(jq -n --arg v "$MOD_VERSION" --arg id "$VERSION_ID" --arg sha "$SHA512" --arg run "$GITHUB_RUN_ID" '{version:$v,modrinth_version_id:$id,sha512:$sha,verified_by_run:$run}')"
+          body="$(jq -n --arg v "$MOD_VERSION" --arg id "$VERSION_ID" --arg sha "$SHA512" --arg run "$GITHUB_RUN_ID" --arg type "$RELEASE_TYPE" '{version:$v,release_type:$type,modrinth_version_id:$id,sha512:$sha,verified_by_run:$run}')"
           enc="$(printf '%s\n' "$body" | base64 -w0)"
           old="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" | jq -r '.sha // empty')"
           payload="$(jq -n --arg m "release: record Modrinth ${MOD_VERSION}" --arg c "$enc" --arg b main --arg s "$old" 'if $s=="" then {message:$m,content:$c,branch:$b} else {message:$m,content:$c,branch:$b,sha:$s} end')"
@@ -231,13 +295,14 @@ jobs:
           GH_TOKEN: '${{ github.token }}'
           MOD_VERSION: '${{ steps.release.outputs.version }}'
           RELEASE_REF: '${{ steps.release.outputs.release_ref }}'
+          RELEASE_TYPE: '${{ steps.release.outputs.release_type }}'
           JOB_STATUS: '${{ job.status }}'
           PUBLISH_OUTCOME: '${{ steps.modrinth.outcome }}'
         run: |
           set -euo pipefail
           marker=".github/staging/modrinth-attempt-${MOD_VERSION}.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${marker}"
-          body="$(jq -n --arg v "$MOD_VERSION" --arg ref "$RELEASE_REF" --arg run "$GITHUB_RUN_ID" --arg status "$JOB_STATUS" --arg publish "$PUBLISH_OUTCOME" '{version:$v,release_ref:$ref,run:$run,status:$status,publish_step:$publish}')"
+          body="$(jq -n --arg v "$MOD_VERSION" --arg ref "$RELEASE_REF" --arg type "$RELEASE_TYPE" --arg run "$GITHUB_RUN_ID" --arg status "$JOB_STATUS" --arg publish "$PUBLISH_OUTCOME" '{version:$v,release_ref:$ref,release_type:$type,run:$run,status:$status,publish_step:$publish}')"
           enc="$(printf '%s\n' "$body" | base64 -w0)"
           old="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" | jq -r '.sha // empty')"
           payload="$(jq -n --arg m "ci: record Modrinth attempt ${MOD_VERSION}" --arg c "$enc" --arg b main --arg s "$old" 'if $s=="" then {message:$m,content:$c,branch:$b} else {message:$m,content:$c,branch:$b,sha:$s} end')"
