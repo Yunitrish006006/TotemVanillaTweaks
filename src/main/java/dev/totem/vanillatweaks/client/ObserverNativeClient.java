@@ -12,6 +12,7 @@ public final class ObserverNativeClient {
     private static boolean targetStateEnabled;
     private static int targetProtocolVersion;
     private static int targetStateFps = ObserverNativePayloads.TARGET_STATE_FPS;
+    private static boolean captureGameplayFrames = true;
     private static long lastTargetStateNanos;
     private static long nextTargetStateSequence;
 
@@ -49,14 +50,44 @@ public final class ObserverNativeClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeClient::tick);
     }
 
+    static boolean suppressGameplayFramebuffer() {
+        return targetStateEnabled && !captureGameplayFrames;
+    }
+
+    static boolean observerSessionActive() {
+        return observerSessionActive;
+    }
+
+    static long lastNativeStateSequence() {
+        return lastNativeStateSequence;
+    }
+
+    static float remoteHealth() {
+        return remoteHealth;
+    }
+
+    static float remoteMaxHealth() {
+        return remoteMaxHealth;
+    }
+
+    static int remoteFood() {
+        return remoteFood;
+    }
+
+    static String observerTargetName() {
+        return observerTargetName;
+    }
+
     private static void applyControl(ObserverNativePayloads.NativeControl payload) {
         targetStateEnabled = payload.enabled()
                 && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
         targetProtocolVersion = payload.protocolVersion();
         targetStateFps = clamp(payload.stateFps(), 1, 20);
+        captureGameplayFrames = payload.captureGameplayFrames();
         lastTargetStateNanos = 0L;
         if (!targetStateEnabled) {
             targetProtocolVersion = 0;
+            captureGameplayFrames = true;
         }
     }
 
@@ -67,6 +98,11 @@ public final class ObserverNativeClient {
         observerTargetId = observerSessionActive ? payload.targetId() : null;
         observerTargetName = observerSessionActive ? payload.targetName() : "";
         lastNativeStateSequence = -1L;
+        ObserverUiClient.applyNativeSession(
+                observerSessionActive,
+                payload.targetId(),
+                observerSessionActive ? payload.targetName() : ""
+        );
         if (!observerSessionActive) {
             observerProtocolVersion = 0;
             remoteYaw = 0.0F;
