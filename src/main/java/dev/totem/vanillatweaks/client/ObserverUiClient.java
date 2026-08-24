@@ -54,6 +54,9 @@ public final class ObserverUiClient {
         if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
+        if (payload.open() && ObserverNativeBookScreenClient.hasStructuredRemoteScreen()) {
+            return;
+        }
         ObserverNativeScreenClient.applyGenericScreenState(
                 payload.open(),
                 payload.screenClass(),
@@ -68,7 +71,9 @@ public final class ObserverUiClient {
         }
 
         Screen screen = minecraft.gui.screen();
-        boolean screenOpen = screen != null && !ObserverNativeScreenClient.isNativeMirrorScreen(screen);
+        boolean screenOpen = screen != null
+                && !ObserverNativeScreenClient.isNativeMirrorScreen(screen)
+                && !ObserverNativeBookScreenClient.isNativeMirrorScreen(screen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
         String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
         String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;
