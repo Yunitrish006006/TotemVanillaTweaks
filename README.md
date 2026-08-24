@@ -4,8 +4,13 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
 管理員用的 Spectator Observer View。
 
-目前候選版本為 **0.1.15 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
+目前候選版本為 **0.1.16 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
 目前建議搭配已發布的 TotemCore **0.7.11**。
+
+> **0.1.16 hotfix：** 0.1.15 在 Minecraft 26.2 的 production runtime 中，
+> 骷髏載入時可能因 namespace/remap ABI 不一致而觸發 `NoSuchMethodError`。
+> 0.1.16 停止把 26.2 distribution JAR remap 回 intermediary namespace，並新增
+> production-runtime GameTest 直接啟動單人世界、召喚骷髏驗證實際發版環境。
 
 ## 安裝
 
@@ -13,7 +18,7 @@ Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
 2. TotemCore `0.7.x`（`>=0.7.0 <0.8.0`）
-3. TotemVanillaTweaks `0.1.15`
+3. TotemVanillaTweaks `0.1.16`
 
 | 項目 | 需求 |
 | --- | --- |
@@ -27,7 +32,7 @@ Server 負責規則、整理 transaction 與 Observer session authority；Client
 提供整理按鍵、目標選擇與 Observer capture/render。使用 DeadRecall 整合 JAR
 時不要再安裝獨立 TotemVanillaTweaks。
 
-## Spectator Observer View（0.1.15 Beta）
+## Spectator Observer View（0.1.15+ Beta）
 
 管理員可在 Spectator 模式使用：
 
@@ -46,7 +51,7 @@ Observer 關閉 Mirror 後會送出 Stop，Target 會收到 `CaptureControl(fals
 容器／UI 與事件狀態，再由 Observer Client 本地重建畫面。詳細方向見
 [`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
 
-0.1.15 已由 CI 驗證真正的三 JVM 路徑：
+Observer 已由 CI 驗證真正的三 JVM 路徑：
 
 ```text
 Dedicated Server JVM
@@ -130,6 +135,8 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 ./gradlew build
 ```
 
-CI 會另外執行 Server GameTests、Client GameTests，以及 Observer 的
-Dedicated Server + Target Client + Observer Client 三 JVM E2E。所有權與
-驗證契約見 [`EXTRACTION.md`](EXTRACTION.md)。
+CI 會另外執行 Server GameTests、Client GameTests、production-runtime Client GameTests，
+以及 Observer 的 Dedicated Server + Target Client + Observer Client 三 JVM E2E。
+production-runtime gate 使用實際 distribution namespace 啟動單人世界並召喚骷髏，
+專門攔截開發環境可能看不到的 ABI/remapping 問題。所有權與驗證契約見
+[`EXTRACTION.md`](EXTRACTION.md)。
