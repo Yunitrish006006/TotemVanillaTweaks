@@ -350,10 +350,10 @@ public final class ObserverE2eClient implements ClientModInitializer {
         if (screen == null || !screen.getClass().getSimpleName().equals("AccessibilityOnboardingScreen")) {
             return;
         }
-        minecraft.setScreen(null);
+        screen.onClose();
         ObserverE2eCommon.marker(
                 "observer-onboarding-dismissed.txt",
-                "E2E dismissed Minecraft AccessibilityOnboardingScreen before native-world render proof.\n"
+                "E2E requested AccessibilityOnboardingScreen close before native-world render proof.\n"
         );
     }
 
