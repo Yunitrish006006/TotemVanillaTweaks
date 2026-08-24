@@ -18,6 +18,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Keep this helper isolated; it exists only to dispatch the release workflow
+          # from the default branch, matching the path used by the last successful publish.
           gh workflow run publish-modrinth.yml \
             --ref main \
             -f release_ref=d5bef305ca2961d691156c9023c5f4237d256546 \
