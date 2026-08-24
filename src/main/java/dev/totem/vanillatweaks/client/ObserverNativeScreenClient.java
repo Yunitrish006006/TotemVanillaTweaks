@@ -552,7 +552,7 @@ public final class ObserverNativeScreenClient {
             ItemStack stack = itemStack(slot);
             if (!stack.isEmpty()) {
                 graphics.item(stack, slotX + 1, slotY + 1);
-                graphics.itemDecorations(screen.minecraft.font, stack, slotX + 1, slotY + 1);
+                graphics.itemDecorations(Minecraft.getInstance().font, stack, slotX + 1, slotY + 1);
             }
         }
     }
