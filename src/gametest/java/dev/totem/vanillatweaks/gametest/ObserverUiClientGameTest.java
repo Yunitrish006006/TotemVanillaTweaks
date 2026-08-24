@@ -1,7 +1,9 @@
 package dev.totem.vanillatweaks.gametest;
 
+import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -47,12 +49,15 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             UUID targetId = UUID.randomUUID();
             context.runOnClient(minecraft -> {
                 invoke(
-                        ObserverUiClient.class,
-                        "applyNativeSession",
-                        new Class<?>[]{boolean.class, UUID.class, String.class},
-                        true,
-                        targetId,
-                        "ObserverSmokeTarget"
+                        ObserverNativeClient.class,
+                        "applySession",
+                        new Class<?>[]{ObserverNativePayloads.NativeSession.class},
+                        new ObserverNativePayloads.NativeSession(
+                                true,
+                                targetId,
+                                "ObserverSmokeTarget",
+                                ObserverNativePayloads.PROTOCOL_VERSION
+                        )
                 );
                 invoke(
                         ObserverNativeScreenClient.class,
@@ -82,12 +87,15 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                         ""
                 );
                 invoke(
-                        ObserverUiClient.class,
-                        "applyNativeSession",
-                        new Class<?>[]{boolean.class, UUID.class, String.class},
-                        false,
-                        targetId,
-                        ""
+                        ObserverNativeClient.class,
+                        "applySession",
+                        new Class<?>[]{ObserverNativePayloads.NativeSession.class},
+                        new ObserverNativePayloads.NativeSession(
+                                false,
+                                new UUID(0L, 0L),
+                                "",
+                                ObserverNativePayloads.PROTOCOL_VERSION
+                        )
                 );
             });
             context.waitForScreen(null);
