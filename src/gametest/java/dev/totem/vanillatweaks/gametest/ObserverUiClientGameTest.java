@@ -1,8 +1,10 @@
 package dev.totem.vanillatweaks.gametest;
 
+import dev.totem.vanillatweaks.client.ObserverNativeBookScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -25,7 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * Client smoke tests for framebuffer-free Observer screen reconstruction.
- * Verifies unnegotiated families degrade to metadata and furnace semantics render locally.
+ * Verifies unnegotiated families degrade to metadata and negotiated semantic families render locally.
  */
 public final class ObserverUiClientGameTest implements FabricClientGameTest {
     @Override
@@ -37,6 +39,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             assertFramebufferSurfaceRemoved();
             verifyUnnegotiatedMetadataFallback(context);
             verifyFurnaceSemanticMirror(context);
+            verifyBookSemanticMirror(context);
             assertFramebufferSurfaceRemoved();
         }
     }
@@ -154,6 +157,69 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                     ObserverNativeScreenClient.class,
                     "acceptFurnaceRelay",
                     new Class<?>[]{ObserverNativeScreenPayloads.FurnaceRelay.class},
+                    close
+            );
+            applySession(false, new UUID(0L, 0L), 0L);
+        });
+        context.waitForScreen(null);
+    }
+
+    private static void verifyBookSemanticMirror(ClientGameTestContext context) {
+        UUID targetId = UUID.randomUUID();
+        ObserverBookScreenPayloads.BookRelay open = new ObserverBookScreenPayloads.BookRelay(
+                targetId,
+                ObserverBookScreenPayloads.PROTOCOL_VERSION,
+                1L,
+                true,
+                ObserverNativeScreenPayloads.FAMILY_BOOK,
+                ObserverBookScreenPayloads.VARIANT_WRITTEN,
+                "net.minecraft.client.gui.screens.inventory.BookViewScreen",
+                "Observer Book Test",
+                1,
+                3,
+                "The Observer should reconstruct this book page from semantic state, not from framebuffer pixels.",
+                "",
+                ""
+        );
+
+        context.runOnClient(minecraft -> {
+            applySession(true, targetId, ObserverNativeScreenPayloads.CAPABILITY_BOOK);
+            invoke(
+                    ObserverNativeBookScreenClient.class,
+                    "acceptRelay",
+                    new Class<?>[]{ObserverBookScreenPayloads.BookRelay.class},
+                    open
+            );
+        });
+
+        context.waitFor(minecraft -> minecraft.gui.screen() != null
+                && minecraft.gui.screen().getClass().getName().contains("NativeBookMirrorScreen"), 100);
+        context.waitFor(minecraft -> getStaticLong(ObserverNativeBookScreenClient.class, "extractedFrames") > 0L, 100);
+        persistForCi(
+                context.takeScreenshot("observer-ui-native-book-screen"),
+                "observer-ui-native-book-screen.png"
+        );
+
+        ObserverBookScreenPayloads.BookRelay close = new ObserverBookScreenPayloads.BookRelay(
+                targetId,
+                ObserverBookScreenPayloads.PROTOCOL_VERSION,
+                2L,
+                false,
+                ObserverNativeScreenPayloads.FAMILY_BOOK,
+                "",
+                "",
+                "",
+                0,
+                0,
+                "",
+                "",
+                ""
+        );
+        context.runOnClient(minecraft -> {
+            invoke(
+                    ObserverNativeBookScreenClient.class,
+                    "acceptRelay",
+                    new Class<?>[]{ObserverBookScreenPayloads.BookRelay.class},
                     close
             );
             applySession(false, new UUID(0L, 0L), 0L);
