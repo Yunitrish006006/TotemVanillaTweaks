@@ -1,28 +1,64 @@
 # TotemVanillaTweaks
 
 TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容器整理、
-講台／書櫃規則、混凝土粉末硬化，以及漏斗取出熔爐成品時釋放經驗。
+講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
+管理員用的 Spectator Observer View。
 
-目前候選版本為 **0.1.8**，精確搭配 TotemCore **0.6.0**。
+目前候選版本為 **0.1.15 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
+目前建議搭配已發布的 TotemCore **0.7.11**。
 
 ## 安裝
 
 Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
-2. TotemCore `0.6.0`
-3. TotemVanillaTweaks `0.1.8`
+2. TotemCore `0.7.x`（`>=0.7.0 <0.8.0`）
+3. TotemVanillaTweaks `0.1.15`
 
 | 項目 | 需求 |
 | --- | --- |
 | Minecraft | 26.2 |
 | Fabric Loader | 0.19.3+ |
 | Java | 25+ |
-| 必要 Totem 模組 | `totem-core =0.6.0` |
+| Fabric API | 0.154.2+26.2 |
+| 必要 Totem 模組 | `totem-core >=0.7.0 <0.8.0` |
 
-Server 負責所有規則與整理 transaction；Client 模組提供整理按鍵與目標
-選擇。使用 DeadRecall 2.4.11 整合 JAR 時不要再安裝獨立
-TotemVanillaTweaks。
+Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
+提供整理按鍵、目標選擇與 Observer capture/render。使用 DeadRecall 整合 JAR
+時不要再安裝獨立 TotemVanillaTweaks。
+
+## Spectator Observer View（0.1.15 Beta）
+
+管理員可在 Spectator 模式使用：
+
+```text
+/observeui <player>
+/observeui stop
+```
+
+Observer View 目前可把 Target Client 的即時 Minecraft framebuffer 經由
+Dedicated Server relay 到 Observer Client，包含正常第一人稱世界、HUD 與
+開啟中的 GUI。Server 端控制 session、權限、Target capture 啟停與 cleanup；
+Observer 關閉 Mirror 後會送出 Stop，Target 會收到 `CaptureControl(false)`。
+
+目前 framebuffer relay 是 **過渡實作**，不是長期架構。永久目標是完全停止
+傳送整張截圖／framebuffer，只透過版本化協定傳送結構化世界、玩家、HUD、
+容器／UI 與事件狀態，再由 Observer Client 本地重建畫面。詳細方向見
+[`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
+
+0.1.15 已由 CI 驗證真正的三 JVM 路徑：
+
+```text
+Dedicated Server JVM
+        +
+Target Minecraft Client JVM
+        +
+Observer Minecraft Client JVM
+```
+
+測試會要求 Target 在沒有開 GUI 的正常遊戲世界中持續送出 framebuffer，並驗證
+Observer 實際收到、重組與顯示 relayed frame，最後完成 Stop、capture disable
+與 server cleanup。
 
 ## 容器整理
 
@@ -94,8 +130,6 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 ./gradlew build
 ```
 
-0.1.6 加入 canonical `totem:vanilla_tweaks/*` 的礫石鐵礦、煙燻腐肉與
-熟河豚，並通過 16/16 required Fabric GameTests，涵蓋配方、戰利品、
-標籤、lectern recipe、bookshelf inventory／structure、混凝土粉末、hopper
-furnace XP 與兩側容器整理。所有權與驗證契約見
-[EXTRACTION.md](EXTRACTION.md)。
+CI 會另外執行 Server GameTests、Client GameTests，以及 Observer 的
+Dedicated Server + Target Client + Observer Client 三 JVM E2E。所有權與
+驗證契約見 [`EXTRACTION.md`](EXTRACTION.md)。

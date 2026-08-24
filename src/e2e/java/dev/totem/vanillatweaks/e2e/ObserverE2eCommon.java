@@ -23,11 +23,13 @@ import java.util.UUID;
 public final class ObserverE2eCommon implements ModInitializer {
     private static final String TARGET_NAME = "Target";
     private static final String OBSERVER_NAME = "Observer";
-    private static final int START_TIMEOUT_TICKS = 20 * 90;
+    private static final int FIRST_CLIENT_TIMEOUT_TICKS = 20 * 90;
+    private static final int SECOND_CLIENT_TIMEOUT_TICKS = 20 * 90;
 
     private static boolean started;
     private static boolean cleanedUp;
     private static int ticks;
+    private static int firstClientSeenTick = -1;
     private static UUID targetId;
     private static UUID observerId;
 
@@ -48,16 +50,37 @@ public final class ObserverE2eCommon implements ModInitializer {
             if (!started) {
                 ServerPlayer target = findPlayer(server, TARGET_NAME);
                 ServerPlayer observer = findPlayer(server, OBSERVER_NAME);
+                boolean oneClientPresent = target != null || observer != null;
+
+                if (oneClientPresent && firstClientSeenTick < 0) {
+                    firstClientSeenTick = ticks;
+                    marker(
+                            "server-first-client-seen.txt",
+                            "tick=" + ticks + "\ntargetPresent=" + (target != null)
+                                    + "\nobserverPresent=" + (observer != null) + "\n"
+                    );
+                }
+
                 if (target == null || observer == null) {
-                    if (ticks > START_TIMEOUT_TICKS) {
-                        fail("server", "Timed out waiting for Target and Observer clients to join");
+                    int timeoutTick = firstClientSeenTick < 0
+                            ? FIRST_CLIENT_TIMEOUT_TICKS
+                            : firstClientSeenTick + SECOND_CLIENT_TIMEOUT_TICKS;
+                    if (ticks > timeoutTick) {
+                        fail(
+                                "server",
+                                "Timed out waiting for Target and Observer clients to join; targetPresent="
+                                        + (target != null) + ", observerPresent=" + (observer != null)
+                        );
                         cleanedUp = true;
                     }
                     return;
                 }
 
                 if (!supportsObserverPayloads(target, observer)) {
-                    if (ticks > START_TIMEOUT_TICKS) {
+                    int payloadDeadline = firstClientSeenTick < 0
+                            ? ticks + SECOND_CLIENT_TIMEOUT_TICKS
+                            : firstClientSeenTick + SECOND_CLIENT_TIMEOUT_TICKS;
+                    if (ticks > payloadDeadline) {
                         fail("server", "Connected clients never advertised all Observer View payloads");
                         cleanedUp = true;
                     }

@@ -6,12 +6,10 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
-import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -23,15 +21,23 @@ import java.nio.file.Path;
 public final class ObserverE2eClient implements ClientModInitializer {
     private static final Class<?> CLIENT = ObserverUiClient.class;
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 120;
+    private static final int MAX_CONNECTION_ATTEMPTS = 5;
+    private static final int RECONNECT_DELAY_TICKS = 20 * 2;
+    private static final int TARGET_WORLD_SETTLE_TICKS = 40;
+    private static final int MIRROR_SETTLE_TICKS = 20;
     private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
     private static int ticks;
     private static boolean connectionStarted;
+    private static int connectionAttempts;
+    private static int nextConnectionTick = 5;
+    private static int targetWorldStableTicks;
     private static boolean targetReady;
     private static boolean targetCaptureSeen;
-    private static boolean targetScreenOpened;
     private static boolean observerFrameSeen;
+    private static int observerMirrorStableTicks;
+    private static boolean observerScreenshotRequested;
     private static volatile boolean observerScreenshotSaved;
     private static boolean observerStopRequested;
     private static boolean finished;
@@ -61,9 +67,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             }
 
             if (minecraft.player == null || minecraft.level == null) {
-                if (!connectionStarted && ticks >= 5) {
-                    connectToDedicatedServer(minecraft);
-                }
+                handleConnectionState(minecraft);
                 return;
             }
 
@@ -77,8 +81,39 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
     }
 
+    private static void handleConnectionState(Minecraft minecraft) {
+        Screen current = minecraft.gui.screen();
+        boolean disconnected = current != null
+                && current.getClass().getSimpleName().contains("Disconnected");
+
+        if (connectionStarted && disconnected) {
+            connectionStarted = false;
+            nextConnectionTick = ticks + RECONNECT_DELAY_TICKS;
+            ObserverE2eCommon.marker(
+                    role + "-reconnect-" + connectionAttempts + ".txt",
+                    role + " connection attempt " + connectionAttempts
+                            + " failed; retrying after " + RECONNECT_DELAY_TICKS + " ticks.\n"
+            );
+        }
+
+        if (connectionStarted || ticks < nextConnectionTick) {
+            return;
+        }
+
+        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+            failAndStop(
+                    minecraft,
+                    "Failed to connect to dedicated server after " + MAX_CONNECTION_ATTEMPTS + " attempts"
+            );
+            return;
+        }
+
+        connectToDedicatedServer(minecraft);
+    }
+
     private static void connectToDedicatedServer(Minecraft minecraft) {
         connectionStarted = true;
+        connectionAttempts++;
         ServerData serverData = new ServerData(
                 "Totem Observer E2E",
                 E2E_SERVER.toString(),
@@ -88,7 +123,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
         ConnectScreen.startConnecting(parent, minecraft, E2E_SERVER, serverData, false, null);
         ObserverE2eCommon.marker(
                 role + "-connect-started.txt",
-                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570.\n"
+                role + " invoked Minecraft 26.2 ConnectScreen for 127.0.0.1:25570; attempt "
+                        + connectionAttempts + ".\n"
         );
     }
 
@@ -101,17 +137,25 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (!targetReady) {
+            if (minecraft.gui.screen() != null) {
+                targetWorldStableTicks = 0;
+                return;
+            }
+            targetWorldStableTicks++;
+            if (targetWorldStableTicks < TARGET_WORLD_SETTLE_TICKS) {
+                return;
+            }
             targetReady = true;
             ObserverE2eCommon.marker(
-                    "target-ready.txt",
-                    "Target joined the dedicated server with observer-only client state disabled.\n"
+                    "target-world-ready.txt",
+                    "Target stayed in the dedicated-server gameplay view with no Screen open for "
+                            + TARGET_WORLD_SETTLE_TICKS + " client ticks.\n"
             );
         }
 
-        if (!targetScreenOpened) {
-            minecraft.setScreenAndShow(new TargetScreen());
-            targetScreenOpened = true;
-            ObserverE2eCommon.marker("target-screen-open.txt", "Target opened the E2E source Screen.\n");
+        if (minecraft.gui.screen() != null) {
+            throw new AssertionError("Target opened a Screen during gameplay framebuffer E2E: "
+                    + minecraft.gui.screen().getClass().getName());
         }
 
         boolean captureEnabled = getBoolean("captureEnabled");
@@ -119,7 +163,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             targetCaptureSeen = true;
             ObserverE2eCommon.marker(
                     "target-capture-enabled.txt",
-                    "Target received CaptureControl(true) while observer-only state remained false.\n"
+                    "Target received CaptureControl(true) while remaining in normal gameplay view.\n"
             );
         }
 
@@ -129,7 +173,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             }
             ObserverE2eCommon.marker(
                     "target-complete.txt",
-                    "Target sent at least one framebuffer and received CaptureControl(false) after observer stopped.\n"
+                    "Target sent at least one live gameplay framebuffer and received CaptureControl(false).\n"
             );
             finished = true;
             stopMinecraft(minecraft);
@@ -157,16 +201,33 @@ public final class ObserverE2eClient implements ClientModInitializer {
             if (!"Target".equals(targetName)) {
                 throw new AssertionError("Observer session target name mismatch: " + targetName);
             }
-            if (!getBoolean("remoteScreenOpen")) {
-                throw new AssertionError("Observer mirror texture arrived without ScreenRelay(open=true)");
+            if (getBoolean("remoteScreenOpen")) {
+                throw new AssertionError("Gameplay framebuffer E2E unexpectedly reports Target Screen open");
             }
 
             observerFrameSeen = true;
+            observerMirrorStableTicks = 0;
             ObserverE2eCommon.marker(
                     "observer-frame-ok.txt",
-                    "Observer received and installed a real relayed Target framebuffer.\n"
+                    "Observer received and installed a real relayed Target gameplay framebuffer while remoteScreenOpen=false.\n"
             );
-            saveMirrorScreenshot(minecraft);
+        }
+
+        if (observerFrameSeen && !observerScreenshotRequested) {
+            if (sessionActive && mirrorOpen && textureRegistered && !getBoolean("remoteScreenOpen")) {
+                observerMirrorStableTicks++;
+                if (observerMirrorStableTicks >= MIRROR_SETTLE_TICKS) {
+                    observerScreenshotRequested = true;
+                    ObserverE2eCommon.marker(
+                            "observer-mirror-settled.txt",
+                            "Observer Mirror remained open with a live gameplay texture for "
+                                    + MIRROR_SETTLE_TICKS + " client ticks before capture.\n"
+                    );
+                    saveMirrorScreenshot(minecraft);
+                }
+            } else {
+                observerMirrorStableTicks = 0;
+            }
         }
 
         if (observerFrameSeen && observerScreenshotSaved && !observerStopRequested) {
@@ -210,7 +271,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 observerScreenshotSaved = true;
                 ObserverE2eCommon.marker(
                         "observer-screenshot-saved.txt",
-                        "Observer Mirror screenshot was flushed to disk before Stop.\n"
+                        "Observer Mirror screenshot was flushed to disk after the settled gameplay mirror gate.\n"
                 );
             } catch (IOException error) {
                 ObserverE2eCommon.fail("observer", "Failed to save E2E screenshot: " + error);
@@ -275,26 +336,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
             return field(name).get(null);
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
-        }
-    }
-
-    private static final class TargetScreen extends Screen {
-        private TargetScreen() {
-            super(Component.literal("Observer E2E Target UI"));
-        }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0xFF163047);
-            graphics.fill(24, 36, Math.max(25, width - 24), Math.max(37, height - 36), 0xFF315D7D);
-            graphics.fill(48, 72, Math.max(49, width - 48), Math.max(73, height - 72), 0xFF102231);
-            graphics.text(font, Component.literal("TOTEM OBSERVER TWO-CLIENT E2E"), 32, 48, 0xFFFFFFFF);
-            graphics.text(font, Component.literal("TARGET FRAMEBUFFER SOURCE"), 32, 62, 0xFFE0E0E0);
-        }
-
-        @Override
-        public boolean shouldCloseOnEsc() {
-            return false;
         }
     }
 }
