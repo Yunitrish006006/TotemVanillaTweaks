@@ -93,6 +93,12 @@ dependencies {
     compileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     runtimeOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modImplementation files(totemCoreJar)
+
+    // Production namespace regression tests must load the same runtime mods that
+    // users install. The project JAR itself is supplied by Loom's production task.
+    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    productionRuntimeMods files(totemCoreJar)
+
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -181,6 +187,27 @@ tasks.matching { task ->
     ]
 }.configureEach {
     dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
+}
+
+// Build the separate GameTest source set as a real test-only Fabric mod. Loom's
+// generic production run task loads the main project JAR automatically, but it
+// does not automatically add a createSourceSet=true GameTest mod to its mod list.
+tasks.register('productionGametestModJar', Jar) {
+    dependsOn(sourceSets.gametest.classesTaskName, sourceSets.gametest.processResourcesTaskName)
+    archiveClassifier = 'production-gametest'
+    from sourceSets.gametest.output
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+// This runs the built distribution artifact in Loom's production environment,
+// which is the missing gate that allowed the 0.1.15 mixed-namespace ABI bug.
+tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    dependsOn('productionGametestModJar')
+    mods.from(tasks.named('productionGametestModJar').flatMap { it.archiveFile })
+    jvmArgs.add('-Dfabric.client.gametest')
+    jvmArgs.add('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    useXVFB = true
 }
 
 // A Loom run has exactly one primary SourceSet. The E2E runs use main so the

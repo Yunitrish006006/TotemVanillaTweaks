@@ -1,0 +1,59 @@
+name: Production Runtime
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  production-client-gametest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out VanillaTweaks
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # The normal development CI intentionally rewrites Fabric API tweaker
+          # namespaces in its Gradle cache for the named dev runtime. A production
+          # namespace gate must never restore that mutated cache; it needs pristine
+          # distribution dependencies exactly as a player downloads them.
+          cache-disabled: true
+
+      - name: Check out pinned TotemCore
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemCore
+          ref: 5be940a1fb91d250bb6781193bd49f0f24b40a43
+          path: .lockstep/TotemCore
+          persist-credentials: false
+
+      - name: Build pinned TotemCore
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew .lockstep/TotemCore/gradlew
+          ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          test "$core_version" = '0.7.0'
+          test -f ".lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+
+      - name: Run production-namespace client GameTests
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace
