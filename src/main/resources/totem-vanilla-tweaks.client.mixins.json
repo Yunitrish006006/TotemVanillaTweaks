@@ -6,6 +6,7 @@
   "client": [
     "OptionsMixin",
     "AbstractContainerScreenMixin",
+    "ObserverNativeScreenClientCraftingPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor"
