@@ -37,38 +37,26 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverCraftingScreenPayloads.CraftingRelay.TYPE, ObserverCraftingScreenPayloads.CraftingRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverMerchantScreenPayloads.MerchantState.TYPE, ObserverMerchantScreenPayloads.MerchantState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverMerchantScreenPayloads.MerchantRelay.TYPE, ObserverMerchantScreenPayloads.MerchantRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverAnvilScreenPayloads.AnvilState.TYPE, ObserverAnvilScreenPayloads.AnvilState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverAnvilScreenPayloads.AnvilRelay.TYPE, ObserverAnvilScreenPayloads.AnvilRelay.CODEC);
 
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverPayloads.ScreenState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverPayloads.Stop.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptStop(context.player()))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverNativePayloads.NativeViewState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptViewState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverNativeScreenPayloads.ContainerState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptContainerState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverNativeScreenPayloads.FurnaceState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptFurnaceState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverBookScreenPayloads.BookState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptBookState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverCraftingScreenPayloads.CraftingState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptCraftingState(context.player(), payload))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(
-                ObserverMerchantScreenPayloads.MerchantState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptMerchantState(context.player(), payload))
-        );
+        ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.Stop.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptStop(context.player())));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverNativePayloads.NativeViewState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptViewState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverNativeScreenPayloads.ContainerState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptContainerState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverNativeScreenPayloads.FurnaceState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptFurnaceState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverBookScreenPayloads.BookState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptBookState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverCraftingScreenPayloads.CraftingState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptCraftingState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverMerchantScreenPayloads.MerchantState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptMerchantState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverAnvilScreenPayloads.AnvilState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptAnvilState(context.player(), payload)));
     }
 }
