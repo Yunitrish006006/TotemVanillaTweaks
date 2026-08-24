@@ -21,6 +21,7 @@ jobs:
           set -uo pipefail
           output=''
           if output="$(gh workflow run publish-modrinth.yml \
+            -R "$GITHUB_REPOSITORY" \
             --ref main \
             -f release_ref=d5bef305ca2961d691156c9023c5f4237d256546 \
             -f dry_run=true \
