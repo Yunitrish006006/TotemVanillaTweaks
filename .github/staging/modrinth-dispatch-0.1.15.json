@@ -1,9 +1,9 @@
 {
-  "helper_run": "32703187917",
-  "helper_sha": "d8ee4171e9c02e70e16c183ff143e07e213b0bbc",
-  "dispatch": "failed",
-  "exit_code": 1,
-  "output": "failed to run git: fatal: not a git repository (or any of the parent directories): .git",
+  "helper_run": "32703241740",
+  "helper_sha": "1afdf809a8e956188fb991d4e691fdb6bba25a56",
+  "dispatch": "submitted",
+  "exit_code": 0,
+  "output": "https://github.com/Yunitrish006006/TotemVanillaTweaks/actions/runs/32703248327",
   "dry_run": true,
   "release_type": "beta"
 }
