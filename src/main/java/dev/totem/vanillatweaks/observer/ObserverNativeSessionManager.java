@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Server-authoritative protocol-native Observer state and screen relay. */
+/** Server-authoritative structured-state and screen relay for protocol-native Observer View. */
 public final class ObserverNativeSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
@@ -34,7 +34,6 @@ public final class ObserverNativeSessionManager {
         if (!supports(observer, target)) {
             return false;
         }
-
         TARGET_BY_OBSERVER.put(observer.getUUID(), target.getUUID());
         ServerPlayNetworking.send(observer, new ObserverNativePayloads.NativeSession(
                 true,
@@ -78,7 +77,6 @@ public final class ObserverNativeSessionManager {
         if (!valid(payload) || nativeObserverCount(target.getUUID()) == 0) {
             return;
         }
-
         long lastSequence = LAST_SEQUENCE_BY_TARGET.getOrDefault(target.getUUID(), -1L);
         if (payload.sequence() <= lastSequence) {
             return;
@@ -219,8 +217,7 @@ public final class ObserverNativeSessionManager {
         ServerPlayNetworking.send(target, new ObserverNativePayloads.NativeControl(
                 enabled,
                 ObserverNativePayloads.PROTOCOL_VERSION,
-                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0,
-                false
+                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0
         ));
     }
 }
