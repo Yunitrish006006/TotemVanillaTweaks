@@ -228,6 +228,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
             throw new AssertionError("Observer JVM incorrectly entered native target-state sender mode");
         }
 
+        dismissAccessibilityOnboarding(minecraft);
+
         boolean sessionActive = getBoolean("sessionActive");
         Screen screen = minecraft.gui.screen();
         boolean mirrorOpen = isObserverMirror(screen);
@@ -281,13 +283,11 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 observerNativeWorldStableTicks++;
                 if (observerNativeWorldStableTicks >= NATIVE_WORLD_SETTLE_TICKS) {
                     observerScreenshotRequested = true;
-                    String overlay = screen == null ? "none" : screen.getClass().getName();
                     ObserverE2eCommon.marker(
                             "observer-native-world-settled.txt",
                             "Observer stayed on Minecraft-native Target camera rendering for "
                                     + NATIVE_WORLD_SETTLE_TICKS
-                                    + " client ticks with zero framebuffer state; non-mirror screen="
-                                    + overlay + ".\n"
+                                    + " client ticks with screen=null and zero framebuffer state.\n"
                     );
                     saveNativeWorldScreenshot(minecraft);
                 }
@@ -335,6 +335,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         if (!nativeGetBoolean("observerSessionActive")
                 || !sessionActive
                 || !getBoolean("nativeSession")
+                || minecraft.gui.screen() != null
                 || mirrorOpen
                 || textureRegistered
                 || getLong("lastFrameId") >= 0L) {
@@ -342,6 +343,18 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
         requireTargetCamera(minecraft);
         return true;
+    }
+
+    private static void dismissAccessibilityOnboarding(Minecraft minecraft) {
+        Screen screen = minecraft.gui.screen();
+        if (screen == null || !screen.getClass().getSimpleName().equals("AccessibilityOnboardingScreen")) {
+            return;
+        }
+        minecraft.setScreen(null);
+        ObserverE2eCommon.marker(
+                "observer-onboarding-dismissed.txt",
+                "E2E dismissed Minecraft AccessibilityOnboardingScreen before native-world render proof.\n"
+        );
     }
 
     private static void requireTargetCamera(Minecraft minecraft) {
