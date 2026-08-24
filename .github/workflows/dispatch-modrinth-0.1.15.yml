@@ -18,15 +18,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          gh workflow run publish-modrinth.yml \
+          set -uo pipefail
+          output=''
+          if output="$(gh workflow run publish-modrinth.yml \
             --ref main \
             -f release_ref=d5bef305ca2961d691156c9023c5f4237d256546 \
             -f dry_run=true \
-            -f release_type=beta
+            -f release_type=beta 2>&1)"; then
+            dispatch_status=submitted
+            exit_code=0
+          else
+            exit_code=$?
+            dispatch_status=failed
+          fi
 
           marker='.github/staging/modrinth-dispatch-0.1.15.json'
-          body="$(jq -n --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" '{helper_run:$run,helper_sha:$sha,dispatch:"submitted",dry_run:true,release_type:"beta"}')"
+          body="$(jq -n \
+            --arg run "$GITHUB_RUN_ID" \
+            --arg sha "$GITHUB_SHA" \
+            --arg status "$dispatch_status" \
+            --arg output "$output" \
+            --argjson code "$exit_code" \
+            '{helper_run:$run,helper_sha:$sha,dispatch:$status,exit_code:$code,output:$output,dry_run:true,release_type:"beta"}')"
           encoded="$(printf '%s\n' "$body" | base64 -w0)"
           api="repos/${GITHUB_REPOSITORY}/contents/${marker}"
           old="$(gh api "$api" --jq '.sha' 2>/dev/null || true)"
@@ -35,3 +48,5 @@ jobs:
           else
             gh api --method PUT "$api" -f message='ci: record Modrinth 0.1.15 dispatch' -f content="$encoded" -f branch=main >/dev/null
           fi
+
+          exit "$exit_code"
