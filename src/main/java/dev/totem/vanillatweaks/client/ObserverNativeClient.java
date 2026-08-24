@@ -12,7 +12,6 @@ public final class ObserverNativeClient {
     private static boolean targetStateEnabled;
     private static int targetProtocolVersion;
     private static int targetStateFps = ObserverNativePayloads.TARGET_STATE_FPS;
-    private static boolean captureGameplayFrames = true;
     private static long lastTargetStateNanos;
     private static long nextTargetStateSequence;
 
@@ -55,10 +54,6 @@ public final class ObserverNativeClient {
 
     static boolean targetStateEnabled() {
         return targetStateEnabled;
-    }
-
-    static boolean suppressGameplayFramebuffer() {
-        return targetStateEnabled && !captureGameplayFrames;
     }
 
     static boolean observerSessionActive() {
@@ -108,14 +103,9 @@ public final class ObserverNativeClient {
     private static void applyControl(ObserverNativePayloads.NativeControl payload) {
         targetStateEnabled = payload.enabled()
                 && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
-        targetProtocolVersion = payload.protocolVersion();
+        targetProtocolVersion = targetStateEnabled ? payload.protocolVersion() : 0;
         targetStateFps = clamp(payload.stateFps(), 1, 20);
-        captureGameplayFrames = payload.captureGameplayFrames();
         lastTargetStateNanos = 0L;
-        if (!targetStateEnabled) {
-            targetProtocolVersion = 0;
-            captureGameplayFrames = true;
-        }
     }
 
     private static void applySession(ObserverNativePayloads.NativeSession payload) {
