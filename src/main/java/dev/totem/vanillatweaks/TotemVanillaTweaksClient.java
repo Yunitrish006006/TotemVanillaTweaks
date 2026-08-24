@@ -9,6 +9,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeEnchantingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeHud;
 import dev.totem.vanillatweaks.client.ObserverNativeMerchantScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
+import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -19,21 +20,14 @@ import org.lwjgl.glfw.GLFW;
 public final class TotemVanillaTweaksClient implements ClientModInitializer {
     private static KeyMapping sortBackpackKey;
 
-    public static KeyMapping sortBackpackKey() {
-        return sortBackpackKey;
-    }
+    public static KeyMapping sortBackpackKey() { return sortBackpackKey; }
 
     @Override
     public void onInitializeClient() {
         KeyMapping.Category category = KeyMapping.Category.register(
-                Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category")
-        );
+                Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category"));
         sortBackpackKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.deadrecall.sort_backpack",
-                InputConstants.Type.MOUSE,
-                GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
-                category
-        ));
+                "key.deadrecall.sort_backpack", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_MIDDLE, category));
         ObserverUiClient.register();
         ObserverNativeClient.register();
         ObserverNativeScreenClient.register();
@@ -42,6 +36,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverNativeMerchantScreenClient.register();
         ObserverNativeAnvilScreenClient.register();
         ObserverNativeEnchantingScreenClient.register();
+        ObserverRemnantBackpackScreenClient.register();
         ObserverNativeHud.register();
     }
 }
