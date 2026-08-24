@@ -1,0 +1,25 @@
+name: Dispatch Modrinth 0.1.15 Beta
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dispatch-modrinth-0.1.15.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch 0.1.15 Beta dry-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run publish-modrinth.yml \
+            --ref main \
+            -f release_ref=d5bef305ca2961d691156c9023c5f4237d256546 \
+            -f dry_run=true \
+            -f release_type=beta
