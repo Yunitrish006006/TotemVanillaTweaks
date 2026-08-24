@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Runs protocol-v3 Observer state in both directions over a real integrated-server connection.
+ * Runs protocol-v4 Observer state in both directions over a real integrated-server connection.
  * The one-process loopback deliberately uses the same player as Target and Observer; only the command's
  * self-observe guard is bypassed. No framebuffer payload, encoder, texture, or frame gate participates.
  */
@@ -47,10 +47,10 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     throw new AssertionError("Loopback player did not enter spectator mode");
                 }
 
-                assertCanSend(player, ObserverNativePayloads.NativeControl.TYPE, "NativeControl v3");
-                assertCanSend(player, ObserverNativePayloads.NativeSession.TYPE, "NativeSession v3");
-                assertCanSend(player, ObserverNativePayloads.NativeViewRelay.TYPE, "NativeViewRelay v3");
-                assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay");
+                assertCanSend(player, ObserverNativePayloads.NativeControl.TYPE, "NativeControl v4");
+                assertCanSend(player, ObserverNativePayloads.NativeSession.TYPE, "NativeSession v4");
+                assertCanSend(player, ObserverNativePayloads.NativeViewRelay.TYPE, "NativeViewRelay v4");
+                assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay v2");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -65,7 +65,11 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
-                    && nativeGetInt("targetProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION, 100);
+                    && nativeGetInt("targetProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
+                    && nativeGetLong("observerScreenCapabilities")
+                    == ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
+                    && nativeGetLong("targetScreenCapabilities")
+                    == ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS, 100);
 
             context.waitFor(minecraft -> nativeGetLong("nextTargetStateSequence") > 0L
                     && nativeGetLong("lastNativeStateSequence") > 0L, 200);
@@ -85,10 +89,14 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             context.runOnClient(minecraft -> ClientPlayNetworking.send(new ObserverPayloads.Stop()));
             context.waitFor(minecraft -> !nativeGetBoolean("observerSessionActive"), 100);
             context.waitFor(minecraft -> !nativeGetBoolean("targetStateEnabled"), 100);
+            context.waitFor(minecraft -> nativeGetLong("observerScreenCapabilities") == 0L
+                    && nativeGetLong("targetScreenCapabilities") == 0L, 100);
 
             UUID expected = playerId;
             boolean serverCleanedUp = singleplayer.getServer().computeOnServer(server ->
-                    !mainTargetMap().containsKey(expected) && !nativeTargetMap().containsKey(expected));
+                    !mainTargetMap().containsKey(expected)
+                            && !nativeTargetMap().containsKey(expected)
+                            && !nativeScreenCapabilityMap().containsKey(expected));
             if (!serverCleanedUp) {
                 throw new AssertionError("Observer Stop did not clean native loopback session state");
             }
@@ -135,6 +143,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             singleplayer.getServer().runOnServer(server -> {
                 mainTargetMap().remove(playerId);
                 nativeTargetMap().remove(playerId);
+                nativeScreenCapabilityMap().remove(playerId);
             });
         } catch (Throwable ignored) {
         }
@@ -162,6 +171,11 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
     @SuppressWarnings("unchecked")
     private static Map<UUID, UUID> nativeTargetMap() {
         return (Map<UUID, UUID>) getStatic(ObserverNativeSessionManager.class, "TARGET_BY_OBSERVER");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<UUID, Long> nativeScreenCapabilityMap() {
+        return (Map<UUID, Long>) getStatic(ObserverNativeSessionManager.class, "SCREEN_CAPABILITIES_BY_OBSERVER");
     }
 
     private static Object getStatic(Class<?> owner, String name) {
