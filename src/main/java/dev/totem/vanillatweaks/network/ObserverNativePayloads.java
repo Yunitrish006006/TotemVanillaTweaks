@@ -27,7 +27,7 @@ public final class ObserverNativePayloads {
             int stateFps,
             boolean captureGameplayFrames
     ) implements CustomPacketPayload {
-        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control"));
+        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control_v2"));
         public static final StreamCodec<FriendlyByteBuf, NativeControl> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.enabled);
@@ -51,7 +51,7 @@ public final class ObserverNativePayloads {
 
     public record NativeSession(boolean active, UUID targetId, String targetName, int protocolVersion)
             implements CustomPacketPayload {
-        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session"));
+        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session_v2"));
         public static final StreamCodec<FriendlyByteBuf, NativeSession> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.active);
@@ -89,7 +89,7 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state"));
+        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state_v2"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewState> CODEC = StreamCodec.of(
                 ObserverNativePayloads::writeViewState,
                 ObserverNativePayloads::readViewState
@@ -118,7 +118,7 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay"));
+        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay_v2"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeUUID(value.targetId);
