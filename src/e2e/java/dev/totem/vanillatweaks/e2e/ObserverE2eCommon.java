@@ -1,5 +1,7 @@
 package dev.totem.vanillatweaks.e2e;
 
+import dev.totem.vanillatweaks.network.ObserverNativePayloads;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.api.ModInitializer;
@@ -81,7 +83,7 @@ public final class ObserverE2eCommon implements ModInitializer {
                             ? ticks + SECOND_CLIENT_TIMEOUT_TICKS
                             : firstClientSeenTick + SECOND_CLIENT_TIMEOUT_TICKS;
                     if (ticks > payloadDeadline) {
-                        fail("server", "Connected clients never advertised all Observer View payloads");
+                        fail("server", "Connected clients never advertised all protocol-native Observer payloads");
                         cleanedUp = true;
                     }
                     return;
@@ -101,14 +103,15 @@ public final class ObserverE2eCommon implements ModInitializer {
 
                 started = true;
                 marker("server-session-started.txt",
-                        "observer=" + observerId + "\ntarget=" + targetId + "\nproduction_start=true\n");
+                        "observer=" + observerId + "\ntarget=" + targetId
+                                + "\nprotocol=" + ObserverNativePayloads.PROTOCOL_VERSION
+                                + "\nframebuffer_transport=false\n");
                 return;
             }
 
             boolean sessionPresent = observerId != null && targetMap().containsKey(observerId);
-            boolean gatePresent = targetId != null && frameGateMap().containsKey(targetId);
-            if (!sessionPresent && !gatePresent) {
-                marker("server-cleanup-ok.txt", "Observer Stop removed session and frame-gate state.\n");
+            if (!sessionPresent) {
+                marker("server-cleanup-ok.txt", "Observer Stop removed protocol-native session state.\n");
                 cleanedUp = true;
             }
         } catch (Throwable error) {
@@ -118,10 +121,11 @@ public final class ObserverE2eCommon implements ModInitializer {
     }
 
     private static boolean supportsObserverPayloads(ServerPlayer target, ServerPlayer observer) {
-        return ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)
-                && ServerPlayNetworking.canSend(observer, ObserverPayloads.Session.TYPE)
-                && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE)
-                && ServerPlayNetworking.canSend(observer, ObserverPayloads.FrameRelay.TYPE);
+        return ServerPlayNetworking.canSend(target, ObserverNativePayloads.NativeControl.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeViewRelay.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE);
     }
 
     private static int invokeProductionStart(ServerPlayer observer, ServerPlayer target) {
@@ -168,11 +172,6 @@ public final class ObserverE2eCommon implements ModInitializer {
     @SuppressWarnings("unchecked")
     private static Map<UUID, UUID> targetMap() {
         return (Map<UUID, UUID>) staticField(ObserverSessionManager.class, "TARGET_BY_OBSERVER");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<UUID, Object> frameGateMap() {
-        return (Map<UUID, Object>) staticField(ObserverSessionManager.class, "FRAME_GATE_BY_TARGET");
     }
 
     private static Object staticField(Class<?> owner, String name) {
