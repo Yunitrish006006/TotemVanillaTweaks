@@ -20,10 +20,14 @@ public final class ObserverNativeScreenPayloads {
     public static final String FAMILY_CONTAINER_SLOTS = "container_slots";
     /** Furnace, blast-furnace and smoker adapter with progress/fuel semantics. */
     public static final String FAMILY_FURNACE = "furnace";
+    /** Written/writable/lectern/signing book semantic adapter. */
+    public static final String FAMILY_BOOK = "book";
 
     public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
     public static final long CAPABILITY_FURNACE = 1L << 1;
-    public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS | CAPABILITY_FURNACE;
+    public static final long CAPABILITY_BOOK = 1L << 2;
+    public static final long KNOWN_CAPABILITIES =
+            CAPABILITY_CONTAINER_SLOTS | CAPABILITY_FURNACE | CAPABILITY_BOOK;
 
     private static final int MAX_TEXT = 256;
 
@@ -46,6 +50,7 @@ public final class ObserverNativeScreenPayloads {
         return switch (familyId) {
             case FAMILY_CONTAINER_SLOTS -> CAPABILITY_CONTAINER_SLOTS;
             case FAMILY_FURNACE -> CAPABILITY_FURNACE;
+            case FAMILY_BOOK -> CAPABILITY_BOOK;
             default -> 0L;
         };
     }
@@ -73,8 +78,7 @@ public final class ObserverNativeScreenPayloads {
             int mouseY,
             List<SlotState> slots
     ) implements CustomPacketPayload {
-        public static final Type<ContainerState> TYPE =
-                new Type<>(id("observer_native_container_state_v2"));
+        public static final Type<ContainerState> TYPE = new Type<>(id("observer_native_container_state_v2"));
         public static final StreamCodec<FriendlyByteBuf, ContainerState> CODEC = StreamCodec.of(
                 ObserverNativeScreenPayloads::writeContainerState,
                 ObserverNativeScreenPayloads::readContainerState
@@ -100,8 +104,7 @@ public final class ObserverNativeScreenPayloads {
             int mouseY,
             List<SlotState> slots
     ) implements CustomPacketPayload {
-        public static final Type<ContainerRelay> TYPE =
-                new Type<>(id("observer_native_container_relay_v2"));
+        public static final Type<ContainerRelay> TYPE = new Type<>(id("observer_native_container_relay_v2"));
         public static final StreamCodec<FriendlyByteBuf, ContainerRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeUUID(value.targetId());
@@ -162,8 +165,7 @@ public final class ObserverNativeScreenPayloads {
             float fuelProgress,
             boolean lit
     ) implements CustomPacketPayload {
-        public static final Type<FurnaceState> TYPE =
-                new Type<>(id("observer_native_furnace_state_v1"));
+        public static final Type<FurnaceState> TYPE = new Type<>(id("observer_native_furnace_state_v1"));
         public static final StreamCodec<FriendlyByteBuf, FurnaceState> CODEC = StreamCodec.of(
                 ObserverNativeScreenPayloads::writeFurnaceState,
                 ObserverNativeScreenPayloads::readFurnaceState
@@ -192,8 +194,7 @@ public final class ObserverNativeScreenPayloads {
             float fuelProgress,
             boolean lit
     ) implements CustomPacketPayload {
-        public static final Type<FurnaceRelay> TYPE =
-                new Type<>(id("observer_native_furnace_relay_v1"));
+        public static final Type<FurnaceRelay> TYPE = new Type<>(id("observer_native_furnace_relay_v1"));
         public static final StreamCodec<FriendlyByteBuf, FurnaceRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeUUID(value.targetId());
