@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
+import dev.totem.vanillatweaks.client.ObserverNativeHud;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -29,5 +30,6 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ));
         ObserverUiClient.register();
         ObserverNativeClient.register();
+        ObserverNativeHud.register();
     }
 }
