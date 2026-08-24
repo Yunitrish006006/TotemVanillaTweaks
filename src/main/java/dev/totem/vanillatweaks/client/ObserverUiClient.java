@@ -24,7 +24,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
 
-/** Client-side live framebuffer capture and read-only rendering for privileged spectator observation. */
+/** Client-side compatibility framebuffer transport plus protocol-native Observer rendering bridge. */
 public final class ObserverUiClient {
     private static final Identifier FRAME_TEXTURE =
             Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "observer/live_frame");
@@ -39,6 +39,8 @@ public final class ObserverUiClient {
     private static String lastScreenKey;
 
     private static boolean sessionActive;
+    private static boolean nativeSession;
+    private static boolean suppressMirrorStop;
     private static UUID targetId;
     private static String targetName = "";
     private static boolean remoteScreenOpen;
@@ -75,6 +77,18 @@ public final class ObserverUiClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverUiClient::tickCapture);
     }
 
+    static void applyNativeSession(boolean active, UUID nativeTargetId, String nativeTargetName) {
+        sessionActive = active;
+        nativeSession = active;
+        targetId = active ? nativeTargetId : null;
+        targetName = active ? nativeTargetName : "";
+        remoteScreenOpen = false;
+        assembly = null;
+        lastFrameId = -1L;
+        closeMirrorScreen();
+        releaseFrameTexture();
+    }
+
     private static void applyCaptureControl(ObserverPayloads.CaptureControl payload) {
         captureEnabled = payload.enabled();
         captureMaxWidth = clamp(payload.maxWidth(), 1, ObserverFrameRules.MAX_WIDTH);
@@ -89,6 +103,7 @@ public final class ObserverUiClient {
 
     private static void applySession(ObserverPayloads.Session payload) {
         sessionActive = payload.active();
+        nativeSession = false;
         targetId = sessionActive ? payload.targetId() : null;
         targetName = sessionActive ? payload.targetName() : "";
         remoteScreenOpen = false;
@@ -107,6 +122,12 @@ public final class ObserverUiClient {
             return;
         }
         remoteScreenOpen = payload.open();
+        if (nativeSession && !remoteScreenOpen) {
+            assembly = null;
+            closeMirrorScreen();
+            releaseFrameTexture();
+            return;
+        }
         ensureMirrorScreen();
     }
 
@@ -125,6 +146,9 @@ public final class ObserverUiClient {
             ClientPlayNetworking.send(new ObserverPayloads.ScreenState(screenOpen, screenClass, title));
         }
 
+        if (ObserverNativeClient.suppressGameplayFramebuffer() && !screenOpen) {
+            return;
+        }
         if (captureInFlight) {
             return;
         }
@@ -232,6 +256,9 @@ public final class ObserverUiClient {
         if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
+        if (nativeSession && !remoteScreenOpen) {
+            return;
+        }
         if (!ObserverFrameRules.validChunk(
                 payload.chunkIndex(), payload.chunkCount(), payload.frameWidth(), payload.frameHeight(),
                 payload.sourceWidth(), payload.sourceHeight(), payload.data().length)) {
@@ -305,13 +332,21 @@ public final class ObserverUiClient {
 
     private static void closeMirrorScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gui.screen() instanceof ObserverMirrorScreen) {
+        if (!(minecraft.gui.screen() instanceof ObserverMirrorScreen)) {
+            return;
+        }
+        suppressMirrorStop = true;
+        try {
             minecraft.setScreenAndShow(null);
+        } finally {
+            suppressMirrorStop = false;
         }
     }
 
     private static void releaseFrameTexture() {
         if (!textureRegistered) {
+            frameWidth = 0;
+            frameHeight = 0;
             return;
         }
         Minecraft.getInstance().getTextureManager().release(FRAME_TEXTURE);
@@ -436,7 +471,9 @@ public final class ObserverUiClient {
 
         @Override
         public void onClose() {
-            requestStop();
+            if (!suppressMirrorStop) {
+                requestStop();
+            }
         }
     }
 }
