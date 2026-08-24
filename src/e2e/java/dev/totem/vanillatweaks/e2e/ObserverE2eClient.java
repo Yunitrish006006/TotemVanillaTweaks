@@ -17,6 +17,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -30,7 +31,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static final Class<?> NATIVE_CLIENT = ObserverNativeClient.class;
     private static final Class<?> NATIVE_HUD = ObserverNativeHud.class;
     private static final Class<?> NATIVE_SCREEN_CLIENT = ObserverNativeScreenClient.class;
-    private static final int CLIENT_TIMEOUT_TICKS = 20 * 150;
+    private static final int CLIENT_TIMEOUT_TICKS = 20 * 180;
     private static final int MAX_CONNECTION_ATTEMPTS = 5;
     private static final int RECONNECT_DELAY_TICKS = 20 * 2;
     private static final int TARGET_WORLD_SETTLE_TICKS = 40;
@@ -51,6 +52,9 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean targetContainerOpened;
     private static boolean targetContainerClosed;
     private static long targetFrameIdBeforeContainer;
+    private static boolean targetGenericOpened;
+    private static boolean targetGenericClosed;
+    private static long targetFrameIdBeforeGeneric;
 
     private static boolean observerNativeSeen;
     private static boolean observerHudSeen;
@@ -61,6 +65,10 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean observerContainerSeen;
     private static boolean observerContainerScreenshotRequested;
     private static volatile boolean observerContainerScreenshotSaved;
+    private static boolean observerGenericRequested;
+    private static boolean observerGenericSeen;
+    private static boolean observerGenericScreenshotRequested;
+    private static volatile boolean observerGenericScreenshotSaved;
     private static boolean observerStopRequested;
     private static boolean finished;
 
@@ -183,7 +191,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             targetCaptureSeen = true;
             ObserverE2eCommon.marker(
                     "target-capture-enabled.txt",
-                    "Target received compatibility CaptureControl(true); native mode must suppress gameplay frames.\n"
+                    "Target received compatibility CaptureControl(true); native mode must suppress all framebuffer frames.\n"
             );
         }
 
@@ -195,12 +203,12 @@ public final class ObserverE2eClient implements ClientModInitializer {
                         + nativeGetInt("targetProtocolVersion"));
             }
             if (nativeGetBoolean("captureGameplayFrames")) {
-                throw new AssertionError("Native-only E2E incorrectly requested gameplay framebuffer fallback");
+                throw new AssertionError("Native-only E2E incorrectly requested framebuffer fallback");
             }
             ObserverE2eCommon.marker(
                     "target-native-state-enabled.txt",
                     "Target negotiated Observer protocol v" + ObserverNativePayloads.PROTOCOL_VERSION
-                            + " with gameplay framebuffer suppression.\n"
+                            + " with global framebuffer suppression.\n"
             );
         }
 
@@ -261,13 +269,59 @@ public final class ObserverE2eClient implements ClientModInitializer {
             return;
         }
 
+        if (!targetGenericOpened
+                && targetContainerClosed
+                && markerExists("observer-ready-for-generic-screen.txt")) {
+            if (minecraft.gui.screen() != null) {
+                throw new AssertionError("Target had an unexpected Screen before unsupported-screen E2E: "
+                        + minecraft.gui.screen().getClass().getName());
+            }
+            targetFrameIdBeforeGeneric = getLong("nextFrameId");
+            if (targetFrameIdBeforeGeneric != 0L) {
+                throw new AssertionError("Target entered unsupported-screen E2E after a framebuffer was already emitted");
+            }
+            minecraft.setScreenAndShow(new E2eUnsupportedScreen());
+            targetGenericOpened = true;
+            ObserverE2eCommon.marker(
+                    "target-native-generic-opened.txt",
+                    "Target opened a deliberately unsupported non-container Screen for metadata-only native fallback proof.\n"
+            );
+            return;
+        }
+
+        if (targetGenericOpened && !targetGenericClosed) {
+            if (!(minecraft.gui.screen() instanceof E2eUnsupportedScreen)) {
+                throw new AssertionError("Unsupported Target Screen closed before Observer saved metadata-only proof");
+            }
+            if (getLong("nextFrameId") != targetFrameIdBeforeGeneric) {
+                throw new AssertionError("Target emitted framebuffer while unsupported native Screen was open; nextFrameId="
+                        + getLong("nextFrameId"));
+            }
+            ObserverE2eCommon.marker(
+                    "target-native-generic-no-frame.txt",
+                    "Unsupported Screen stayed open while Target nextFrameId remained zero.\n"
+            );
+            if (markerExists("observer-native-generic-screen-saved.txt")) {
+                minecraft.setScreenAndShow(null);
+                targetGenericClosed = true;
+                ObserverE2eCommon.marker(
+                        "target-native-generic-closed.txt",
+                        "Target closed unsupported Screen after Observer saved local metadata-only placeholder.\n"
+                );
+            }
+            return;
+        }
+
         if (minecraft.gui.screen() != null) {
-            throw new AssertionError("Target opened an unexpected Screen during native gameplay E2E: "
+            throw new AssertionError("Target opened an unexpected Screen during native E2E: "
                     + minecraft.gui.screen().getClass().getName());
         }
 
         if (targetContainerClosed && getLong("nextFrameId") != targetFrameIdBeforeContainer) {
             throw new AssertionError("Target emitted framebuffer during structured container lifecycle");
+        }
+        if (targetGenericClosed && getLong("nextFrameId") != targetFrameIdBeforeGeneric) {
+            throw new AssertionError("Target emitted framebuffer during unsupported-screen lifecycle");
         }
 
         if (targetCaptureSeen && !captureEnabled) {
@@ -277,12 +331,12 @@ public final class ObserverE2eClient implements ClientModInitializer {
             if (!targetNoFrameProven || getLong("nextFrameId") != 0L) {
                 throw new AssertionError("Target completed native session after emitting a framebuffer");
             }
-            if (!targetContainerOpened || !targetContainerClosed) {
-                throw new AssertionError("Target session stopped before structured InventoryScreen E2E completed");
+            if (!targetContainerOpened || !targetContainerClosed || !targetGenericOpened || !targetGenericClosed) {
+                throw new AssertionError("Target session stopped before native screen E2E completed");
             }
             ObserverE2eCommon.marker(
                     "target-complete.txt",
-                    "Target completed native world/HUD/container observation with zero PNG/framebuffer frames.\n"
+                    "Target completed native world/HUD/container/unsupported-screen observation with zero PNG/framebuffer frames.\n"
             );
             finished = true;
             stopMinecraft(minecraft);
@@ -398,9 +452,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
                     && screenGetBoolean("remoteContainerOpen")
                     && screenGetLong("lastRemoteSequence") > 0L
                     && screenGetLong("extractedFrames") > 0L) {
-                if (textureRegistered || getLong("lastFrameId") >= 0L) {
-                    throw new AssertionError("Structured container was accompanied by framebuffer state");
-                }
+                requireNoFramebufferState("structured container");
                 observerContainerSeen = true;
                 ObserverE2eCommon.marker(
                         "observer-native-container-ok.txt",
@@ -411,20 +463,53 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
         if (observerContainerSeen && !observerContainerScreenshotRequested) {
             observerContainerScreenshotRequested = true;
-            saveNativeContainerScreenshot(minecraft);
+            saveScreenshot(minecraft, "observer-native-container.png", "observer-native-container-saved.txt",
+                    "Observer locally reconstructed InventoryScreen was saved for CI evidence; no container image was received over network.");
         }
 
-        if (observerContainerScreenshotSaved && !observerStopRequested) {
-            if (screenGetBoolean("remoteContainerOpen") || isNativeContainerMirror(minecraft.gui.screen())) {
+        if (observerContainerScreenshotSaved
+                && !observerGenericRequested
+                && !screenGetBoolean("remoteContainerOpen")
+                && !isNativeContainerMirror(minecraft.gui.screen())) {
+            requireNoFramebufferState("after structured container close");
+            observerGenericRequested = true;
+            ObserverE2eCommon.marker(
+                    "observer-ready-for-generic-screen.txt",
+                    "Structured container proof is complete; Target may open an unsupported Screen.\n"
+            );
+        }
+
+        if (observerGenericRequested && !observerGenericSeen) {
+            if (isNativeGenericMirror(minecraft.gui.screen())
+                    && screenGetBoolean("remoteGenericOpen")
+                    && screenGetLong("genericExtractedFrames") > 0L) {
+                requireNoFramebufferState("unsupported generic screen");
+                observerGenericSeen = true;
+                ObserverE2eCommon.marker(
+                        "observer-native-generic-screen-ok.txt",
+                        "Observer rendered metadata-only NativeGenericMirrorScreen for an unsupported Target Screen with zero framebuffer state.\n"
+                );
+            }
+        }
+
+        if (observerGenericSeen && !observerGenericScreenshotRequested) {
+            observerGenericScreenshotRequested = true;
+            saveScreenshot(minecraft, "observer-native-generic-screen.png", "observer-native-generic-screen-saved.txt",
+                    "Observer metadata-only unsupported-screen placeholder was saved locally; no remote pixels were received.");
+        }
+
+        if (observerGenericScreenshotSaved && !observerStopRequested) {
+            if (screenGetBoolean("remoteGenericOpen") || isNativeGenericMirror(minecraft.gui.screen())) {
                 return;
             }
             requireTargetCamera(minecraft);
-            if (getBoolean("textureRegistered") || getLong("lastFrameId") >= 0L) {
-                throw new AssertionError("Framebuffer state appeared after structured container close");
-            }
+            requireNoFramebufferState("after unsupported screen close");
             ClientPlayNetworking.send(new ObserverPayloads.Stop());
             observerStopRequested = true;
-            ObserverE2eCommon.marker("observer-stop-requested.txt", "Observer sent production Stop after native container close.\n");
+            ObserverE2eCommon.marker(
+                    "observer-stop-requested.txt",
+                    "Observer sent production Stop after native unsupported-screen close.\n"
+            );
             return;
         }
 
@@ -432,12 +517,12 @@ public final class ObserverE2eClient implements ClientModInitializer {
             if (getBoolean("textureRegistered") || nativeGetBoolean("observerSessionActive")) {
                 return;
             }
-            if (isObserverMirror(minecraft.gui.screen()) || isNativeContainerMirror(minecraft.gui.screen())) {
+            if (isObserverMirror(minecraft.gui.screen()) || isNativeScreenMirror(minecraft.gui.screen())) {
                 return;
             }
             ObserverE2eCommon.marker(
                     "observer-complete.txt",
-                    "Observer received native Session(false) after world/HUD/container proof and cleaned up locally.\n"
+                    "Observer received native Session(false) after world/HUD/container/unsupported-screen proof and cleaned up locally.\n"
             );
             finished = true;
             stopMinecraft(minecraft);
@@ -483,12 +568,26 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
     }
 
+    private static void requireNoFramebufferState(String phase) {
+        if (getBoolean("textureRegistered") || getLong("lastFrameId") >= 0L) {
+            throw new AssertionError("Native " + phase + " unexpectedly received framebuffer state");
+        }
+    }
+
     private static boolean isObserverMirror(Screen screen) {
         return screen != null && screen.getClass().getName().contains("ObserverMirrorScreen");
     }
 
     private static boolean isNativeContainerMirror(Screen screen) {
         return screen != null && screen.getClass().getName().contains("NativeContainerMirrorScreen");
+    }
+
+    private static boolean isNativeGenericMirror(Screen screen) {
+        return screen != null && screen.getClass().getName().contains("NativeGenericMirrorScreen");
+    }
+
+    private static boolean isNativeScreenMirror(Screen screen) {
+        return isNativeContainerMirror(screen) || isNativeGenericMirror(screen);
     }
 
     private static boolean markerExists(String name) {
@@ -517,23 +616,24 @@ public final class ObserverE2eClient implements ClientModInitializer {
         });
     }
 
-    private static void saveNativeContainerScreenshot(Minecraft minecraft) {
+    private static void saveScreenshot(Minecraft minecraft, String fileName, String markerName, String markerText) {
         Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), image -> {
             if (image == null) {
-                ObserverE2eCommon.fail("observer", "Native-container screenshot callback returned null image");
+                ObserverE2eCommon.fail("observer", "Screenshot callback returned null image for " + fileName);
                 return;
             }
             try (NativeImage owned = image) {
-                Path output = ObserverE2eCommon.resultsDir().resolve("observer-native-container.png");
+                Path output = ObserverE2eCommon.resultsDir().resolve(fileName);
                 Files.createDirectories(output.getParent());
                 owned.writeToFile(output);
-                observerContainerScreenshotSaved = true;
-                ObserverE2eCommon.marker(
-                        "observer-native-container-saved.txt",
-                        "Observer locally reconstructed InventoryScreen was saved for CI evidence; no container image was received over network.\n"
-                );
+                if (fileName.equals("observer-native-container.png")) {
+                    observerContainerScreenshotSaved = true;
+                } else if (fileName.equals("observer-native-generic-screen.png")) {
+                    observerGenericScreenshotSaved = true;
+                }
+                ObserverE2eCommon.marker(markerName, markerText + "\n");
             } catch (IOException error) {
-                ObserverE2eCommon.fail("observer", "Failed to save native-container E2E screenshot: " + error);
+                ObserverE2eCommon.fail("observer", "Failed to save E2E screenshot " + fileName + ": " + error);
             }
         });
     }
@@ -659,6 +759,17 @@ public final class ObserverE2eClient implements ClientModInitializer {
             return nativeField(name).get(null);
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
+        }
+    }
+
+    private static final class E2eUnsupportedScreen extends Screen {
+        private E2eUnsupportedScreen() {
+            super(Component.literal("Observer E2E Unsupported Screen"));
+        }
+
+        @Override
+        public boolean isPauseScreen() {
+            return false;
         }
     }
 }
