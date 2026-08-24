@@ -3,6 +3,9 @@
   "id": "totem-vanilla-tweaks",
   "version": "${version}",
   "name": "TotemVanillaTweaks",
+  "description": "Vanilla-focused gameplay tweaks for the Totem ecosystem, including container sorting, bookshelf rules, automation fixes, and privileged Spectator Observer View.",
+  "authors": ["Yunitrish006006"],
+  "license": "Apache-2.0",
   "icon": "assets/totem-vanilla-tweaks/icon.png",
   "environment": "*",
   "entrypoints": {
