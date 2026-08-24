@@ -1,0 +1,8 @@
+{
+  "version": "0.1.15",
+  "release_ref": "d5bef305ca2961d691156c9023c5f4237d256546",
+  "release_type": "beta",
+  "run": "32702570547",
+  "status": "failure",
+  "publish_step": "failure"
+}
