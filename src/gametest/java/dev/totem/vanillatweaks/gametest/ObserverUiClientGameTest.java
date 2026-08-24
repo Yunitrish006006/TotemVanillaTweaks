@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 
 /**
  * Client smoke test for the framebuffer-free Observer UI bridge.
- * Verifies removed frame surfaces stay absent and an unsupported Screen is represented by local metadata UI only.
+ * Verifies removed frame surfaces stay absent and an unnegotiated screen family degrades to metadata-only UI.
  */
 public final class ObserverUiClientGameTest implements FabricClientGameTest {
     @Override
@@ -56,7 +56,8 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                                 true,
                                 targetId,
                                 "ObserverSmokeTarget",
-                                ObserverNativePayloads.PROTOCOL_VERSION
+                                ObserverNativePayloads.PROTOCOL_VERSION,
+                                0L
                         )
                 );
                 invoke(
@@ -64,8 +65,8 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                         "applyGenericScreenState",
                         new Class<?>[]{boolean.class, String.class, String.class},
                         true,
-                        "gametest.UnsupportedScreen",
-                        "Unsupported Metadata Screen"
+                        "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                        "Unnegotiated Container Metadata"
                 );
             });
 
@@ -94,7 +95,8 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                                 false,
                                 new UUID(0L, 0L),
                                 "",
-                                ObserverNativePayloads.PROTOCOL_VERSION
+                                ObserverNativePayloads.PROTOCOL_VERSION,
+                                0L
                         )
                 );
             });

@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Protocol-native screen transport. Known container screens use semantic slot snapshots;
- * unknown screens use metadata-only local placeholders. Neither path receives pixels.
+ * Protocol-native screen transport. Negotiated container families use semantic slot snapshots;
+ * unsupported screens use metadata-only local placeholders. Neither path receives pixels.
  */
 public final class ObserverNativeScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
@@ -65,7 +65,8 @@ public final class ObserverNativeScreenClient {
     }
 
     static boolean isStructuredTargetScreen(Screen screen) {
-        return ObserverNativeClient.targetStateEnabled() && screen instanceof AbstractContainerScreen<?>;
+        return ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS)
+                && screen instanceof AbstractContainerScreen<?>;
     }
 
     static boolean hasStructuredRemoteScreen() {
@@ -143,21 +144,28 @@ public final class ObserverNativeScreenClient {
 
     private static void tickTarget(Minecraft minecraft) {
         Screen screen = minecraft.gui.screen();
-        if (!(screen instanceof AbstractContainerScreen<?>)) {
+        boolean supportsContainer = ObserverNativeClient.targetSupportsScreen(
+                ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
+        );
+        if (!supportsContainer || !(screen instanceof AbstractContainerScreen<?>)) {
             if (targetContainerOpen) {
                 targetContainerOpen = false;
-                ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
-                        ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
-                        ++nextTargetSequence,
-                        false,
-                        "",
-                        "",
-                        0,
-                        0,
-                        0,
-                        0,
-                        List.of()
-                ));
+                lastSnapshotNanos = 0L;
+                if (supportsContainer) {
+                    ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
+                            ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
+                            ++nextTargetSequence,
+                            false,
+                            ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
+                            "",
+                            "",
+                            0,
+                            0,
+                            0,
+                            0,
+                            List.of()
+                    ));
+                }
             }
             return;
         }
@@ -210,6 +218,7 @@ public final class ObserverNativeScreenClient {
                 ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
                 ++nextTargetSequence,
                 true,
+                ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
                 screen.getClass().getName(),
                 title,
                 contentWidth,
@@ -223,9 +232,13 @@ public final class ObserverNativeScreenClient {
     private static void acceptRelay(ObserverNativeScreenPayloads.ContainerRelay payload) {
         UUID targetId = ObserverNativeClient.observerTargetId();
         if (!ObserverNativeClient.observerSessionActive()
+                || !ObserverNativeClient.observerSupportsScreen(
+                        ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
+                )
                 || targetId == null
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS.equals(payload.familyId())
                 || payload.sequence() <= lastRemoteSequence) {
             return;
         }

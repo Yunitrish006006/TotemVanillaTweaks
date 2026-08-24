@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
@@ -12,11 +13,13 @@ public final class ObserverNativeClient {
     private static boolean targetStateEnabled;
     private static int targetProtocolVersion;
     private static int targetStateFps = ObserverNativePayloads.TARGET_STATE_FPS;
+    private static long targetScreenCapabilities;
     private static long lastTargetStateNanos;
     private static long nextTargetStateSequence;
 
     private static boolean observerSessionActive;
     private static int observerProtocolVersion;
+    private static long observerScreenCapabilities;
     private static UUID observerTargetId;
     private static String observerTargetName = "";
     private static long lastNativeStateSequence = -1L;
@@ -56,8 +59,26 @@ public final class ObserverNativeClient {
         return targetStateEnabled;
     }
 
+    static boolean targetSupportsScreen(long capability) {
+        return targetStateEnabled
+                && ObserverNativeScreenPayloads.supports(targetScreenCapabilities, capability);
+    }
+
+    static long targetScreenCapabilities() {
+        return targetScreenCapabilities;
+    }
+
     static boolean observerSessionActive() {
         return observerSessionActive;
+    }
+
+    static boolean observerSupportsScreen(long capability) {
+        return observerSessionActive
+                && ObserverNativeScreenPayloads.supports(observerScreenCapabilities, capability);
+    }
+
+    static long observerScreenCapabilities() {
+        return observerScreenCapabilities;
     }
 
     static UUID observerTargetId() {
@@ -105,13 +126,19 @@ public final class ObserverNativeClient {
                 && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
         targetProtocolVersion = targetStateEnabled ? payload.protocolVersion() : 0;
         targetStateFps = clamp(payload.stateFps(), 1, 20);
+        targetScreenCapabilities = targetStateEnabled
+                ? ObserverNativeScreenPayloads.sanitizeCapabilities(payload.screenCapabilities())
+                : 0L;
         lastTargetStateNanos = 0L;
     }
 
     private static void applySession(ObserverNativePayloads.NativeSession payload) {
         observerSessionActive = payload.active()
                 && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
-        observerProtocolVersion = payload.protocolVersion();
+        observerProtocolVersion = observerSessionActive ? payload.protocolVersion() : 0;
+        observerScreenCapabilities = observerSessionActive
+                ? ObserverNativeScreenPayloads.sanitizeCapabilities(payload.screenCapabilities())
+                : 0L;
         observerTargetId = observerSessionActive ? payload.targetId() : null;
         observerTargetName = observerSessionActive ? payload.targetName() : "";
         lastNativeStateSequence = -1L;
@@ -121,7 +148,6 @@ public final class ObserverNativeClient {
                 observerSessionActive ? payload.targetName() : ""
         );
         if (!observerSessionActive) {
-            observerProtocolVersion = 0;
             remoteYaw = 0.0F;
             remotePitch = 0.0F;
             remoteHealth = 0.0F;

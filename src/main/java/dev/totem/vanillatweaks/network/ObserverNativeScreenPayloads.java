@@ -10,10 +10,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Structured GUI transport kept separate from the protocol-v2 gameplay/HUD stream. */
+/** Versioned semantic-screen transport for protocol-native Observer View. */
 public final class ObserverNativeScreenPayloads {
-    public static final int SCREEN_PROTOCOL_VERSION = 1;
+    public static final int SCREEN_PROTOCOL_VERSION = 2;
     public static final int MAX_SLOTS = 128;
+
+    /** Generic slot-layout adapter used for AbstractContainerScreen families. */
+    public static final String FAMILY_CONTAINER_SLOTS = "container_slots";
+    public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
+    public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS;
+
     private static final int MAX_TEXT = 256;
 
     private ObserverNativeScreenPayloads() {
@@ -21,6 +27,18 @@ public final class ObserverNativeScreenPayloads {
 
     private static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
+    }
+
+    public static long sanitizeCapabilities(long capabilities) {
+        return capabilities & KNOWN_CAPABILITIES;
+    }
+
+    public static boolean supports(long capabilities, long capability) {
+        return (sanitizeCapabilities(capabilities) & capability) == capability;
+    }
+
+    public static long capabilityForFamily(String familyId) {
+        return FAMILY_CONTAINER_SLOTS.equals(familyId) ? CAPABILITY_CONTAINER_SLOTS : 0L;
     }
 
     public record SlotState(
@@ -37,6 +55,7 @@ public final class ObserverNativeScreenPayloads {
             int protocolVersion,
             long sequence,
             boolean open,
+            String familyId,
             String screenClass,
             String title,
             int contentWidth,
@@ -46,7 +65,7 @@ public final class ObserverNativeScreenPayloads {
             List<SlotState> slots
     ) implements CustomPacketPayload {
         public static final Type<ContainerState> TYPE =
-                new Type<>(id("observer_native_container_state_v1"));
+                new Type<>(id("observer_native_container_state_v2"));
         public static final StreamCodec<FriendlyByteBuf, ContainerState> CODEC = StreamCodec.of(
                 ObserverNativeScreenPayloads::writeContainerState,
                 ObserverNativeScreenPayloads::readContainerState
@@ -63,6 +82,7 @@ public final class ObserverNativeScreenPayloads {
             int protocolVersion,
             long sequence,
             boolean open,
+            String familyId,
             String screenClass,
             String title,
             int contentWidth,
@@ -72,7 +92,7 @@ public final class ObserverNativeScreenPayloads {
             List<SlotState> slots
     ) implements CustomPacketPayload {
         public static final Type<ContainerRelay> TYPE =
-                new Type<>(id("observer_native_container_relay_v1"));
+                new Type<>(id("observer_native_container_relay_v2"));
         public static final StreamCodec<FriendlyByteBuf, ContainerRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeUUID(value.targetId());
@@ -81,6 +101,7 @@ public final class ObserverNativeScreenPayloads {
                             value.protocolVersion(),
                             value.sequence(),
                             value.open(),
+                            value.familyId(),
                             value.screenClass(),
                             value.title(),
                             value.contentWidth(),
@@ -98,6 +119,7 @@ public final class ObserverNativeScreenPayloads {
                             state.protocolVersion(),
                             state.sequence(),
                             state.open(),
+                            state.familyId(),
                             state.screenClass(),
                             state.title(),
                             state.contentWidth(),
@@ -121,6 +143,7 @@ public final class ObserverNativeScreenPayloads {
                 value.protocolVersion(),
                 value.sequence(),
                 value.open(),
+                value.familyId(),
                 value.screenClass(),
                 value.title(),
                 value.contentWidth(),
@@ -136,6 +159,7 @@ public final class ObserverNativeScreenPayloads {
             int protocolVersion,
             long sequence,
             boolean open,
+            String familyId,
             String screenClass,
             String title,
             int contentWidth,
@@ -147,6 +171,7 @@ public final class ObserverNativeScreenPayloads {
         buf.writeVarInt(protocolVersion);
         buf.writeLong(sequence);
         buf.writeBoolean(open);
+        buf.writeUtf(familyId, MAX_TEXT);
         buf.writeUtf(screenClass, MAX_TEXT);
         buf.writeUtf(title, MAX_TEXT);
         buf.writeVarInt(contentWidth);
@@ -170,6 +195,7 @@ public final class ObserverNativeScreenPayloads {
         int protocolVersion = buf.readVarInt();
         long sequence = buf.readLong();
         boolean open = buf.readBoolean();
+        String familyId = buf.readUtf(MAX_TEXT);
         String screenClass = buf.readUtf(MAX_TEXT);
         String title = buf.readUtf(MAX_TEXT);
         int contentWidth = buf.readVarInt();
@@ -195,6 +221,7 @@ public final class ObserverNativeScreenPayloads {
                 protocolVersion,
                 sequence,
                 open,
+                familyId,
                 screenClass,
                 title,
                 contentWidth,

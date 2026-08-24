@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /** Versioned structured-state transport for framebuffer-free Observer View. */
 public final class ObserverNativePayloads {
-    public static final int PROTOCOL_VERSION = 3;
+    public static final int PROTOCOL_VERSION = 4;
     public static final int TARGET_STATE_FPS = 10;
     private static final int MAX_TEXT = 256;
 
@@ -21,16 +21,26 @@ public final class ObserverNativePayloads {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
     }
 
-    public record NativeControl(boolean enabled, int protocolVersion, int stateFps)
-            implements CustomPacketPayload {
-        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control_v3"));
+    public record NativeControl(
+            boolean enabled,
+            int protocolVersion,
+            int stateFps,
+            long screenCapabilities
+    ) implements CustomPacketPayload {
+        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control_v4"));
         public static final StreamCodec<FriendlyByteBuf, NativeControl> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.enabled);
                     buf.writeVarInt(value.protocolVersion);
                     buf.writeVarInt(value.stateFps);
+                    buf.writeLong(value.screenCapabilities);
                 },
-                buf -> new NativeControl(buf.readBoolean(), buf.readVarInt(), buf.readVarInt())
+                buf -> new NativeControl(
+                        buf.readBoolean(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readLong()
+                )
         );
 
         @Override
@@ -39,17 +49,29 @@ public final class ObserverNativePayloads {
         }
     }
 
-    public record NativeSession(boolean active, UUID targetId, String targetName, int protocolVersion)
-            implements CustomPacketPayload {
-        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session_v3"));
+    public record NativeSession(
+            boolean active,
+            UUID targetId,
+            String targetName,
+            int protocolVersion,
+            long screenCapabilities
+    ) implements CustomPacketPayload {
+        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session_v4"));
         public static final StreamCodec<FriendlyByteBuf, NativeSession> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.active);
                     buf.writeUUID(value.targetId);
                     buf.writeUtf(value.targetName, MAX_TEXT);
                     buf.writeVarInt(value.protocolVersion);
+                    buf.writeLong(value.screenCapabilities);
                 },
-                buf -> new NativeSession(buf.readBoolean(), buf.readUUID(), buf.readUtf(MAX_TEXT), buf.readVarInt())
+                buf -> new NativeSession(
+                        buf.readBoolean(),
+                        buf.readUUID(),
+                        buf.readUtf(MAX_TEXT),
+                        buf.readVarInt(),
+                        buf.readLong()
+                )
         );
 
         @Override
@@ -74,7 +96,7 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state_v3"));
+        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state_v4"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewState> CODEC = StreamCodec.of(
                 ObserverNativePayloads::writeViewState,
                 ObserverNativePayloads::readViewState
@@ -103,26 +125,26 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay_v3"));
+        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay_v4"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
-                    buf.writeUUID(value.targetId);
+                    buf.writeUUID(value.targetId());
                     writeViewFields(
                             buf,
-                            value.protocolVersion,
-                            value.sequence,
-                            value.yaw,
-                            value.pitch,
-                            value.health,
-                            value.maxHealth,
-                            value.food,
-                            value.saturation,
-                            value.experienceProgress,
-                            value.experienceLevel,
-                            value.selectedHotbarSlot,
-                            value.sprinting,
-                            value.crouching,
-                            value.usingItem
+                            value.protocolVersion(),
+                            value.sequence(),
+                            value.yaw(),
+                            value.pitch(),
+                            value.health(),
+                            value.maxHealth(),
+                            value.food(),
+                            value.saturation(),
+                            value.experienceProgress(),
+                            value.experienceLevel(),
+                            value.selectedHotbarSlot(),
+                            value.sprinting(),
+                            value.crouching(),
+                            value.usingItem()
                     );
                 },
                 buf -> {
@@ -130,20 +152,20 @@ public final class ObserverNativePayloads {
                     NativeViewState state = readViewState(buf);
                     return new NativeViewRelay(
                             targetId,
-                            state.protocolVersion,
-                            state.sequence,
-                            state.yaw,
-                            state.pitch,
-                            state.health,
-                            state.maxHealth,
-                            state.food,
-                            state.saturation,
-                            state.experienceProgress,
-                            state.experienceLevel,
-                            state.selectedHotbarSlot,
-                            state.sprinting,
-                            state.crouching,
-                            state.usingItem
+                            state.protocolVersion(),
+                            state.sequence(),
+                            state.yaw(),
+                            state.pitch(),
+                            state.health(),
+                            state.maxHealth(),
+                            state.food(),
+                            state.saturation(),
+                            state.experienceProgress(),
+                            state.experienceLevel(),
+                            state.selectedHotbarSlot(),
+                            state.sprinting(),
+                            state.crouching(),
+                            state.usingItem()
                     );
                 }
         );
@@ -157,20 +179,20 @@ public final class ObserverNativePayloads {
     private static void writeViewState(FriendlyByteBuf buf, NativeViewState value) {
         writeViewFields(
                 buf,
-                value.protocolVersion,
-                value.sequence,
-                value.yaw,
-                value.pitch,
-                value.health,
-                value.maxHealth,
-                value.food,
-                value.saturation,
-                value.experienceProgress,
-                value.experienceLevel,
-                value.selectedHotbarSlot,
-                value.sprinting,
-                value.crouching,
-                value.usingItem
+                value.protocolVersion(),
+                value.sequence(),
+                value.yaw(),
+                value.pitch(),
+                value.health(),
+                value.maxHealth(),
+                value.food(),
+                value.saturation(),
+                value.experienceProgress(),
+                value.experienceLevel(),
+                value.selectedHotbarSlot(),
+                value.sprinting(),
+                value.crouching(),
+                value.usingItem()
         );
     }
 
