@@ -32,7 +32,7 @@ Server 負責規則、整理 transaction 與 Observer session authority；Client
 提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。
 使用 DeadRecall 整合 JAR 時不要再安裝獨立 TotemVanillaTweaks。
 
-## Spectator Observer View（protocol v3 開發版）
+## Spectator Observer View（protocol v4 開發版）
 
 管理員可在 Spectator 模式使用：
 
@@ -41,19 +41,26 @@ Server 負責規則、整理 transaction 與 Observer session authority；Client
 /observeui stop
 ```
 
-Observer View 現在使用 **protocol-native v3**。Dedicated Server 負責 session、權限、
-Target／Observer capability 驗證與 cleanup；Target Client 只傳送版本化的結構化
-玩家、HUD、container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI
-重建觀察畫面。
+Observer View 現在使用 **protocol-native v4**；semantic screen transport 使用
+**screen protocol v2**。Dedicated Server 負責 session、權限、Target／Observer
+capability negotiation 與 cleanup；Target Client 只傳送版本化的結構化玩家、HUD、
+container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI 重建觀察畫面。
+
+screen protocol v2 使用 stable screen-family capability mask。第一個已實作的 semantic
+family 是 `container_slots`：Server 會為每個 Observer 記錄 negotiated capability，
+把同一 Target 所需 capability 的聯集下發給 Target，再按每個 Observer 的 mask 個別
+過濾 semantic relay。若某個 screen family 沒有被雙方共同支援，該畫面仍走
+metadata-only placeholder，不會中止整個 Observer session，也不會傳送 Target 像素。
 
 production 路徑已完全移除整張 framebuffer／PNG 傳輸，不再存在 `FrameChunk`、
 `FrameRelay`、`CaptureControl`、frame texture 或 `DynamicTexture` 安裝 fallback。
-如果 Target 或 Observer Client 不支援目前的 protocol-native capability，`/observeui`
-會拒絕建立 session，而不是退回截圖傳輸。
+如果 Target 或 Observer Client 不支援目前的 protocol-native session capability，
+`/observeui` 會拒絕建立 session，而不是退回截圖傳輸；個別 semantic screen family
+不支援時則只降級該 GUI 為 metadata-only。
 
-目前支援的觀察面包含正常世界／HUD、已實作的 container 與 screen family；對尚未
-支援重建的 Screen，Observer 只顯示本地 metadata placeholder，不會取得 Target 的
-畫面像素。完整架構與剩餘相容性工作見 [`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
+目前支援的觀察面包含正常世界／HUD、`container_slots` family，以及 unsupported／
+unnegotiated Screen 的 metadata placeholder。完整架構與剩餘相容性工作見
+[`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
 
 Observer 由 CI 驗證真正的三 JVM 路徑：
 
@@ -65,9 +72,11 @@ Target Minecraft Client JVM
 Observer Minecraft Client JVM
 ```
 
-三 JVM E2E 會驗證 protocol-native world/HUD、container、unsupported-screen metadata、
-Stop 與 server/client cleanup；另外有 source-level gate，若 `src/main` 再出現舊的
-framebuffer transport surface，CI 會直接失敗。
+三 JVM E2E 會驗證 protocol-native world/HUD、negotiated container、unsupported-screen
+metadata、Stop 與 server/client cleanup；Client GameTests 另驗證 capability mask=0 時，
+即使 Target metadata 指向 container Screen，也只會建立本地 generic placeholder。
+另外有 source-level gate，若 `src/main` 再出現舊的 framebuffer transport surface，CI
+會直接失敗。
 
 ## 容器整理
 
