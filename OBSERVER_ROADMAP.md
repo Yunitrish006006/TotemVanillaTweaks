@@ -28,22 +28,38 @@ The final protocol may carry structured data such as:
 
 The exact schema should be versioned and capability-negotiated rather than coupled directly to internal client classes.
 
-## Current milestone
+## Migration phases
 
-For now, prioritize a reliable working Observer View using the existing framebuffer relay:
+### Phase 1 — structured-state side channel (in progress)
 
-1. Dedicated Server + Target Client JVM + Observer Client JVM must remain reproducibly green.
-2. Normal gameplay framebuffer observation must work with no GUI open.
-3. Observer Mirror rendering, Stop, CaptureControl(false), disconnect/reconnect, and cleanup must remain correct.
-4. CI artifacts should continue proving that actual Target gameplay reaches the Observer JVM.
+- Introduce Observer protocol v1 as separate payload types so the existing framebuffer transport remains removable.
+- Negotiate support through Fabric payload capability checks on both Target and Observer clients.
+- Relay Target camera/HUD state as structured values: yaw, pitch, health, max health, food, saturation and key movement/use flags.
+- Keep the existing framebuffer path active as a compatibility fallback while the structured channel is proven in CI.
 
-Do not block near-term usability on the protocol-native rewrite.
+### Phase 2 — native gameplay rendering
+
+- Use the existing server-authoritative `observer.setCamera(target)` relationship for world/chunk/entity rendering.
+- Stop sending gameplay PNG frames when no Target GUI is open and both clients support protocol v1.
+- Render Target HUD state locally on the Observer client from protocol data.
+- Keep framebuffer only for unsupported GUI states during this transition phase.
+
+### Phase 3 — structured GUI/container replication
+
+- Replace GUI screenshot fallback with versioned screen/container/menu/cursor protocol data.
+- Reconstruct supported vanilla screens locally on the Observer client.
+- Add explicit capability negotiation for screen families and protocol extensions.
+
+### Phase 4 — remove framebuffer transport
+
+- Remove normal-use framebuffer capture, PNG encoding, chunking and texture relay.
+- Retain image transport only as an explicitly isolated diagnostic mechanism if one is still useful, disabled by default.
 
 ## Migration rule
 
-New Observer features should avoid making the framebuffer relay harder to remove. Where practical, keep session management, authorization, lifecycle, capability negotiation, and transport framing independent from the image-specific payloads.
+New Observer features should avoid making the framebuffer relay harder to remove. Session management, authorization, lifecycle, capability negotiation and transport framing should remain independent from image-specific payloads.
 
-When the structured protocol reaches feature parity, remove framebuffer capture/PNG encoding/frame relay rather than retaining it as the normal transport path. A temporary diagnostic fallback may exist only if explicitly isolated and disabled by default.
+When the structured protocol reaches feature parity, remove framebuffer capture/PNG encoding/frame relay rather than retaining it as the normal transport path.
 
 ## Success criterion
 
