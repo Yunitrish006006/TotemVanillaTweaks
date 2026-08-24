@@ -122,10 +122,15 @@ public final class ObserverUiClient {
             return;
         }
         remoteScreenOpen = payload.open();
-        if (nativeSession && !remoteScreenOpen) {
-            assembly = null;
-            closeMirrorScreen();
-            releaseFrameTexture();
+        if (nativeSession) {
+            if (!remoteScreenOpen) {
+                assembly = null;
+                closeMirrorScreen();
+                releaseFrameTexture();
+            }
+            // Native sessions wait for either a structured screen relay or an actual
+            // framebuffer chunk from an unsupported screen. ScreenState alone must
+            // not cover the native world with an empty compatibility Mirror screen.
             return;
         }
         ensureMirrorScreen();
@@ -137,7 +142,9 @@ public final class ObserverUiClient {
         }
 
         Screen screen = minecraft.gui.screen();
-        boolean screenOpen = screen != null && !(screen instanceof ObserverMirrorScreen);
+        boolean screenOpen = screen != null
+                && !(screen instanceof ObserverMirrorScreen)
+                && !ObserverNativeScreenClient.isNativeContainerMirror(screen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
         String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
         String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;
@@ -146,7 +153,8 @@ public final class ObserverUiClient {
             ClientPlayNetworking.send(new ObserverPayloads.ScreenState(screenOpen, screenClass, title));
         }
 
-        if (ObserverNativeClient.suppressGameplayFramebuffer() && !screenOpen) {
+        boolean structuredScreen = screenOpen && ObserverNativeScreenClient.isStructuredTargetScreen(screen);
+        if (ObserverNativeClient.suppressGameplayFramebuffer() && (!screenOpen || structuredScreen)) {
             return;
         }
         if (captureInFlight) {
@@ -256,7 +264,7 @@ public final class ObserverUiClient {
         if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
-        if (nativeSession && !remoteScreenOpen) {
+        if (nativeSession && (!remoteScreenOpen || ObserverNativeScreenClient.hasStructuredRemoteScreen())) {
             return;
         }
         if (!ObserverFrameRules.validChunk(
