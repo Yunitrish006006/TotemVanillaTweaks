@@ -39,6 +39,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverMerchantScreenPayloads.MerchantRelay.TYPE, ObserverMerchantScreenPayloads.MerchantRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverAnvilScreenPayloads.AnvilState.TYPE, ObserverAnvilScreenPayloads.AnvilState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverAnvilScreenPayloads.AnvilRelay.TYPE, ObserverAnvilScreenPayloads.AnvilRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverEnchantingScreenPayloads.EnchantingState.TYPE, ObserverEnchantingScreenPayloads.EnchantingState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE, ObserverEnchantingScreenPayloads.EnchantingRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -58,5 +60,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptMerchantState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverAnvilScreenPayloads.AnvilState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptAnvilState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverEnchantingScreenPayloads.EnchantingState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptEnchantingState(context.player(), payload)));
     }
 }
