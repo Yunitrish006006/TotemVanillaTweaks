@@ -219,7 +219,7 @@ tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eOb
 // resources have had time to finish loading.
 tasks.matching { task -> task.name in ["runE2eTarget", "runE2eObserver"] }.configureEach {
     doFirst {
-        String runDirName = task.name == 'runE2eTarget' ? 'target' : 'observer'
+        String runDirName = name == 'runE2eTarget' ? 'target' : 'observer'
         File dir = file("build/e2e/${runDirName}")
         dir.mkdirs()
         new File(dir, 'options.txt').text = '''onboardAccessibility:false
