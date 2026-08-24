@@ -208,6 +208,13 @@ jobs:
                && -f "$results/observer-native-generic-screen-saved.txt" \
                && -f "$results/observer-native-generic-screen.png" \
                && -f "$results/target-native-generic-closed.txt" \
+               && -f "$results/observer-ready-for-merchant.txt" \
+               && -f "$results/target-native-merchant-state-sent.txt" \
+               && -f "$results/observer-native-merchant-ok.txt" \
+               && -f "$results/observer-native-merchant-saved.txt" \
+               && -f "$results/observer-native-merchant.png" \
+               && -f "$results/target-native-merchant-close-sent.txt" \
+               && -f "$results/observer-native-merchant-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -247,7 +254,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
-            'Verified protocol-v3 world/HUD state, vanilla Target camera rendering, structured InventoryScreen reconstruction, metadata-only unsupported-screen handling, Stop, and server cleanup.'
+            'Verified world/HUD state, Target camera rendering, crafting Inventory reconstruction, metadata-only unsupported-screen handling, merchant semantic relay/reconstruction, Stop, and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()

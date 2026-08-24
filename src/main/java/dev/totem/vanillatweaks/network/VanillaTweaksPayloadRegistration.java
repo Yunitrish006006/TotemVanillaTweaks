@@ -35,6 +35,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverBookScreenPayloads.BookRelay.TYPE, ObserverBookScreenPayloads.BookRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverCraftingScreenPayloads.CraftingState.TYPE, ObserverCraftingScreenPayloads.CraftingState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverCraftingScreenPayloads.CraftingRelay.TYPE, ObserverCraftingScreenPayloads.CraftingRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverMerchantScreenPayloads.MerchantState.TYPE, ObserverMerchantScreenPayloads.MerchantState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverMerchantScreenPayloads.MerchantRelay.TYPE, ObserverMerchantScreenPayloads.MerchantRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(
                 ObserverPayloads.ScreenState.TYPE,
@@ -63,6 +65,10 @@ public final class VanillaTweaksPayloadRegistration {
         ServerPlayNetworking.registerGlobalReceiver(
                 ObserverCraftingScreenPayloads.CraftingState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptCraftingState(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverMerchantScreenPayloads.MerchantState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptMerchantState(context.player(), payload))
         );
     }
 }

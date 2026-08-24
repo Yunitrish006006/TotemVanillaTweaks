@@ -9,6 +9,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverE2eCommon"
     ],
     "client": [
+      "dev.totem.vanillatweaks.e2e.ObserverMerchantE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]

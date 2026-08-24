@@ -52,7 +52,8 @@ public final class ObserverUiClient {
             return;
         }
         if (payload.open() && (ObserverNativeBookScreenClient.hasStructuredRemoteScreen()
-                || ObserverNativeCraftingScreenClient.hasStructuredRemoteScreen())) {
+                || ObserverNativeCraftingScreenClient.hasStructuredRemoteScreen()
+                || ObserverNativeMerchantScreenClient.hasStructuredRemoteScreen())) {
             return;
         }
         ObserverNativeScreenClient.applyGenericScreenState(payload.open(), payload.screenClass(), payload.title());
@@ -68,7 +69,8 @@ public final class ObserverUiClient {
         boolean screenOpen = screen != null
                 && !ObserverNativeScreenClient.isNativeMirrorScreen(screen)
                 && !ObserverNativeBookScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverNativeCraftingScreenClient.isNativeMirrorScreen(screen);
+                && !ObserverNativeCraftingScreenClient.isNativeMirrorScreen(screen)
+                && !ObserverNativeMerchantScreenClient.isNativeMirrorScreen(screen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
         String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
         String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;

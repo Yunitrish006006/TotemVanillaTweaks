@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.observer;
 
 import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -24,6 +25,7 @@ public final class ObserverNativeSessionManager {
     private static final Map<UUID, Long> LAST_SCREEN_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_BOOK_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_CRAFTING_SEQUENCE_BY_TARGET = new HashMap<>();
+    private static final Map<UUID, Long> LAST_MERCHANT_SEQUENCE_BY_TARGET = new HashMap<>();
 
     private ObserverNativeSessionManager() {}
 
@@ -125,6 +127,18 @@ public final class ObserverNativeSessionManager {
                         payload.gridWidth(), payload.gridHeight(), payload.resultSlotIndex(), payload.slots()), capability);
     }
 
+    public static void acceptMerchantState(ServerPlayer target, ObserverMerchantScreenPayloads.MerchantState payload) {
+        long capability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validMerchant(payload) || capability != ObserverNativeScreenPayloads.CAPABILITY_MERCHANT
+                || !targetSupports(target, capability) || nativeObserverCount(target.getUUID()) == 0
+                || !acceptSequence(LAST_MERCHANT_SEQUENCE_BY_TARGET, target.getUUID(), payload.sequence())) return;
+        relayToNativeObservers(target, ObserverMerchantScreenPayloads.MerchantRelay.TYPE,
+                new ObserverMerchantScreenPayloads.MerchantRelay(target.getUUID(), payload.protocolVersion(), payload.sequence(),
+                        payload.open(), payload.familyId(), payload.variant(), payload.screenClass(), payload.title(),
+                        payload.selectedOffer(), payload.traderLevel(), payload.traderXp(), payload.futureTraderXp(),
+                        payload.showProgressBar(), payload.canRestock(), payload.offers()), capability);
+    }
+
     private static boolean targetSupports(ServerPlayer target, long capability) {
         return ObserverNativeScreenPayloads.supports(screenCapabilitiesForTarget(target.getUUID()), capability);
     }
@@ -207,6 +221,31 @@ public final class ObserverNativeSessionManager {
                 && validScreenGeometry(true, p.contentWidth(), p.contentHeight(), p.mouseX(), p.mouseY(), p.slots());
     }
 
+    private static boolean validMerchant(ObserverMerchantScreenPayloads.MerchantState p) {
+        if (p.protocolVersion() != ObserverMerchantScreenPayloads.PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_MERCHANT.equals(p.familyId()) || p.sequence() < 0L) return false;
+        if (!p.open()) {
+            return p.offers().isEmpty() && p.traderLevel() == 0 && p.traderXp() == 0 && p.futureTraderXp() == 0;
+        }
+        if (!ObserverMerchantScreenPayloads.VARIANT_VANILLA.equals(p.variant())
+                || p.offers().size() > ObserverMerchantScreenPayloads.MAX_OFFERS
+                || p.traderLevel() < 0 || p.traderLevel() > 5
+                || p.traderXp() < 0 || p.futureTraderXp() < 0
+                || p.selectedOffer() < 0 || (!p.offers().isEmpty() && p.selectedOffer() >= p.offers().size())) return false;
+        for (ObserverMerchantScreenPayloads.OfferState offer : p.offers()) {
+            if (offer.index() < 0 || offer.index() >= ObserverMerchantScreenPayloads.MAX_OFFERS
+                    || offer.uses() < 0 || offer.maxUses() < 0 || offer.uses() > offer.maxUses()
+                    || offer.xp() < 0 || !validMerchantItem(offer.costA())
+                    || !validMerchantItem(offer.costB()) || !validMerchantItem(offer.result())) return false;
+        }
+        return true;
+    }
+
+    private static boolean validMerchantItem(ObserverMerchantScreenPayloads.ItemState item) {
+        return item != null && item.count() >= 0 && item.count() <= 127 && item.damage() >= 0
+                && (item.count() > 0 || item.itemId().isEmpty());
+    }
+
     private static boolean validScreenGeometry(boolean open, int width, int height, int mouseX, int mouseY,
                                                 List<ObserverNativeScreenPayloads.SlotState> slots) {
         if (!open) return slots.isEmpty();
@@ -233,6 +272,8 @@ public final class ObserverNativeSessionManager {
             capabilities |= ObserverNativeScreenPayloads.CAPABILITY_BOOK;
         if (ServerPlayNetworking.canSend(observer, ObserverCraftingScreenPayloads.CraftingRelay.TYPE))
             capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CRAFTING;
+        if (ServerPlayNetworking.canSend(observer, ObserverMerchantScreenPayloads.MerchantRelay.TYPE))
+            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
 
@@ -269,5 +310,6 @@ public final class ObserverNativeSessionManager {
         LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_BOOK_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_CRAFTING_SEQUENCE_BY_TARGET.remove(targetId);
+        LAST_MERCHANT_SEQUENCE_BY_TARGET.remove(targetId);
     }
 }
