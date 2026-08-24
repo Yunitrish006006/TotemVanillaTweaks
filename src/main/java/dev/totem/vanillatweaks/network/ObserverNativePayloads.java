@@ -21,16 +21,26 @@ public final class ObserverNativePayloads {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
     }
 
-    public record NativeControl(boolean enabled, int protocolVersion, int stateFps)
-            implements CustomPacketPayload {
+    public record NativeControl(
+            boolean enabled,
+            int protocolVersion,
+            int stateFps,
+            boolean captureGameplayFrames
+    ) implements CustomPacketPayload {
         public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control"));
         public static final StreamCodec<FriendlyByteBuf, NativeControl> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.enabled);
                     buf.writeVarInt(value.protocolVersion);
                     buf.writeVarInt(value.stateFps);
+                    buf.writeBoolean(value.captureGameplayFrames);
                 },
-                buf -> new NativeControl(buf.readBoolean(), buf.readVarInt(), buf.readVarInt())
+                buf -> new NativeControl(
+                        buf.readBoolean(),
+                        buf.readVarInt(),
+                        buf.readVarInt(),
+                        buf.readBoolean()
+                )
         );
 
         @Override
