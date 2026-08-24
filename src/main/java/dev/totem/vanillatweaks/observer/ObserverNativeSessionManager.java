@@ -2,7 +2,9 @@ package dev.totem.vanillatweaks.observer;
 
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -10,7 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Server-authoritative structured-state side channel used during the Observer protocol-native migration. */
+/** Server-authoritative protocol-native Observer state and screen relay. */
 public final class ObserverNativeSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
@@ -20,10 +22,16 @@ public final class ObserverNativeSessionManager {
     private ObserverNativeSessionManager() {
     }
 
+    public static boolean supports(ServerPlayer observer, ServerPlayer target) {
+        return ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeViewRelay.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)
+                && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE)
+                && ServerPlayNetworking.canSend(target, ObserverNativePayloads.NativeControl.TYPE);
+    }
+
     public static boolean start(ServerPlayer observer, ServerPlayer target) {
-        if (!ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)
-                || !ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeViewRelay.TYPE)
-                || !ServerPlayNetworking.canSend(target, ObserverNativePayloads.NativeControl.TYPE)) {
+        if (!supports(observer, target)) {
             return false;
         }
 
@@ -67,11 +75,7 @@ public final class ObserverNativeSessionManager {
     }
 
     public static void acceptViewState(ServerPlayer target, ObserverNativePayloads.NativeViewState payload) {
-        if (!valid(payload)) {
-            return;
-        }
-        int observerCount = nativeObserverCount(target.getUUID());
-        if (observerCount == 0) {
+        if (!valid(payload) || nativeObserverCount(target.getUUID()) == 0) {
             return;
         }
 
@@ -101,10 +105,7 @@ public final class ObserverNativeSessionManager {
         relayToNativeObservers(target, ObserverNativePayloads.NativeViewRelay.TYPE, relay);
     }
 
-    public static void acceptContainerState(
-            ServerPlayer target,
-            ObserverNativeScreenPayloads.ContainerState payload
-    ) {
+    public static void acceptContainerState(ServerPlayer target, ObserverNativeScreenPayloads.ContainerState payload) {
         if (!validContainer(payload) || nativeObserverCount(target.getUUID()) == 0) {
             return;
         }
@@ -127,24 +128,12 @@ public final class ObserverNativeSessionManager {
                 payload.mouseY(),
                 payload.slots()
         );
-
-        MinecraftServer server = target.level().getServer();
-        for (Map.Entry<UUID, UUID> entry : TARGET_BY_OBSERVER.entrySet()) {
-            if (!target.getUUID().equals(entry.getValue())) {
-                continue;
-            }
-            ServerPlayer observer = server.getPlayerList().getPlayer(entry.getKey());
-            if (observer != null
-                    && observer.isSpectator()
-                    && ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)) {
-                ServerPlayNetworking.send(observer, relay);
-            }
-        }
+        relayToNativeObservers(target, ObserverNativeScreenPayloads.ContainerRelay.TYPE, relay);
     }
 
-    private static <T extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> void relayToNativeObservers(
+    private static <T extends CustomPacketPayload> void relayToNativeObservers(
             ServerPlayer target,
-            net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<T> type,
+            CustomPacketPayload.Type<T> type,
             T relay
     ) {
         MinecraftServer server = target.level().getServer();
@@ -171,15 +160,11 @@ public final class ObserverNativeSessionManager {
                 && payload.health() >= 0.0F
                 && payload.maxHealth() > 0.0F
                 && payload.health() <= payload.maxHealth() + 0.001F
-                && payload.food() >= 0
-                && payload.food() <= 20
-                && payload.saturation() >= 0.0F
-                && payload.saturation() <= 20.0F
-                && payload.experienceProgress() >= 0.0F
-                && payload.experienceProgress() <= 1.0F + 0.001F
+                && payload.food() >= 0 && payload.food() <= 20
+                && payload.saturation() >= 0.0F && payload.saturation() <= 20.0F
+                && payload.experienceProgress() >= 0.0F && payload.experienceProgress() <= 1.001F
                 && payload.experienceLevel() >= 0
-                && payload.selectedHotbarSlot() >= 0
-                && payload.selectedHotbarSlot() < 9;
+                && payload.selectedHotbarSlot() >= 0 && payload.selectedHotbarSlot() < 9;
     }
 
     private static boolean validContainer(ObserverNativeScreenPayloads.ContainerState payload) {
@@ -226,9 +211,7 @@ public final class ObserverNativeSessionManager {
             LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
             return;
         }
-        int nativeCount = nativeObserverCount(targetId);
-        boolean enabled = nativeCount > 0;
-        boolean captureGameplayFrames = ObserverSessionManager.observerCount(targetId) > nativeCount;
+        boolean enabled = nativeObserverCount(targetId) > 0;
         if (!enabled) {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
             LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
@@ -237,7 +220,7 @@ public final class ObserverNativeSessionManager {
                 enabled,
                 ObserverNativePayloads.PROTOCOL_VERSION,
                 enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0,
-                captureGameplayFrames
+                false
         ));
     }
 }
