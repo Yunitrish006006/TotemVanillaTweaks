@@ -45,6 +45,14 @@ public final class VanillaTweaksPayloadRegistration {
                 ObserverNativePayloads.NativeViewRelay.TYPE,
                 ObserverNativePayloads.NativeViewRelay.CODEC
         );
+        PayloadTypeRegistry.serverboundPlay().register(
+                ObserverNativeScreenPayloads.ContainerState.TYPE,
+                ObserverNativeScreenPayloads.ContainerState.CODEC
+        );
+        PayloadTypeRegistry.clientboundPlay().register(
+                ObserverNativeScreenPayloads.ContainerRelay.TYPE,
+                ObserverNativeScreenPayloads.ContainerRelay.CODEC
+        );
 
         ServerPlayNetworking.registerGlobalReceiver(
                 ObserverPayloads.ScreenState.TYPE,
@@ -65,6 +73,11 @@ public final class VanillaTweaksPayloadRegistration {
                 ObserverNativePayloads.NativeViewState.TYPE,
                 (payload, context) -> context.server().execute(() ->
                         ObserverNativeSessionManager.acceptViewState(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverNativeScreenPayloads.ContainerState.TYPE,
+                (payload, context) -> context.server().execute(() ->
+                        ObserverNativeSessionManager.acceptContainerState(context.player(), payload))
         );
     }
 }
