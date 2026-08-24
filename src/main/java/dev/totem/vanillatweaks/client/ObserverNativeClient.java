@@ -53,12 +53,20 @@ public final class ObserverNativeClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeClient::tick);
     }
 
+    static boolean targetStateEnabled() {
+        return targetStateEnabled;
+    }
+
     static boolean suppressGameplayFramebuffer() {
         return targetStateEnabled && !captureGameplayFrames;
     }
 
     static boolean observerSessionActive() {
         return observerSessionActive;
+    }
+
+    static UUID observerTargetId() {
+        return observerTargetId;
     }
 
     static long lastNativeStateSequence() {
