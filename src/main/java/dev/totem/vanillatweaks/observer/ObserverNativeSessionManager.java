@@ -89,6 +89,9 @@ public final class ObserverNativeSessionManager {
                 payload.maxHealth(),
                 payload.food(),
                 payload.saturation(),
+                payload.experienceProgress(),
+                payload.experienceLevel(),
+                payload.selectedHotbarSlot(),
                 payload.sprinting(),
                 payload.crouching(),
                 payload.usingItem()
@@ -115,13 +118,19 @@ public final class ObserverNativeSessionManager {
                 && Float.isFinite(payload.health())
                 && Float.isFinite(payload.maxHealth())
                 && Float.isFinite(payload.saturation())
+                && Float.isFinite(payload.experienceProgress())
                 && payload.health() >= 0.0F
                 && payload.maxHealth() > 0.0F
                 && payload.health() <= payload.maxHealth() + 0.001F
                 && payload.food() >= 0
                 && payload.food() <= 20
                 && payload.saturation() >= 0.0F
-                && payload.saturation() <= 20.0F;
+                && payload.saturation() <= 20.0F
+                && payload.experienceProgress() >= 0.0F
+                && payload.experienceProgress() <= 1.0F + 0.001F
+                && payload.experienceLevel() >= 0
+                && payload.selectedHotbarSlot() >= 0
+                && payload.selectedHotbarSlot() < 9;
     }
 
     private static int nativeObserverCount(UUID targetId) {
