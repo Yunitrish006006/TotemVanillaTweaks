@@ -25,19 +25,29 @@ final class ObserverNativePayloadsTest {
     }
 
     @Test
-    void semanticScreenProtocolV2ExposesStableContainerCapability() {
+    void semanticScreenCapabilitiesIncludeContainerAndFurnaceFamilies() {
         assertEquals(2, ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION);
+        assertEquals(1, ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION);
         assertTrue(ObserverNativeScreenPayloads.ContainerState.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.ContainerRelay.TYPE.id().getPath().endsWith("_v2"));
+        assertTrue(ObserverNativeScreenPayloads.FurnaceState.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverNativeScreenPayloads.FurnaceRelay.TYPE.id().getPath().endsWith("_v1"));
 
         long container = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
-        assertEquals(container, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
+        long furnace = ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
+        long known = container | furnace;
+        assertEquals(known, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
         assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(
                 ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS
         ));
+        assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(
+                ObserverNativeScreenPayloads.FAMILY_FURNACE
+        ));
         assertEquals(0L, ObserverNativeScreenPayloads.capabilityForFamily("unknown"));
-        assertEquals(container, ObserverNativeScreenPayloads.sanitizeCapabilities(container | (1L << 40)));
-        assertTrue(ObserverNativeScreenPayloads.supports(container, container));
+        assertEquals(known, ObserverNativeScreenPayloads.sanitizeCapabilities(known | (1L << 40)));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, container));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, furnace));
+        assertFalse(ObserverNativeScreenPayloads.supports(container, furnace));
         assertFalse(ObserverNativeScreenPayloads.supports(0L, container));
     }
 

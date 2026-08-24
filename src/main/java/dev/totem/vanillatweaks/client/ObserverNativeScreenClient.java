@@ -9,9 +9,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -21,7 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Protocol-native screen transport. Negotiated container families use semantic slot snapshots;
+ * Protocol-native screen transport. Negotiated semantic families use structured snapshots;
  * unsupported screens use metadata-only local placeholders. Neither path receives pixels.
  */
 public final class ObserverNativeScreenClient {
@@ -33,6 +35,7 @@ public final class ObserverNativeScreenClient {
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetContainerOpen;
+    private static boolean targetFurnaceOpen;
 
     private static long lastRemoteSequence = -1L;
     private static boolean remoteContainerOpen;
@@ -44,6 +47,18 @@ public final class ObserverNativeScreenClient {
     private static int remoteMouseY;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
 
+    private static boolean remoteFurnaceOpen;
+    private static String remoteFurnaceClass = "";
+    private static String remoteFurnaceTitle = "";
+    private static int remoteFurnaceContentWidth;
+    private static int remoteFurnaceContentHeight;
+    private static int remoteFurnaceMouseX;
+    private static int remoteFurnaceMouseY;
+    private static List<ObserverNativeScreenPayloads.SlotState> remoteFurnaceSlots = List.of();
+    private static float remoteCookProgress;
+    private static float remoteFuelProgress;
+    private static boolean remoteFurnaceLit;
+
     private static boolean remoteGenericOpen;
     private static String remoteGenericClass = "";
     private static String remoteGenericTitle = "";
@@ -51,6 +66,7 @@ public final class ObserverNativeScreenClient {
 
     private static boolean suppressMirrorStop;
     private static long extractedFrames;
+    private static long furnaceExtractedFrames;
     private static long genericExtractedFrames;
 
     private ObserverNativeScreenClient() {
@@ -61,20 +77,32 @@ public final class ObserverNativeScreenClient {
                 ObserverNativeScreenPayloads.ContainerRelay.TYPE,
                 (payload, context) -> context.client().execute(() -> acceptRelay(payload))
         );
+        ClientPlayNetworking.registerGlobalReceiver(
+                ObserverNativeScreenPayloads.FurnaceRelay.TYPE,
+                (payload, context) -> context.client().execute(() -> acceptFurnaceRelay(payload))
+        );
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeScreenClient::tick);
     }
 
     static boolean isStructuredTargetScreen(Screen screen) {
+        if (screen instanceof AbstractFurnaceScreen<?>
+                && ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_FURNACE)) {
+            return true;
+        }
         return ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS)
                 && screen instanceof AbstractContainerScreen<?>;
     }
 
     static boolean hasStructuredRemoteScreen() {
-        return remoteContainerOpen && ObserverNativeClient.observerSessionActive();
+        return (remoteFurnaceOpen || remoteContainerOpen) && ObserverNativeClient.observerSessionActive();
     }
 
     static boolean isNativeContainerMirror(Screen screen) {
         return screen instanceof NativeContainerMirrorScreen;
+    }
+
+    static boolean isNativeFurnaceMirror(Screen screen) {
+        return screen instanceof NativeFurnaceMirrorScreen;
     }
 
     static boolean isNativeGenericMirror(Screen screen) {
@@ -82,11 +110,15 @@ public final class ObserverNativeScreenClient {
     }
 
     static boolean isNativeMirrorScreen(Screen screen) {
-        return isNativeContainerMirror(screen) || isNativeGenericMirror(screen);
+        return isNativeContainerMirror(screen) || isNativeFurnaceMirror(screen) || isNativeGenericMirror(screen);
     }
 
     static long extractedFrames() {
         return extractedFrames;
+    }
+
+    static long furnaceExtractedFrames() {
+        return furnaceExtractedFrames;
     }
 
     static long genericExtractedFrames() {
@@ -104,7 +136,7 @@ public final class ObserverNativeScreenClient {
         }
         if (!open) {
             clearRemoteGeneric();
-            if (!remoteContainerOpen) {
+            if (!remoteFurnaceOpen && !remoteContainerOpen) {
                 closeNativeScreen();
             }
             return;
@@ -118,13 +150,15 @@ public final class ObserverNativeScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) {
             targetContainerOpen = false;
+            targetFurnaceOpen = false;
             lastSnapshotNanos = 0L;
         } else {
             tickTarget(minecraft);
         }
 
         if (!ObserverNativeClient.observerSessionActive()) {
-            if (remoteContainerOpen || remoteGenericOpen || isNativeMirrorScreen(minecraft.gui.screen())) {
+            if (remoteFurnaceOpen || remoteContainerOpen || remoteGenericOpen || isNativeMirrorScreen(minecraft.gui.screen())) {
+                clearRemoteFurnace();
                 clearRemoteContainer();
                 clearRemoteGeneric();
                 closeNativeScreen();
@@ -132,7 +166,9 @@ public final class ObserverNativeScreenClient {
             return;
         }
 
-        if (remoteContainerOpen) {
+        if (remoteFurnaceOpen) {
+            ensureFurnaceScreen();
+        } else if (remoteContainerOpen) {
             ensureContainerScreen();
         } else if (remoteGenericOpen) {
             genericScreenTicks++;
@@ -144,39 +180,132 @@ public final class ObserverNativeScreenClient {
 
     private static void tickTarget(Minecraft minecraft) {
         Screen screen = minecraft.gui.screen();
+        boolean supportsFurnace = ObserverNativeClient.targetSupportsScreen(
+                ObserverNativeScreenPayloads.CAPABILITY_FURNACE
+        );
         boolean supportsContainer = ObserverNativeClient.targetSupportsScreen(
                 ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
         );
-        if (!supportsContainer || !(screen instanceof AbstractContainerScreen<?>)) {
-            if (targetContainerOpen) {
-                targetContainerOpen = false;
-                lastSnapshotNanos = 0L;
-                if (supportsContainer) {
-                    ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
-                            ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
-                            ++nextTargetSequence,
-                            false,
-                            ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
-                            "",
-                            "",
-                            0,
-                            0,
-                            0,
-                            0,
-                            List.of()
-                    ));
-                }
-            }
+
+        if (supportsFurnace
+                && screen instanceof AbstractFurnaceScreen<?>
+                && minecraft.player.containerMenu instanceof AbstractFurnaceMenu furnaceMenu) {
+            closeTargetContainer(supportsContainer);
+            tickTargetFurnace(minecraft, screen, furnaceMenu);
             return;
         }
 
+        if (supportsContainer && screen instanceof AbstractContainerScreen<?>) {
+            closeTargetFurnace(supportsFurnace);
+            tickTargetContainer(minecraft, screen);
+            return;
+        }
+
+        closeTargetFurnace(supportsFurnace);
+        closeTargetContainer(supportsContainer);
+    }
+
+    private static void tickTargetContainer(Minecraft minecraft, Screen screen) {
         long now = System.nanoTime();
         if (targetContainerOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
             return;
         }
         targetContainerOpen = true;
         lastSnapshotNanos = now;
+        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft);
+        String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
+        ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
+                ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
+                ++nextTargetSequence,
+                true,
+                ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
+                screen.getClass().getName(),
+                title,
+                snapshot.contentWidth(),
+                snapshot.contentHeight(),
+                snapshot.mouseX(),
+                snapshot.mouseY(),
+                snapshot.slots()
+        ));
+    }
 
+    private static void tickTargetFurnace(Minecraft minecraft, Screen screen, AbstractFurnaceMenu furnaceMenu) {
+        long now = System.nanoTime();
+        if (targetFurnaceOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
+            return;
+        }
+        targetFurnaceOpen = true;
+        lastSnapshotNanos = now;
+        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft);
+        String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
+        ClientPlayNetworking.send(new ObserverNativeScreenPayloads.FurnaceState(
+                ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION,
+                ++nextTargetSequence,
+                true,
+                ObserverNativeScreenPayloads.FAMILY_FURNACE,
+                screen.getClass().getName(),
+                title,
+                snapshot.contentWidth(),
+                snapshot.contentHeight(),
+                snapshot.mouseX(),
+                snapshot.mouseY(),
+                snapshot.slots(),
+                furnaceMenu.getBurnProgress(),
+                furnaceMenu.getLitProgress(),
+                furnaceMenu.isLit()
+        ));
+    }
+
+    private static void closeTargetContainer(boolean canSend) {
+        if (!targetContainerOpen) {
+            return;
+        }
+        targetContainerOpen = false;
+        lastSnapshotNanos = 0L;
+        if (canSend) {
+            ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
+                    ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
+                    ++nextTargetSequence,
+                    false,
+                    ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
+                    "",
+                    "",
+                    0,
+                    0,
+                    0,
+                    0,
+                    List.of()
+            ));
+        }
+    }
+
+    private static void closeTargetFurnace(boolean canSend) {
+        if (!targetFurnaceOpen) {
+            return;
+        }
+        targetFurnaceOpen = false;
+        lastSnapshotNanos = 0L;
+        if (canSend) {
+            ClientPlayNetworking.send(new ObserverNativeScreenPayloads.FurnaceState(
+                    ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION,
+                    ++nextTargetSequence,
+                    false,
+                    ObserverNativeScreenPayloads.FAMILY_FURNACE,
+                    "",
+                    "",
+                    0,
+                    0,
+                    0,
+                    0,
+                    List.of(),
+                    0.0F,
+                    0.0F,
+                    false
+            ));
+        }
+    }
+
+    private static TargetScreenSnapshot captureTargetScreen(Minecraft minecraft) {
         List<ObserverNativeScreenPayloads.SlotState> slots = new ArrayList<>();
         int maxX = 0;
         int maxY = 0;
@@ -210,23 +339,13 @@ public final class ObserverNativeScreenClient {
         int screenHeight = Math.max(1, minecraft.getWindow().getScreenHeight());
         int guiMouseX = (int) Math.round(minecraft.mouseHandler.xpos() * guiWidth / screenWidth);
         int guiMouseY = (int) Math.round(minecraft.mouseHandler.ypos() * guiHeight / screenHeight);
-        int mouseX = guiMouseX - (guiWidth - contentWidth) / 2;
-        int mouseY = guiMouseY - (guiHeight - contentHeight) / 2;
-
-        String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
-        ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
-                ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
-                ++nextTargetSequence,
-                true,
-                ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
-                screen.getClass().getName(),
-                title,
+        return new TargetScreenSnapshot(
                 contentWidth,
                 contentHeight,
-                mouseX,
-                mouseY,
+                guiMouseX - (guiWidth - contentWidth) / 2,
+                guiMouseY - (guiHeight - contentHeight) / 2,
                 List.copyOf(slots)
-        ));
+        );
     }
 
     private static void acceptRelay(ObserverNativeScreenPayloads.ContainerRelay payload) {
@@ -245,14 +364,11 @@ public final class ObserverNativeScreenClient {
         lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemoteContainer();
-            if (remoteGenericOpen) {
-                ensureGenericScreen();
-            } else {
-                closeNativeScreen();
-            }
+            ensureBestRemoteScreen();
             return;
         }
 
+        clearRemoteFurnace();
         remoteContainerOpen = true;
         remoteScreenClass = payload.screenClass();
         remoteTitle = payload.title();
@@ -264,9 +380,54 @@ public final class ObserverNativeScreenClient {
         ensureContainerScreen();
     }
 
+    private static void acceptFurnaceRelay(ObserverNativeScreenPayloads.FurnaceRelay payload) {
+        UUID targetId = ObserverNativeClient.observerTargetId();
+        if (!ObserverNativeClient.observerSessionActive()
+                || !ObserverNativeClient.observerSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_FURNACE)
+                || targetId == null
+                || !targetId.equals(payload.targetId())
+                || payload.protocolVersion() != ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_FURNACE.equals(payload.familyId())
+                || payload.sequence() <= lastRemoteSequence) {
+            return;
+        }
+        lastRemoteSequence = payload.sequence();
+        if (!payload.open()) {
+            clearRemoteFurnace();
+            ensureBestRemoteScreen();
+            return;
+        }
+
+        clearRemoteContainer();
+        remoteFurnaceOpen = true;
+        remoteFurnaceClass = payload.screenClass();
+        remoteFurnaceTitle = payload.title();
+        remoteFurnaceContentWidth = clamp(payload.contentWidth(), 64, 512);
+        remoteFurnaceContentHeight = clamp(payload.contentHeight(), 64, 512);
+        remoteFurnaceMouseX = payload.mouseX();
+        remoteFurnaceMouseY = payload.mouseY();
+        remoteFurnaceSlots = List.copyOf(payload.slots());
+        remoteCookProgress = clamp01(payload.cookProgress());
+        remoteFuelProgress = clamp01(payload.fuelProgress());
+        remoteFurnaceLit = payload.lit();
+        ensureFurnaceScreen();
+    }
+
+    private static void ensureBestRemoteScreen() {
+        if (remoteFurnaceOpen) {
+            ensureFurnaceScreen();
+        } else if (remoteContainerOpen) {
+            ensureContainerScreen();
+        } else if (remoteGenericOpen) {
+            ensureGenericScreen();
+        } else {
+            closeNativeScreen();
+        }
+    }
+
     private static void ensureContainerScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!remoteContainerOpen || !ObserverNativeClient.observerSessionActive()) {
+        if (!remoteContainerOpen || remoteFurnaceOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
         if (!(minecraft.gui.screen() instanceof NativeContainerMirrorScreen)) {
@@ -274,9 +435,20 @@ public final class ObserverNativeScreenClient {
         }
     }
 
+    private static void ensureFurnaceScreen() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!remoteFurnaceOpen || !ObserverNativeClient.observerSessionActive()) {
+            return;
+        }
+        if (!(minecraft.gui.screen() instanceof NativeFurnaceMirrorScreen)) {
+            replaceNativeScreen(new NativeFurnaceMirrorScreen());
+        }
+    }
+
     private static void ensureGenericScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!remoteGenericOpen || remoteContainerOpen || !ObserverNativeClient.observerSessionActive()) {
+        if (!remoteGenericOpen || remoteFurnaceOpen || remoteContainerOpen
+                || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
         if (!(minecraft.gui.screen() instanceof NativeGenericMirrorScreen)) {
@@ -317,6 +489,20 @@ public final class ObserverNativeScreenClient {
         remoteSlots = List.of();
     }
 
+    private static void clearRemoteFurnace() {
+        remoteFurnaceOpen = false;
+        remoteFurnaceClass = "";
+        remoteFurnaceTitle = "";
+        remoteFurnaceContentWidth = 0;
+        remoteFurnaceContentHeight = 0;
+        remoteFurnaceMouseX = 0;
+        remoteFurnaceMouseY = 0;
+        remoteFurnaceSlots = List.of();
+        remoteCookProgress = 0.0F;
+        remoteFuelProgress = 0.0F;
+        remoteFurnaceLit = false;
+    }
+
     private static void clearRemoteGeneric() {
         remoteGenericOpen = false;
         remoteGenericClass = "";
@@ -344,8 +530,65 @@ public final class ObserverNativeScreenClient {
         }
     }
 
+    private static void renderSlots(
+            NativeObserverScreen screen,
+            GuiGraphicsExtractor graphics,
+            int left,
+            int top,
+            int contentWidth,
+            int contentHeight,
+            List<ObserverNativeScreenPayloads.SlotState> slots
+    ) {
+        for (ObserverNativeScreenPayloads.SlotState slot : slots) {
+            int slotX = left + slot.x();
+            int slotY = top + slot.y();
+            if (slotX < left - 2 || slotY < top - 2
+                    || slotX + 18 > left + contentWidth + 2
+                    || slotY + 18 > top + contentHeight + 2) {
+                continue;
+            }
+            graphics.fill(slotX, slotY, slotX + 18, slotY + 18, 0xFF555555);
+            graphics.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, 0xFF171717);
+            ItemStack stack = itemStack(slot);
+            if (!stack.isEmpty()) {
+                graphics.item(stack, slotX + 1, slotY + 1);
+                graphics.itemDecorations(Minecraft.getInstance().font, stack, slotX + 1, slotY + 1);
+            }
+        }
+    }
+
+    private static void renderCursor(
+            GuiGraphicsExtractor graphics,
+            int left,
+            int top,
+            int mouseX,
+            int mouseY,
+            int width,
+            int height
+    ) {
+        int cursorX = left + mouseX;
+        int cursorY = top + mouseY;
+        if (cursorX >= 0 && cursorX < width && cursorY >= 0 && cursorY < height) {
+            graphics.fill(cursorX - 4, cursorY, cursorX + 5, cursorY + 1, 0xFFFFFFFF);
+            graphics.fill(cursorX, cursorY - 4, cursorX + 1, cursorY + 5, 0xFFFFFFFF);
+        }
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static float clamp01(float value) {
+        return Math.max(0.0F, Math.min(1.0F, value));
+    }
+
+    private record TargetScreenSnapshot(
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<ObserverNativeScreenPayloads.SlotState> slots
+    ) {
     }
 
     private abstract static class NativeObserverScreen extends Screen {
@@ -385,39 +628,83 @@ public final class ObserverNativeScreenClient {
 
             String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
             graphics.text(this.minecraft.font, title, left, top - 14, 0xFFFFFFFF, true);
+            String mode = "Protocol-native container";
             graphics.text(
                     this.minecraft.font,
-                    "Protocol-native container",
-                    left + contentWidth - this.minecraft.font.width("Protocol-native container"),
+                    mode,
+                    left + contentWidth - this.minecraft.font.width(mode),
                     top - 14,
                     0xFF9E9E9E,
                     false
             );
 
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int slotX = left + slot.x();
-                int slotY = top + slot.y();
-                if (slotX < left - 2 || slotY < top - 2
-                        || slotX + 18 > left + contentWidth + 2
-                        || slotY + 18 > top + contentHeight + 2) {
-                    continue;
-                }
-                graphics.fill(slotX, slotY, slotX + 18, slotY + 18, 0xFF555555);
-                graphics.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, 0xFF171717);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) {
-                    graphics.item(stack, slotX + 1, slotY + 1);
-                    graphics.itemDecorations(this.minecraft.font, stack, slotX + 1, slotY + 1);
-                }
+            renderSlots(this, graphics, left, top, contentWidth, contentHeight, remoteSlots);
+            renderCursor(graphics, left, top, remoteMouseX, remoteMouseY, width, height);
+            extractedFrames++;
+        }
+    }
+
+    private static final class NativeFurnaceMirrorScreen extends NativeObserverScreen {
+        private NativeFurnaceMirrorScreen() {
+            super(Component.literal("Observer Furnace"));
+        }
+
+        @Override
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            graphics.fill(0, 0, width, height, 0x90000000);
+
+            int contentWidth = clamp(remoteFurnaceContentWidth, 64, Math.max(64, width - 24));
+            int contentHeight = clamp(remoteFurnaceContentHeight, 64, Math.max(64, height - 24));
+            int left = (width - contentWidth) / 2;
+            int top = (height - contentHeight) / 2;
+            graphics.fill(left - 7, top - 18, left + contentWidth + 7, top + contentHeight + 7, 0xEE202020);
+            graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
+
+            String title = remoteFurnaceTitle.isBlank() ? remoteFurnaceClass : remoteFurnaceTitle;
+            graphics.text(this.minecraft.font, title, left, top - 14, 0xFFFFFFFF, true);
+            String mode = "Protocol-native furnace";
+            graphics.text(
+                    this.minecraft.font,
+                    mode,
+                    left + contentWidth - this.minecraft.font.width(mode),
+                    top - 14,
+                    0xFF9E9E9E,
+                    false
+            );
+
+            renderSlots(this, graphics, left, top, contentWidth, contentHeight, remoteFurnaceSlots);
+
+            int progressX = left + Math.min(contentWidth - 38, 79);
+            int progressY = top + 34;
+            int cookWidth = Math.round(24.0F * remoteCookProgress);
+            graphics.fill(progressX, progressY, progressX + 24, progressY + 6, 0xFF3A3A3A);
+            if (cookWidth > 0) {
+                graphics.fill(progressX, progressY, progressX + cookWidth, progressY + 6, 0xFFE0A040);
             }
 
-            int cursorX = left + remoteMouseX;
-            int cursorY = top + remoteMouseY;
-            if (cursorX >= 0 && cursorX < width && cursorY >= 0 && cursorY < height) {
-                graphics.fill(cursorX - 4, cursorY, cursorX + 5, cursorY + 1, 0xFFFFFFFF);
-                graphics.fill(cursorX, cursorY - 4, cursorX + 1, cursorY + 5, 0xFFFFFFFF);
+            int fuelX = left + Math.min(contentWidth - 58, 56);
+            int fuelBottom = top + 53;
+            int fuelHeight = Math.round(14.0F * remoteFuelProgress);
+            graphics.fill(fuelX, fuelBottom - 14, fuelX + 6, fuelBottom, 0xFF3A3A3A);
+            if (fuelHeight > 0) {
+                graphics.fill(fuelX, fuelBottom - fuelHeight, fuelX + 6, fuelBottom, 0xFFFF8A3D);
             }
-            extractedFrames++;
+
+            String cookText = "Cook " + Math.round(remoteCookProgress * 100.0F) + "%";
+            String fuelText = (remoteFurnaceLit ? "Lit " : "Fuel ") + Math.round(remoteFuelProgress * 100.0F) + "%";
+            graphics.text(this.minecraft.font, cookText, left + 8, top + contentHeight - 25, 0xFFCFCFCF, false);
+            graphics.text(this.minecraft.font, fuelText, left + 8, top + contentHeight - 13, 0xFFCFCFCF, false);
+
+            renderCursor(
+                    graphics,
+                    left,
+                    top,
+                    remoteFurnaceMouseX,
+                    remoteFurnaceMouseY,
+                    width,
+                    height
+            );
+            furnaceExtractedFrames++;
         }
     }
 

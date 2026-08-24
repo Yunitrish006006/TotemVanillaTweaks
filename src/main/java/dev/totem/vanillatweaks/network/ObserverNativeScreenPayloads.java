@@ -13,12 +13,17 @@ import java.util.UUID;
 /** Versioned semantic-screen transport for protocol-native Observer View. */
 public final class ObserverNativeScreenPayloads {
     public static final int SCREEN_PROTOCOL_VERSION = 2;
+    public static final int FURNACE_PROTOCOL_VERSION = 1;
     public static final int MAX_SLOTS = 128;
 
     /** Generic slot-layout adapter used for AbstractContainerScreen families. */
     public static final String FAMILY_CONTAINER_SLOTS = "container_slots";
+    /** Furnace, blast-furnace and smoker adapter with progress/fuel semantics. */
+    public static final String FAMILY_FURNACE = "furnace";
+
     public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
-    public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS;
+    public static final long CAPABILITY_FURNACE = 1L << 1;
+    public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS | CAPABILITY_FURNACE;
 
     private static final int MAX_TEXT = 256;
 
@@ -38,7 +43,11 @@ public final class ObserverNativeScreenPayloads {
     }
 
     public static long capabilityForFamily(String familyId) {
-        return FAMILY_CONTAINER_SLOTS.equals(familyId) ? CAPABILITY_CONTAINER_SLOTS : 0L;
+        return switch (familyId) {
+            case FAMILY_CONTAINER_SLOTS -> CAPABILITY_CONTAINER_SLOTS;
+            case FAMILY_FURNACE -> CAPABILITY_FURNACE;
+            default -> 0L;
+        };
     }
 
     public record SlotState(
@@ -137,6 +146,104 @@ public final class ObserverNativeScreenPayloads {
         }
     }
 
+    public record FurnaceState(
+            int protocolVersion,
+            long sequence,
+            boolean open,
+            String familyId,
+            String screenClass,
+            String title,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<SlotState> slots,
+            float cookProgress,
+            float fuelProgress,
+            boolean lit
+    ) implements CustomPacketPayload {
+        public static final Type<FurnaceState> TYPE =
+                new Type<>(id("observer_native_furnace_state_v1"));
+        public static final StreamCodec<FriendlyByteBuf, FurnaceState> CODEC = StreamCodec.of(
+                ObserverNativeScreenPayloads::writeFurnaceState,
+                ObserverNativeScreenPayloads::readFurnaceState
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    public record FurnaceRelay(
+            UUID targetId,
+            int protocolVersion,
+            long sequence,
+            boolean open,
+            String familyId,
+            String screenClass,
+            String title,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<SlotState> slots,
+            float cookProgress,
+            float fuelProgress,
+            boolean lit
+    ) implements CustomPacketPayload {
+        public static final Type<FurnaceRelay> TYPE =
+                new Type<>(id("observer_native_furnace_relay_v1"));
+        public static final StreamCodec<FriendlyByteBuf, FurnaceRelay> CODEC = StreamCodec.of(
+                (buf, value) -> {
+                    buf.writeUUID(value.targetId());
+                    writeFurnaceFields(
+                            buf,
+                            value.protocolVersion(),
+                            value.sequence(),
+                            value.open(),
+                            value.familyId(),
+                            value.screenClass(),
+                            value.title(),
+                            value.contentWidth(),
+                            value.contentHeight(),
+                            value.mouseX(),
+                            value.mouseY(),
+                            value.slots(),
+                            value.cookProgress(),
+                            value.fuelProgress(),
+                            value.lit()
+                    );
+                },
+                buf -> {
+                    UUID targetId = buf.readUUID();
+                    FurnaceState state = readFurnaceState(buf);
+                    return new FurnaceRelay(
+                            targetId,
+                            state.protocolVersion(),
+                            state.sequence(),
+                            state.open(),
+                            state.familyId(),
+                            state.screenClass(),
+                            state.title(),
+                            state.contentWidth(),
+                            state.contentHeight(),
+                            state.mouseX(),
+                            state.mouseY(),
+                            state.slots(),
+                            state.cookProgress(),
+                            state.fuelProgress(),
+                            state.lit()
+                    );
+                }
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     private static void writeContainerState(FriendlyByteBuf buf, ContainerState value) {
         writeContainerFields(
                 buf,
@@ -168,6 +275,129 @@ public final class ObserverNativeScreenPayloads {
             int mouseY,
             List<SlotState> slots
     ) {
+        writeCommonScreenFields(
+                buf,
+                protocolVersion,
+                sequence,
+                open,
+                familyId,
+                screenClass,
+                title,
+                contentWidth,
+                contentHeight,
+                mouseX,
+                mouseY,
+                slots
+        );
+    }
+
+    private static ContainerState readContainerState(FriendlyByteBuf buf) {
+        CommonScreenFields common = readCommonScreenFields(buf);
+        return new ContainerState(
+                common.protocolVersion(),
+                common.sequence(),
+                common.open(),
+                common.familyId(),
+                common.screenClass(),
+                common.title(),
+                common.contentWidth(),
+                common.contentHeight(),
+                common.mouseX(),
+                common.mouseY(),
+                common.slots()
+        );
+    }
+
+    private static void writeFurnaceState(FriendlyByteBuf buf, FurnaceState value) {
+        writeFurnaceFields(
+                buf,
+                value.protocolVersion(),
+                value.sequence(),
+                value.open(),
+                value.familyId(),
+                value.screenClass(),
+                value.title(),
+                value.contentWidth(),
+                value.contentHeight(),
+                value.mouseX(),
+                value.mouseY(),
+                value.slots(),
+                value.cookProgress(),
+                value.fuelProgress(),
+                value.lit()
+        );
+    }
+
+    private static void writeFurnaceFields(
+            FriendlyByteBuf buf,
+            int protocolVersion,
+            long sequence,
+            boolean open,
+            String familyId,
+            String screenClass,
+            String title,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<SlotState> slots,
+            float cookProgress,
+            float fuelProgress,
+            boolean lit
+    ) {
+        writeCommonScreenFields(
+                buf,
+                protocolVersion,
+                sequence,
+                open,
+                familyId,
+                screenClass,
+                title,
+                contentWidth,
+                contentHeight,
+                mouseX,
+                mouseY,
+                slots
+        );
+        buf.writeFloat(cookProgress);
+        buf.writeFloat(fuelProgress);
+        buf.writeBoolean(lit);
+    }
+
+    private static FurnaceState readFurnaceState(FriendlyByteBuf buf) {
+        CommonScreenFields common = readCommonScreenFields(buf);
+        return new FurnaceState(
+                common.protocolVersion(),
+                common.sequence(),
+                common.open(),
+                common.familyId(),
+                common.screenClass(),
+                common.title(),
+                common.contentWidth(),
+                common.contentHeight(),
+                common.mouseX(),
+                common.mouseY(),
+                common.slots(),
+                buf.readFloat(),
+                buf.readFloat(),
+                buf.readBoolean()
+        );
+    }
+
+    private static void writeCommonScreenFields(
+            FriendlyByteBuf buf,
+            int protocolVersion,
+            long sequence,
+            boolean open,
+            String familyId,
+            String screenClass,
+            String title,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<SlotState> slots
+    ) {
         buf.writeVarInt(protocolVersion);
         buf.writeLong(sequence);
         buf.writeBoolean(open);
@@ -178,6 +408,36 @@ public final class ObserverNativeScreenPayloads {
         buf.writeVarInt(contentHeight);
         buf.writeVarInt(mouseX);
         buf.writeVarInt(mouseY);
+        writeSlots(buf, slots);
+    }
+
+    private static CommonScreenFields readCommonScreenFields(FriendlyByteBuf buf) {
+        int protocolVersion = buf.readVarInt();
+        long sequence = buf.readLong();
+        boolean open = buf.readBoolean();
+        String familyId = buf.readUtf(MAX_TEXT);
+        String screenClass = buf.readUtf(MAX_TEXT);
+        String title = buf.readUtf(MAX_TEXT);
+        int contentWidth = buf.readVarInt();
+        int contentHeight = buf.readVarInt();
+        int mouseX = buf.readVarInt();
+        int mouseY = buf.readVarInt();
+        return new CommonScreenFields(
+                protocolVersion,
+                sequence,
+                open,
+                familyId,
+                screenClass,
+                title,
+                contentWidth,
+                contentHeight,
+                mouseX,
+                mouseY,
+                readSlots(buf)
+        );
+    }
+
+    private static void writeSlots(FriendlyByteBuf buf, List<SlotState> slots) {
         int slotCount = Math.min(slots.size(), MAX_SLOTS);
         buf.writeVarInt(slotCount);
         for (int i = 0; i < slotCount; i++) {
@@ -191,17 +451,7 @@ public final class ObserverNativeScreenPayloads {
         }
     }
 
-    private static ContainerState readContainerState(FriendlyByteBuf buf) {
-        int protocolVersion = buf.readVarInt();
-        long sequence = buf.readLong();
-        boolean open = buf.readBoolean();
-        String familyId = buf.readUtf(MAX_TEXT);
-        String screenClass = buf.readUtf(MAX_TEXT);
-        String title = buf.readUtf(MAX_TEXT);
-        int contentWidth = buf.readVarInt();
-        int contentHeight = buf.readVarInt();
-        int mouseX = buf.readVarInt();
-        int mouseY = buf.readVarInt();
+    private static List<SlotState> readSlots(FriendlyByteBuf buf) {
         int slotCount = buf.readVarInt();
         if (slotCount < 0 || slotCount > MAX_SLOTS) {
             throw new IllegalArgumentException("Observer container slot count out of range: " + slotCount);
@@ -217,18 +467,21 @@ public final class ObserverNativeScreenPayloads {
                     buf.readVarInt()
             ));
         }
-        return new ContainerState(
-                protocolVersion,
-                sequence,
-                open,
-                familyId,
-                screenClass,
-                title,
-                contentWidth,
-                contentHeight,
-                mouseX,
-                mouseY,
-                List.copyOf(slots)
-        );
+        return List.copyOf(slots);
+    }
+
+    private record CommonScreenFields(
+            int protocolVersion,
+            long sequence,
+            boolean open,
+            String familyId,
+            String screenClass,
+            String title,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            List<SlotState> slots
+    ) {
     }
 }

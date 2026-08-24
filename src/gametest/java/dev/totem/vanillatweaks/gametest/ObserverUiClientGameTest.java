@@ -4,6 +4,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -11,18 +12,20 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Client smoke test for the framebuffer-free Observer UI bridge.
- * Verifies removed frame surfaces stay absent and an unnegotiated screen family degrades to metadata-only UI.
+ * Client smoke tests for framebuffer-free Observer screen reconstruction.
+ * Verifies unnegotiated families degrade to metadata and furnace semantics render locally.
  */
 public final class ObserverUiClientGameTest implements FabricClientGameTest {
     @Override
@@ -32,77 +35,145 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             singleplayer.getClientLevel().waitForChunksRender();
 
             assertFramebufferSurfaceRemoved();
-
-            context.setScreen(() -> new Screen(Component.literal("Observer Metadata Target")) {
-                @Override
-                public boolean isPauseScreen() {
-                    return false;
-                }
-            });
-            context.waitFor(mc -> mc.gui.screen() != null
-                    && "Observer Metadata Target".equals(mc.gui.screen().getTitle().getString()));
-            persistForCi(context.takeScreenshot("observer-ui-source-screen"), "observer-ui-source-screen.png");
-
-            context.setScreen(() -> null);
-            context.waitForScreen(null);
-
-            UUID targetId = UUID.randomUUID();
-            context.runOnClient(minecraft -> {
-                invoke(
-                        ObserverNativeClient.class,
-                        "applySession",
-                        new Class<?>[]{ObserverNativePayloads.NativeSession.class},
-                        new ObserverNativePayloads.NativeSession(
-                                true,
-                                targetId,
-                                "ObserverSmokeTarget",
-                                ObserverNativePayloads.PROTOCOL_VERSION,
-                                0L
-                        )
-                );
-                invoke(
-                        ObserverNativeScreenClient.class,
-                        "applyGenericScreenState",
-                        new Class<?>[]{boolean.class, String.class, String.class},
-                        true,
-                        "net.minecraft.client.gui.screens.inventory.InventoryScreen",
-                        "Unnegotiated Container Metadata"
-                );
-            });
-
-            context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeGenericMirrorScreen"), 100);
-            context.waitTicks(2);
-            persistForCi(
-                    context.takeScreenshot("observer-ui-native-generic-screen"),
-                    "observer-ui-native-generic-screen.png"
-            );
-
-            context.runOnClient(minecraft -> {
-                invoke(
-                        ObserverNativeScreenClient.class,
-                        "applyGenericScreenState",
-                        new Class<?>[]{boolean.class, String.class, String.class},
-                        false,
-                        "",
-                        ""
-                );
-                invoke(
-                        ObserverNativeClient.class,
-                        "applySession",
-                        new Class<?>[]{ObserverNativePayloads.NativeSession.class},
-                        new ObserverNativePayloads.NativeSession(
-                                false,
-                                new UUID(0L, 0L),
-                                "",
-                                ObserverNativePayloads.PROTOCOL_VERSION,
-                                0L
-                        )
-                );
-            });
-            context.waitForScreen(null);
+            verifyUnnegotiatedMetadataFallback(context);
+            verifyFurnaceSemanticMirror(context);
             assertFramebufferSurfaceRemoved();
         }
+    }
+
+    private static void verifyUnnegotiatedMetadataFallback(ClientGameTestContext context) {
+        context.setScreen(() -> new Screen(Component.literal("Observer Metadata Target")) {
+            @Override
+            public boolean isPauseScreen() {
+                return false;
+            }
+        });
+        context.waitFor(mc -> mc.gui.screen() != null
+                && "Observer Metadata Target".equals(mc.gui.screen().getTitle().getString()));
+        persistForCi(context.takeScreenshot("observer-ui-source-screen"), "observer-ui-source-screen.png");
+
+        context.setScreen(() -> null);
+        context.waitForScreen(null);
+
+        UUID targetId = UUID.randomUUID();
+        context.runOnClient(minecraft -> {
+            applySession(true, targetId, 0L);
+            invoke(
+                    ObserverNativeScreenClient.class,
+                    "applyGenericScreenState",
+                    new Class<?>[]{boolean.class, String.class, String.class},
+                    true,
+                    "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                    "Unnegotiated Container Metadata"
+            );
+        });
+
+        context.waitFor(minecraft -> minecraft.gui.screen() != null
+                && minecraft.gui.screen().getClass().getName().contains("NativeGenericMirrorScreen"), 100);
+        context.waitTicks(2);
+        persistForCi(
+                context.takeScreenshot("observer-ui-native-generic-screen"),
+                "observer-ui-native-generic-screen.png"
+        );
+
+        context.runOnClient(minecraft -> {
+            invoke(
+                    ObserverNativeScreenClient.class,
+                    "applyGenericScreenState",
+                    new Class<?>[]{boolean.class, String.class, String.class},
+                    false,
+                    "",
+                    ""
+            );
+            applySession(false, new UUID(0L, 0L), 0L);
+        });
+        context.waitForScreen(null);
+    }
+
+    private static void verifyFurnaceSemanticMirror(ClientGameTestContext context) {
+        UUID targetId = UUID.randomUUID();
+        ObserverNativeScreenPayloads.FurnaceRelay open = new ObserverNativeScreenPayloads.FurnaceRelay(
+                targetId,
+                ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION,
+                1L,
+                true,
+                ObserverNativeScreenPayloads.FAMILY_FURNACE,
+                "net.minecraft.client.gui.screens.inventory.FurnaceScreen",
+                "Observer Furnace Test",
+                176,
+                166,
+                88,
+                42,
+                List.of(
+                        new ObserverNativeScreenPayloads.SlotState(0, 56, 17, "minecraft:iron_ore", 3, 0),
+                        new ObserverNativeScreenPayloads.SlotState(1, 56, 53, "minecraft:coal", 2, 0),
+                        new ObserverNativeScreenPayloads.SlotState(2, 116, 35, "minecraft:iron_ingot", 1, 0)
+                ),
+                0.625F,
+                0.5F,
+                true
+        );
+
+        context.runOnClient(minecraft -> {
+            applySession(true, targetId, ObserverNativeScreenPayloads.CAPABILITY_FURNACE);
+            invoke(
+                    ObserverNativeScreenClient.class,
+                    "acceptFurnaceRelay",
+                    new Class<?>[]{ObserverNativeScreenPayloads.FurnaceRelay.class},
+                    open
+            );
+        });
+
+        context.waitFor(minecraft -> minecraft.gui.screen() != null
+                && minecraft.gui.screen().getClass().getName().contains("NativeFurnaceMirrorScreen"), 100);
+        context.waitFor(minecraft -> getStaticLong(ObserverNativeScreenClient.class, "furnaceExtractedFrames") > 0L, 100);
+        persistForCi(
+                context.takeScreenshot("observer-ui-native-furnace-screen"),
+                "observer-ui-native-furnace-screen.png"
+        );
+
+        ObserverNativeScreenPayloads.FurnaceRelay close = new ObserverNativeScreenPayloads.FurnaceRelay(
+                targetId,
+                ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION,
+                2L,
+                false,
+                ObserverNativeScreenPayloads.FAMILY_FURNACE,
+                "",
+                "",
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                0.0F,
+                0.0F,
+                false
+        );
+        context.runOnClient(minecraft -> {
+            invoke(
+                    ObserverNativeScreenClient.class,
+                    "acceptFurnaceRelay",
+                    new Class<?>[]{ObserverNativeScreenPayloads.FurnaceRelay.class},
+                    close
+            );
+            applySession(false, new UUID(0L, 0L), 0L);
+        });
+        context.waitForScreen(null);
+    }
+
+    private static void applySession(boolean active, UUID targetId, long screenCapabilities) {
+        invoke(
+                ObserverNativeClient.class,
+                "applySession",
+                new Class<?>[]{ObserverNativePayloads.NativeSession.class},
+                new ObserverNativePayloads.NativeSession(
+                        active,
+                        targetId,
+                        active ? "ObserverSmokeTarget" : "",
+                        ObserverNativePayloads.PROTOCOL_VERSION,
+                        screenCapabilities
+                )
+        );
     }
 
     private static void assertFramebufferSurfaceRemoved() {
@@ -124,6 +195,16 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             throw new AssertionError("Removed framebuffer field still exists: " + owner.getSimpleName() + "." + name);
         } catch (NoSuchFieldException expected) {
             // Required absence.
+        }
+    }
+
+    private static long getStaticLong(Class<?> owner, String name) {
+        try {
+            Field field = owner.getDeclaredField(name);
+            field.setAccessible(true);
+            return field.getLong(null);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to read " + owner.getSimpleName() + "." + name, error);
         }
     }
 

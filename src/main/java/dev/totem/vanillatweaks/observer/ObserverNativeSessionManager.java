@@ -118,14 +118,10 @@ public final class ObserverNativeSessionManager {
                         screenCapabilitiesForTarget(target.getUUID()),
                         familyCapability
                 )
-                || nativeObserverCount(target.getUUID()) == 0) {
+                || nativeObserverCount(target.getUUID()) == 0
+                || !acceptScreenSequence(target.getUUID(), payload.sequence())) {
             return;
         }
-        long lastSequence = LAST_SCREEN_SEQUENCE_BY_TARGET.getOrDefault(target.getUUID(), -1L);
-        if (payload.sequence() <= lastSequence) {
-            return;
-        }
-        LAST_SCREEN_SEQUENCE_BY_TARGET.put(target.getUUID(), payload.sequence());
 
         ObserverNativeScreenPayloads.ContainerRelay relay = new ObserverNativeScreenPayloads.ContainerRelay(
                 target.getUUID(),
@@ -147,6 +143,53 @@ public final class ObserverNativeSessionManager {
                 relay,
                 familyCapability
         );
+    }
+
+    public static void acceptFurnaceState(ServerPlayer target, ObserverNativeScreenPayloads.FurnaceState payload) {
+        long familyCapability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validFurnace(payload)
+                || familyCapability != ObserverNativeScreenPayloads.CAPABILITY_FURNACE
+                || !ObserverNativeScreenPayloads.supports(
+                        screenCapabilitiesForTarget(target.getUUID()),
+                        familyCapability
+                )
+                || nativeObserverCount(target.getUUID()) == 0
+                || !acceptScreenSequence(target.getUUID(), payload.sequence())) {
+            return;
+        }
+
+        ObserverNativeScreenPayloads.FurnaceRelay relay = new ObserverNativeScreenPayloads.FurnaceRelay(
+                target.getUUID(),
+                payload.protocolVersion(),
+                payload.sequence(),
+                payload.open(),
+                payload.familyId(),
+                payload.screenClass(),
+                payload.title(),
+                payload.contentWidth(),
+                payload.contentHeight(),
+                payload.mouseX(),
+                payload.mouseY(),
+                payload.slots(),
+                payload.cookProgress(),
+                payload.fuelProgress(),
+                payload.lit()
+        );
+        relayToNativeObservers(
+                target,
+                ObserverNativeScreenPayloads.FurnaceRelay.TYPE,
+                relay,
+                familyCapability
+        );
+    }
+
+    private static boolean acceptScreenSequence(UUID targetId, long sequence) {
+        long lastSequence = LAST_SCREEN_SEQUENCE_BY_TARGET.getOrDefault(targetId, -1L);
+        if (sequence <= lastSequence) {
+            return false;
+        }
+        LAST_SCREEN_SEQUENCE_BY_TARGET.put(targetId, sequence);
+        return true;
     }
 
     private static <T extends CustomPacketPayload> void relayToNativeObservers(
@@ -195,23 +238,65 @@ public final class ObserverNativeSessionManager {
     }
 
     private static boolean validContainer(ObserverNativeScreenPayloads.ContainerState payload) {
-        long familyCapability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
         if (payload.protocolVersion() != ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION
-                || familyCapability == 0L
+                || !ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS.equals(payload.familyId())
                 || payload.sequence() < 0L
-                || payload.slots().size() > ObserverNativeScreenPayloads.MAX_SLOTS) {
+                || !validSlots(payload.slots())) {
             return false;
         }
-        if (!payload.open()) {
-            return payload.slots().isEmpty();
-        }
-        if (payload.contentWidth() < 64 || payload.contentWidth() > 512
-                || payload.contentHeight() < 64 || payload.contentHeight() > 512
-                || payload.mouseX() < -2048 || payload.mouseX() > 2048
-                || payload.mouseY() < -2048 || payload.mouseY() > 2048) {
+        return validScreenGeometry(
+                payload.open(),
+                payload.contentWidth(),
+                payload.contentHeight(),
+                payload.mouseX(),
+                payload.mouseY(),
+                payload.slots()
+        );
+    }
+
+    private static boolean validFurnace(ObserverNativeScreenPayloads.FurnaceState payload) {
+        if (payload.protocolVersion() != ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_FURNACE.equals(payload.familyId())
+                || payload.sequence() < 0L
+                || !Float.isFinite(payload.cookProgress())
+                || !Float.isFinite(payload.fuelProgress())
+                || payload.cookProgress() < 0.0F || payload.cookProgress() > 1.001F
+                || payload.fuelProgress() < 0.0F || payload.fuelProgress() > 1.001F
+                || !validSlots(payload.slots())) {
             return false;
         }
-        for (ObserverNativeScreenPayloads.SlotState slot : payload.slots()) {
+        return validScreenGeometry(
+                payload.open(),
+                payload.contentWidth(),
+                payload.contentHeight(),
+                payload.mouseX(),
+                payload.mouseY(),
+                payload.slots()
+        );
+    }
+
+    private static boolean validScreenGeometry(
+            boolean open,
+            int contentWidth,
+            int contentHeight,
+            int mouseX,
+            int mouseY,
+            java.util.List<ObserverNativeScreenPayloads.SlotState> slots
+    ) {
+        if (!open) {
+            return slots.isEmpty();
+        }
+        return contentWidth >= 64 && contentWidth <= 512
+                && contentHeight >= 64 && contentHeight <= 512
+                && mouseX >= -2048 && mouseX <= 2048
+                && mouseY >= -2048 && mouseY <= 2048;
+    }
+
+    private static boolean validSlots(java.util.List<ObserverNativeScreenPayloads.SlotState> slots) {
+        if (slots.size() > ObserverNativeScreenPayloads.MAX_SLOTS) {
+            return false;
+        }
+        for (ObserverNativeScreenPayloads.SlotState slot : slots) {
             if (slot.index() < 0
                     || slot.x() < -64 || slot.x() > 512
                     || slot.y() < -64 || slot.y() > 512
@@ -227,6 +312,9 @@ public final class ObserverNativeSessionManager {
         long capabilities = 0L;
         if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)) {
             capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
+        }
+        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.FurnaceRelay.TYPE)) {
+            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
         }
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
