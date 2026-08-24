@@ -59,7 +59,7 @@ public final class ObserverNativeClient {
         return targetStateEnabled;
     }
 
-    static boolean targetSupportsScreen(long capability) {
+    public static boolean targetSupportsScreen(long capability) {
         return targetStateEnabled
                 && ObserverNativeScreenPayloads.supports(targetScreenCapabilities, capability);
     }

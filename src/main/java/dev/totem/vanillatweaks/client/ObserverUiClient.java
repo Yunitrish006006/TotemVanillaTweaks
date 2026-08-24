@@ -8,10 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 
 import java.util.UUID;
 
-/**
- * Lightweight lifecycle and screen-metadata bridge for protocol-native Observer View.
- * No framebuffer capture, image encoding, image relay, or dynamic mirror texture exists here.
- */
+/** Lightweight lifecycle and screen-metadata bridge for protocol-native Observer View. */
 public final class ObserverUiClient {
     private static boolean sessionActive;
     private static UUID targetId;
@@ -54,14 +51,11 @@ public final class ObserverUiClient {
         if (!sessionActive || targetId == null || !targetId.equals(payload.targetId())) {
             return;
         }
-        if (payload.open() && ObserverNativeBookScreenClient.hasStructuredRemoteScreen()) {
+        if (payload.open() && (ObserverNativeBookScreenClient.hasStructuredRemoteScreen()
+                || ObserverNativeCraftingScreenClient.hasStructuredRemoteScreen())) {
             return;
         }
-        ObserverNativeScreenClient.applyGenericScreenState(
-                payload.open(),
-                payload.screenClass(),
-                payload.title()
-        );
+        ObserverNativeScreenClient.applyGenericScreenState(payload.open(), payload.screenClass(), payload.title());
     }
 
     private static void tickScreenMetadata(Minecraft minecraft) {
@@ -73,7 +67,8 @@ public final class ObserverUiClient {
         Screen screen = minecraft.gui.screen();
         boolean screenOpen = screen != null
                 && !ObserverNativeScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverNativeBookScreenClient.isNativeMirrorScreen(screen);
+                && !ObserverNativeBookScreenClient.isNativeMirrorScreen(screen)
+                && !ObserverNativeCraftingScreenClient.isNativeMirrorScreen(screen);
         String screenClass = screenOpen ? screen.getClass().getName() : "";
         String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
         String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;

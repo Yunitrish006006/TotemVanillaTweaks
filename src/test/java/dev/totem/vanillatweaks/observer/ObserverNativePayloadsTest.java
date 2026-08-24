@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.observer;
 
 import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -26,38 +27,37 @@ final class ObserverNativePayloadsTest {
     }
 
     @Test
-    void semanticScreenCapabilitiesIncludeContainerFurnaceAndBookFamilies() {
+    void semanticScreenCapabilitiesIncludeSupportedFamilies() {
         assertEquals(2, ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION);
         assertEquals(1, ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION);
         assertEquals(1, ObserverBookScreenPayloads.PROTOCOL_VERSION);
+        assertEquals(1, ObserverCraftingScreenPayloads.PROTOCOL_VERSION);
         assertTrue(ObserverNativeScreenPayloads.ContainerState.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.ContainerRelay.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.FurnaceState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverNativeScreenPayloads.FurnaceRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverBookScreenPayloads.BookState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverBookScreenPayloads.BookRelay.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverCraftingScreenPayloads.CraftingState.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverCraftingScreenPayloads.CraftingRelay.TYPE.id().getPath().endsWith("_v1"));
 
         long container = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
         long furnace = ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
         long book = ObserverNativeScreenPayloads.CAPABILITY_BOOK;
-        long known = container | furnace | book;
+        long crafting = ObserverNativeScreenPayloads.CAPABILITY_CRAFTING;
+        long known = container | furnace | book | crafting;
         assertEquals(known, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
-        assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(
-                ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS
-        ));
-        assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(
-                ObserverNativeScreenPayloads.FAMILY_FURNACE
-        ));
-        assertEquals(book, ObserverNativeScreenPayloads.capabilityForFamily(
-                ObserverNativeScreenPayloads.FAMILY_BOOK
-        ));
+        assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS));
+        assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_FURNACE));
+        assertEquals(book, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_BOOK));
+        assertEquals(crafting, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_CRAFTING));
         assertEquals(0L, ObserverNativeScreenPayloads.capabilityForFamily("unknown"));
         assertEquals(known, ObserverNativeScreenPayloads.sanitizeCapabilities(known | (1L << 40)));
         assertTrue(ObserverNativeScreenPayloads.supports(known, container));
         assertTrue(ObserverNativeScreenPayloads.supports(known, furnace));
         assertTrue(ObserverNativeScreenPayloads.supports(known, book));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, furnace));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, book));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, crafting));
+        assertFalse(ObserverNativeScreenPayloads.supports(container, crafting));
         assertFalse(ObserverNativeScreenPayloads.supports(0L, container));
     }
 
