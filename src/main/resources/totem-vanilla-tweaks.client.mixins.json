@@ -9,7 +9,8 @@
     "ObserverNativeScreenClientCraftingPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
-    "BookSignScreenAccessor"
+    "BookSignScreenAccessor",
+    "MerchantScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
