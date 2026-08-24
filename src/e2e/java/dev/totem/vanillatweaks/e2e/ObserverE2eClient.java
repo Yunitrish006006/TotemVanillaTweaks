@@ -2,7 +2,9 @@ package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
+import dev.totem.vanillatweaks.client.ObserverNativeHud;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -24,6 +26,7 @@ import java.nio.file.Path;
 public final class ObserverE2eClient implements ClientModInitializer {
     private static final Class<?> CLIENT = ObserverUiClient.class;
     private static final Class<?> NATIVE_CLIENT = ObserverNativeClient.class;
+    private static final Class<?> NATIVE_HUD = ObserverNativeHud.class;
     private static final int CLIENT_TIMEOUT_TICKS = 20 * 120;
     private static final int MAX_CONNECTION_ATTEMPTS = 5;
     private static final int RECONNECT_DELAY_TICKS = 20 * 2;
@@ -43,6 +46,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean targetNativeSeen;
     private static boolean targetNoFrameProven;
     private static boolean observerNativeSeen;
+    private static boolean observerHudSeen;
     private static int observerNativeWorldStableTicks;
     private static boolean observerScreenshotRequested;
     private static volatile boolean observerScreenshotSaved;
@@ -180,7 +184,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         boolean nativeEnabled = nativeGetBoolean("targetStateEnabled");
         if (nativeEnabled && !targetNativeSeen) {
             targetNativeSeen = true;
-            if (nativeGetInt("targetProtocolVersion") != 1) {
+            if (nativeGetInt("targetProtocolVersion") != ObserverNativePayloads.PROTOCOL_VERSION) {
                 throw new AssertionError("Target negotiated unexpected native protocol version: "
                         + nativeGetInt("targetProtocolVersion"));
             }
@@ -189,7 +193,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
             }
             ObserverE2eCommon.marker(
                     "target-native-state-enabled.txt",
-                    "Target negotiated Observer protocol v1 with gameplay framebuffer suppression.\n"
+                    "Target negotiated Observer protocol v" + ObserverNativePayloads.PROTOCOL_VERSION
+                            + " with gameplay framebuffer suppression.\n"
             );
         }
 
@@ -255,23 +260,34 @@ public final class ObserverE2eClient implements ClientModInitializer {
             if (!"Target".equals(targetName)) {
                 throw new AssertionError("Native Observer target name mismatch: " + targetName);
             }
-            if (nativeGetInt("observerProtocolVersion") != 1) {
+            if (nativeGetInt("observerProtocolVersion") != ObserverNativePayloads.PROTOCOL_VERSION) {
                 throw new AssertionError("Observer negotiated unexpected native protocol version: "
                         + nativeGetInt("observerProtocolVersion"));
             }
             float health = nativeGetFloat("remoteHealth");
             float maxHealth = nativeGetFloat("remoteMaxHealth");
             int food = nativeGetInt("remoteFood");
+            float experienceProgress = nativeGetFloat("remoteExperienceProgress");
+            int experienceLevel = nativeGetInt("remoteExperienceLevel");
+            int selectedHotbarSlot = nativeGetInt("remoteSelectedHotbarSlot");
             if (!(health >= 0.0F && maxHealth > 0.0F && health <= maxHealth && food >= 0 && food <= 20)) {
                 throw new AssertionError("Observer received invalid structured HUD state: health="
                         + health + " maxHealth=" + maxHealth + " food=" + food);
+            }
+            if (!(experienceProgress >= 0.0F && experienceProgress <= 1.001F
+                    && experienceLevel >= 0
+                    && selectedHotbarSlot >= 0
+                    && selectedHotbarSlot < 9)) {
+                throw new AssertionError("Observer received invalid v2 XP/hotbar state: xp="
+                        + experienceProgress + " level=" + experienceLevel + " slot=" + selectedHotbarSlot);
             }
             requireTargetCamera(minecraft);
             observerNativeSeen = true;
             observerNativeWorldStableTicks = 0;
             ObserverE2eCommon.marker(
                     "observer-native-state-ok.txt",
-                    "Observer received protocol-v1 Target camera/HUD structured state over the real server relay.\n"
+                    "Observer received protocol-v" + ObserverNativePayloads.PROTOCOL_VERSION
+                            + " Target camera/HUD/XP/hotbar structured state over the real server relay.\n"
             );
             ObserverE2eCommon.marker(
                     "observer-native-camera-ok.txt",
@@ -279,14 +295,22 @@ public final class ObserverE2eClient implements ClientModInitializer {
             );
         }
 
-        if (observerNativeSeen && !observerScreenshotRequested) {
+        if (observerNativeSeen && !observerHudSeen && hudGetLong("extractedFrames") > 0L) {
+            observerHudSeen = true;
+            ObserverE2eCommon.marker(
+                    "observer-native-hud-ok.txt",
+                    "Observer locally extracted the Target health/food/XP/selected-slot HUD from structured state.\n"
+            );
+        }
+
+        if (observerNativeSeen && observerHudSeen && !observerScreenshotRequested) {
             if (nativeWorldPathIsStable(minecraft, sessionActive, mirrorOpen, textureRegistered)) {
                 observerNativeWorldStableTicks++;
                 if (observerNativeWorldStableTicks >= NATIVE_WORLD_SETTLE_TICKS) {
                     observerScreenshotRequested = true;
                     ObserverE2eCommon.marker(
                             "observer-native-world-settled.txt",
-                            "Observer stayed on Minecraft-native Target camera rendering for "
+                            "Observer stayed on Minecraft-native Target camera rendering with local structured HUD for "
                                     + NATIVE_WORLD_SETTLE_TICKS
                                     + " client ticks with screen=null and zero framebuffer state.\n"
                     );
@@ -304,6 +328,9 @@ public final class ObserverE2eClient implements ClientModInitializer {
             requireTargetCamera(minecraft);
             if (getBoolean("textureRegistered") || getLong("lastFrameId") >= 0L) {
                 throw new AssertionError("Framebuffer state appeared before native Stop request");
+            }
+            if (!observerHudSeen || hudGetLong("extractedFrames") <= 0L) {
+                throw new AssertionError("Native HUD did not extract before Stop request");
             }
             ClientPlayNetworking.send(new ObserverPayloads.Stop());
             observerStopRequested = true;
@@ -377,13 +404,14 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 return;
             }
             try (NativeImage owned = image) {
-                Path output = ObserverE2eCommon.resultsDir().resolve("observer-native-world.png");
-                Files.createDirectories(output.getParent());
-                owned.writeToFile(output);
+                Path results = ObserverE2eCommon.resultsDir();
+                Files.createDirectories(results);
+                owned.writeToFile(results.resolve("observer-native-world.png"));
+                owned.writeToFile(results.resolve("observer-native-hud.png"));
                 observerScreenshotSaved = true;
                 ObserverE2eCommon.marker(
                         "observer-native-world-saved.txt",
-                        "Observer native Target-camera framebuffer was saved locally for CI evidence; it was not received over network.\n"
+                        "Observer native Target-camera world plus locally reconstructed HUD was saved for CI evidence; no image was received over network.\n"
                 );
             } catch (IOException error) {
                 ObserverE2eCommon.fail("observer", "Failed to save native-world E2E screenshot: " + error);
@@ -415,6 +443,10 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
     private static Field nativeField(String name) {
         return field(NATIVE_CLIENT, "ObserverNativeClient", name);
+    }
+
+    private static Field hudField(String name) {
+        return field(NATIVE_HUD, "ObserverNativeHud", name);
     }
 
     private static Field field(Class<?> owner, String ownerName, String name) {
@@ -462,6 +494,14 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static long nativeGetLong(String name) {
         try {
             return nativeField(name).getLong(null);
+        } catch (IllegalAccessException error) {
+            throw new RuntimeException(error);
+        }
+    }
+
+    private static long hudGetLong(String name) {
+        try {
+            return hudField(name).getLong(null);
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
         }
