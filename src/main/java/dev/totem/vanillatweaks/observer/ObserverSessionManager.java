@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Server-authoritative observer-to-target relationships and UI frame relay. */
+/** Server-authoritative observer-to-target relationships and UI/frame compatibility relay. */
 public final class ObserverSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
     private static final long MIN_NEW_FRAME_INTERVAL_NANOS = 250_000_000L;
@@ -66,9 +66,14 @@ public final class ObserverSessionManager {
         stop(observer, false);
         TARGET_BY_OBSERVER.put(observer.getUUID(), target.getUUID());
         observer.setCamera(target);
-        ServerPlayNetworking.send(observer,
-                new ObserverPayloads.Session(true, target.getUUID(), target.getGameProfile().name()));
-        ObserverNativeSessionManager.start(observer, target);
+
+        boolean nativeSession = ObserverNativeSessionManager.start(observer, target);
+        if (!nativeSession) {
+            ServerPlayNetworking.send(observer,
+                    new ObserverPayloads.Session(true, target.getUUID(), target.getGameProfile().name()));
+        }
+        ObserverNativeSessionManager.refreshTargetControl(target.level().getServer(), target.getUUID());
+
         if (observerCount(target.getUUID()) == 1) {
             FRAME_GATE_BY_TARGET.remove(target.getUUID());
             ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(
@@ -78,25 +83,32 @@ public final class ObserverSessionManager {
                     ObserverFrameRules.TARGET_FPS
             ));
         }
-        source.sendSuccess(() -> Component.literal("Observing UI for " + target.getGameProfile().name()), false);
+        source.sendSuccess(() -> Component.literal(
+                (nativeSession ? "Observing natively for " : "Observing UI for ") + target.getGameProfile().name()
+        ), false);
         return 1;
     }
 
     public static int stop(ServerPlayer observer, boolean resetCamera) {
         UUID targetId = TARGET_BY_OBSERVER.remove(observer.getUUID());
-        ObserverNativeSessionManager.stop(observer);
+        boolean nativeSession = ObserverNativeSessionManager.stop(observer);
         if (targetId == null) {
             if (resetCamera) {
                 observer.setCamera(null);
             }
-            sendInactive(observer);
+            if (!nativeSession) {
+                sendInactive(observer);
+            }
             return 0;
         }
 
         if (resetCamera) {
             observer.setCamera(null);
         }
-        sendInactive(observer);
+        if (!nativeSession) {
+            sendInactive(observer);
+        }
+        ObserverNativeSessionManager.refreshTargetControl(observer.level().getServer(), targetId);
         if (observerCount(targetId) == 0) {
             FRAME_GATE_BY_TARGET.remove(targetId);
             MinecraftServer server = observer.level().getServer();
@@ -170,6 +182,9 @@ public final class ObserverSessionManager {
     private static void removeOfflineObserver(MinecraftServer server, UUID observerId, UUID targetId) {
         TARGET_BY_OBSERVER.remove(observerId);
         ObserverNativeSessionManager.removeOfflineObserver(server, observerId);
+        if (targetId != null) {
+            ObserverNativeSessionManager.refreshTargetControl(server, targetId);
+        }
         if (targetId != null && observerCount(targetId) == 0) {
             FRAME_GATE_BY_TARGET.remove(targetId);
             ServerPlayer target = server.getPlayerList().getPlayer(targetId);
@@ -179,7 +194,7 @@ public final class ObserverSessionManager {
         }
     }
 
-    private static int observerCount(UUID targetId) {
+    static int observerCount(UUID targetId) {
         int count = 0;
         for (UUID value : TARGET_BY_OBSERVER.values()) {
             if (targetId.equals(value)) {
