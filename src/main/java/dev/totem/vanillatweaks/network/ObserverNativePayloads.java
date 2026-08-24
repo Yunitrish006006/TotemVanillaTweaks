@@ -8,9 +8,9 @@ import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
-/** Versioned structured-state transport for the protocol-native Observer View migration. */
+/** Versioned structured-state transport for framebuffer-free Observer View. */
 public final class ObserverNativePayloads {
-    public static final int PROTOCOL_VERSION = 2;
+    public static final int PROTOCOL_VERSION = 3;
     public static final int TARGET_STATE_FPS = 10;
     private static final int MAX_TEXT = 256;
 
@@ -21,26 +21,16 @@ public final class ObserverNativePayloads {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
     }
 
-    public record NativeControl(
-            boolean enabled,
-            int protocolVersion,
-            int stateFps,
-            boolean captureGameplayFrames
-    ) implements CustomPacketPayload {
-        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control_v2"));
+    public record NativeControl(boolean enabled, int protocolVersion, int stateFps)
+            implements CustomPacketPayload {
+        public static final Type<NativeControl> TYPE = new Type<>(id("observer_native_control_v3"));
         public static final StreamCodec<FriendlyByteBuf, NativeControl> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.enabled);
                     buf.writeVarInt(value.protocolVersion);
                     buf.writeVarInt(value.stateFps);
-                    buf.writeBoolean(value.captureGameplayFrames);
                 },
-                buf -> new NativeControl(
-                        buf.readBoolean(),
-                        buf.readVarInt(),
-                        buf.readVarInt(),
-                        buf.readBoolean()
-                )
+                buf -> new NativeControl(buf.readBoolean(), buf.readVarInt(), buf.readVarInt())
         );
 
         @Override
@@ -51,7 +41,7 @@ public final class ObserverNativePayloads {
 
     public record NativeSession(boolean active, UUID targetId, String targetName, int protocolVersion)
             implements CustomPacketPayload {
-        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session_v2"));
+        public static final Type<NativeSession> TYPE = new Type<>(id("observer_native_session_v3"));
         public static final StreamCodec<FriendlyByteBuf, NativeSession> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeBoolean(value.active);
@@ -59,12 +49,7 @@ public final class ObserverNativePayloads {
                     buf.writeUtf(value.targetName, MAX_TEXT);
                     buf.writeVarInt(value.protocolVersion);
                 },
-                buf -> new NativeSession(
-                        buf.readBoolean(),
-                        buf.readUUID(),
-                        buf.readUtf(MAX_TEXT),
-                        buf.readVarInt()
-                )
+                buf -> new NativeSession(buf.readBoolean(), buf.readUUID(), buf.readUtf(MAX_TEXT), buf.readVarInt())
         );
 
         @Override
@@ -89,7 +74,7 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state_v2"));
+        public static final Type<NativeViewState> TYPE = new Type<>(id("observer_native_view_state_v3"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewState> CODEC = StreamCodec.of(
                 ObserverNativePayloads::writeViewState,
                 ObserverNativePayloads::readViewState
@@ -118,7 +103,7 @@ public final class ObserverNativePayloads {
             boolean crouching,
             boolean usingItem
     ) implements CustomPacketPayload {
-        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay_v2"));
+        public static final Type<NativeViewRelay> TYPE = new Type<>(id("observer_native_view_relay_v3"));
         public static final StreamCodec<FriendlyByteBuf, NativeViewRelay> CODEC = StreamCodec.of(
                 (buf, value) -> {
                     buf.writeUUID(value.targetId);
