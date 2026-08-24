@@ -9,6 +9,7 @@
     "ObserverNativeScreenClientCraftingPriorityMixin",
     "ObserverNativeScreenClientMerchantPriorityMixin",
     "ObserverNativeScreenClientAnvilPriorityMixin",
+    "ObserverNativeScreenClientEnchantingPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
