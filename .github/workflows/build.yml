@@ -52,6 +52,16 @@ jobs:
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
+      - name: Assert Observer production source is framebuffer-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='Screenshot\.takeScreenshot|FrameChunk|FrameRelay|DynamicTexture|ObserverFrameRules|observer_frame_chunk|observer_frame_relay|observer_capture_control'
+          if grep -R -n -E "$forbidden" src/main; then
+            echo 'Protocol-native Observer production source still contains framebuffer transport code.' >&2
+            exit 1
+          fi
+
       - name: Run server GameTests
         shell: bash
         run: |
@@ -166,7 +176,7 @@ jobs:
           observer_pid=$!
 
           complete=false
-          for _ in $(seq 1 240); do
+          for _ in $(seq 1 360); do
             if compgen -G "$results/failure-*.txt" >/dev/null; then
               echo 'Observer E2E reported a failure:' >&2
               cat "$results"/failure-*.txt >&2 || true
@@ -175,15 +185,32 @@ jobs:
 
             if [[ -f "$results/server-session-started.txt" \
                && -f "$results/target-world-ready.txt" \
-               && -f "$results/target-capture-enabled.txt" \
-               && -f "$results/observer-frame-ok.txt" \
-               && -f "$results/observer-relayed-frame-saved.txt" \
-               && -f "$results/observer-relayed-frame.png" \
-               && -f "$results/observer-screenshot-saved.txt" \
+               && -f "$results/target-native-state-enabled.txt" \
+               && -f "$results/target-native-no-frame.txt" \
+               && -f "$results/observer-native-state-ok.txt" \
+               && -f "$results/observer-native-camera-ok.txt" \
+               && -f "$results/observer-native-hud-ok.txt" \
+               && -f "$results/observer-native-world-settled.txt" \
+               && -f "$results/observer-native-world-saved.txt" \
+               && -f "$results/observer-native-world.png" \
+               && -f "$results/observer-native-hud.png" \
+               && -f "$results/observer-ready-for-container.txt" \
+               && -f "$results/target-native-container-opened.txt" \
+               && -f "$results/target-native-container-state-sent.txt" \
+               && -f "$results/observer-native-container-ok.txt" \
+               && -f "$results/observer-native-container-saved.txt" \
+               && -f "$results/observer-native-container.png" \
+               && -f "$results/target-native-container-closed.txt" \
+               && -f "$results/observer-ready-for-generic-screen.txt" \
+               && -f "$results/target-native-generic-opened.txt" \
+               && -f "$results/target-native-generic-no-frame.txt" \
+               && -f "$results/observer-native-generic-screen-ok.txt" \
+               && -f "$results/observer-native-generic-screen-saved.txt" \
+               && -f "$results/observer-native-generic-screen.png" \
+               && -f "$results/target-native-generic-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
-               && -f "$results/server-cleanup-ok.txt" \
-               && -f "$results/observer-two-client-e2e.png" ]]; then
+               && -f "$results/server-cleanup-ok.txt" ]]; then
               complete=true
               break
             fi
@@ -219,8 +246,8 @@ jobs:
           fi
 
           printf '%s\n' \
-            'Dedicated server + Target JVM + Observer JVM gameplay-frame E2E passed.' \
-            'Verified live gameplay framebuffer relay with no Target Screen open, Mirror render, Stop, CaptureControl(false), and server cleanup.'
+            'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
+            'Verified protocol-v3 world/HUD state, vanilla Target camera rendering, structured InventoryScreen reconstruction, metadata-only unsupported-screen handling, Stop, and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()

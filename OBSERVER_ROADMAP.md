@@ -1,50 +1,77 @@
 # Observer View Roadmap
 
-## Permanent architecture goal
+## Current architecture
 
-The current framebuffer relay is an **interim compatibility implementation only**. It exists so Observer View can become functional and testable end-to-end before the final protocol is designed.
+Observer View has completed the migration to **protocol-native observation**. Production code no longer transports full-screen images or framebuffer captures between the Target and Observer clients.
 
-The permanent target architecture is **protocol-native observation with no full-screen image/framebuffer streaming**.
+The current protocol is **Observer protocol v3**. Session authority remains on the dedicated server, while Target and Observer clients exchange only versioned structured state through server relay and reconstruct the observed experience locally.
 
-### Non-negotiable end state
+### Architecture invariants
 
-- Do **not** capture the target player's full framebuffer for transport.
-- Do **not** encode whole-screen screenshots or video frames for transport.
-- Do **not** treat PNG/JPEG/video/framebuffer relay as the final Observer protocol.
-- Transmit only structured game/UI state required to reconstruct the observed view on the Observer client.
-- Reconstruct and render the observed state locally on the Observer client using Minecraft-native rendering and protocol data.
+- Do **not** capture the Target player's full framebuffer for transport.
+- Do **not** encode or relay whole-screen PNG/JPEG/video frames.
+- Do **not** reintroduce `FrameChunk`, `FrameRelay`, `CaptureControl`, `DynamicTexture` frame installation, or screenshot transport as a compatibility fallback.
+- Require compatible protocol-native client capabilities before `/observeui` starts a session.
+- Render world state through Minecraft-native spectator/camera behavior and reconstruct HUD/UI state from structured protocol data.
+- Keep session authorization, lifecycle, cleanup and capability negotiation independent from any renderer-specific representation.
 
-### Candidate protocol data
+CI enforces the no-frame invariant by rejecting production source that contains the retired framebuffer transport surfaces.
 
-The final protocol may carry structured data such as:
+## Completed migration
 
-- player transform, camera transform, dimension and view state;
-- nearby entities and relevant entity state;
-- chunk/block state and incremental block updates needed by the observer renderer;
-- held item, equipment, health, hunger, effects and HUD state;
-- active screen/container type and synchronized menu state;
-- cursor/selection/interaction state when required;
-- discrete game events and deltas instead of repeated full snapshots wherever practical.
+### Phase 1 — structured state side channel — complete
 
-The exact schema should be versioned and capability-negotiated rather than coupled directly to internal client classes.
+- Introduced versioned Observer payloads and capability negotiation.
+- Relayed Target camera/HUD state as structured values.
+- Bound structured state to the server-authoritative `/observeui` lifecycle.
 
-## Current milestone
+### Phase 2 — native gameplay rendering — complete
 
-For now, prioritize a reliable working Observer View using the existing framebuffer relay:
+- Uses the server-authoritative spectator camera relationship for world/chunk/entity rendering.
+- Removed gameplay PNG transport.
+- Reconstructs Target HUD state locally from protocol data.
 
-1. Dedicated Server + Target Client JVM + Observer Client JVM must remain reproducibly green.
-2. Normal gameplay framebuffer observation must work with no GUI open.
-3. Observer Mirror rendering, Stop, CaptureControl(false), disconnect/reconnect, and cleanup must remain correct.
-4. CI artifacts should continue proving that actual Target gameplay reaches the Observer JVM.
+### Phase 3 — structured GUI/container replication — complete for the supported surface
 
-Do not block near-term usability on the protocol-native rewrite.
+- Added versioned structured screen and container relay.
+- Reconstructs supported container/screen state locally on the Observer client.
+- Unsupported screen classes are represented by a local metadata placeholder rather than a screenshot fallback.
+- Screen lifecycle is session-bound and cleaned up on close/stop/disconnect.
 
-## Migration rule
+### Phase 4 — framebuffer transport removal — complete
 
-New Observer features should avoid making the framebuffer relay harder to remove. Where practical, keep session management, authorization, lifecycle, capability negotiation, and transport framing independent from the image-specific payloads.
+- Removed production framebuffer capture and screenshot encoding.
+- Removed frame chunking/reassembly and frame relay payloads.
+- Removed frame textures and `DynamicTexture` installation.
+- Removed capture-control/frame-rate state and legacy frame counters.
+- Removed the old framebuffer-only E2E mixin and PNG evidence path.
+- Protocol v3 does not fall back to image transport when an older/incompatible client connects; the Observer session is rejected instead.
 
-When the structured protocol reaches feature parity, remove framebuffer capture/PNG encoding/frame relay rather than retaining it as the normal transport path. A temporary diagnostic fallback may exist only if explicitly isolated and disabled by default.
+## Current validation contract
+
+The Observer implementation is validated through:
+
+1. source-level CI that fails if retired framebuffer transport identifiers return to `src/main`;
+2. Server GameTests for authoritative session/protocol behavior;
+3. Client GameTests for v3 lifecycle, local UI reconstruction and removed frame surfaces;
+4. production-runtime Client GameTests using the distribution namespace;
+5. a real three-JVM E2E with Dedicated Server + Target Client + Observer Client.
+
+The three-JVM path exercises protocol-native world/HUD observation, supported container state, unsupported-screen metadata handling, Stop, and server/client cleanup without receiving a full-screen image frame from the Target.
+
+## Remaining work
+
+Framebuffer removal is no longer a migration task. Future Observer work should extend the structured protocol instead of adding image fallback. Priorities include:
+
+- broaden native reconstruction coverage for additional vanilla and modded screen families;
+- version screen-family capabilities so unsupported UI can be identified before a session reaches that screen;
+- add more structured player/equipment/effect/event state where visual fidelity requires it;
+- prefer deltas for high-frequency state where practical;
+- harden reconnect, dimension-change and unusual screen-transition cases;
+- keep bandwidth, allocation and packet-size regression coverage in CI.
 
 ## Success criterion
 
-Observer View is considered architecturally complete only when an Observer can reconstruct the required player/world/UI experience **without receiving full-screen image frames from the Target client**.
+The original architectural success criterion has been reached for the current supported Observer surface: an Observer can reconstruct the tested world/HUD/container/screen experience **without receiving full-screen image frames from the Target client**.
+
+Feature-completeness for every possible vanilla/modded GUI is a separate ongoing compatibility goal; unsupported screens must continue to degrade to structured metadata rather than framebuffer transport.

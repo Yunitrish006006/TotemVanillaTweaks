@@ -17,12 +17,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Server-authoritative observer-to-target relationships and UI frame relay. */
+/** Server-authoritative observer-to-target relationships for protocol-native Observer View. */
 public final class ObserverSessionManager {
-    private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
-    private static final long MIN_NEW_FRAME_INTERVAL_NANOS = 250_000_000L;
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
-    private static final Map<UUID, FrameGate> FRAME_GATE_BY_TARGET = new HashMap<>();
 
     private ObserverSessionManager() {
     }
@@ -54,56 +51,36 @@ public final class ObserverSessionManager {
             source.sendFailure(Component.literal("You cannot observe your own UI."));
             return 0;
         }
-        if (!ServerPlayNetworking.canSend(observer, ObserverPayloads.Session.TYPE)) {
-            source.sendFailure(Component.literal("The observer client does not support Totem Observer View."));
-            return 0;
-        }
-        if (!ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
-            source.sendFailure(Component.literal("The target client does not support Totem Observer View."));
+        if (!ObserverNativeSessionManager.supports(observer, target)) {
+            source.sendFailure(Component.literal(
+                    "Observer View now requires protocol-native TotemVanillaTweaks clients on both players; framebuffer fallback was removed."
+            ));
             return 0;
         }
 
         stop(observer, false);
         TARGET_BY_OBSERVER.put(observer.getUUID(), target.getUUID());
         observer.setCamera(target);
-        ServerPlayNetworking.send(observer,
-                new ObserverPayloads.Session(true, target.getUUID(), target.getGameProfile().name()));
-        if (observerCount(target.getUUID()) == 1) {
-            FRAME_GATE_BY_TARGET.remove(target.getUUID());
-            ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(
-                    true,
-                    ObserverFrameRules.MAX_WIDTH,
-                    ObserverFrameRules.MAX_HEIGHT,
-                    ObserverFrameRules.TARGET_FPS
-            ));
+        if (!ObserverNativeSessionManager.start(observer, target)) {
+            TARGET_BY_OBSERVER.remove(observer.getUUID());
+            observer.setCamera(null);
+            source.sendFailure(Component.literal("Failed to negotiate protocol-native Observer View."));
+            return 0;
         }
-        source.sendSuccess(() -> Component.literal("Observing UI for " + target.getGameProfile().name()), false);
+
+        source.sendSuccess(() -> Component.literal(
+                "Observing natively for " + target.getGameProfile().name()
+        ), false);
         return 1;
     }
 
     public static int stop(ServerPlayer observer, boolean resetCamera) {
         UUID targetId = TARGET_BY_OBSERVER.remove(observer.getUUID());
-        if (targetId == null) {
-            if (resetCamera) {
-                observer.setCamera(null);
-            }
-            sendInactive(observer);
-            return 0;
-        }
-
+        boolean nativeSession = ObserverNativeSessionManager.stop(observer);
         if (resetCamera) {
             observer.setCamera(null);
         }
-        sendInactive(observer);
-        if (observerCount(targetId) == 0) {
-            FRAME_GATE_BY_TARGET.remove(targetId);
-            MinecraftServer server = observer.level().getServer();
-            ServerPlayer target = server.getPlayerList().getPlayer(targetId);
-            if (target != null && ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
-                ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(false, 0, 0, 0));
-            }
-        }
-        return 1;
+        return targetId != null || nativeSession ? 1 : 0;
     }
 
     public static void acceptScreenState(ServerPlayer target, ObserverPayloads.ScreenState payload) {
@@ -113,43 +90,8 @@ public final class ObserverSessionManager {
                 )));
     }
 
-    public static void acceptFrameChunk(ServerPlayer target, ObserverPayloads.FrameChunk payload) {
-        if (!ObserverFrameRules.validChunk(
-                payload.chunkIndex(), payload.chunkCount(), payload.frameWidth(), payload.frameHeight(),
-                payload.sourceWidth(), payload.sourceHeight(), payload.data().length)
-                || observerCount(target.getUUID()) == 0
-                || !acceptFrameChunk(target.getUUID(), payload)) {
-            return;
-        }
-        forEachObserver(target.level().getServer(), target.getUUID(), observer ->
-                ServerPlayNetworking.send(observer, new ObserverPayloads.FrameRelay(
-                        target.getUUID(), payload.frameId(), payload.chunkIndex(), payload.chunkCount(),
-                        payload.frameWidth(), payload.frameHeight(), payload.sourceWidth(), payload.sourceHeight(),
-                        payload.mouseX(), payload.mouseY(), payload.data()
-                )));
-    }
-
     public static void acceptStop(ServerPlayer observer) {
         stop(observer, true);
-    }
-
-    private static boolean acceptFrameChunk(UUID targetId, ObserverPayloads.FrameChunk payload) {
-        long now = System.nanoTime();
-        FrameGate gate = FRAME_GATE_BY_TARGET.get(targetId);
-        if (gate == null) {
-            gate = new FrameGate(payload, now);
-            FRAME_GATE_BY_TARGET.put(targetId, gate);
-            return gate.accept(payload);
-        }
-        if (payload.frameId() == gate.frameId) {
-            return gate.accept(payload);
-        }
-        if (payload.frameId() < gate.frameId || now - gate.acceptedAtNanos < MIN_NEW_FRAME_INTERVAL_NANOS) {
-            return false;
-        }
-        gate = new FrameGate(payload, now);
-        FRAME_GATE_BY_TARGET.put(targetId, gate);
-        return gate.accept(payload);
     }
 
     private static void cleanup(MinecraftServer server) {
@@ -158,89 +100,29 @@ public final class ObserverSessionManager {
             UUID targetId = TARGET_BY_OBSERVER.get(observerId);
             ServerPlayer target = targetId == null ? null : server.getPlayerList().getPlayer(targetId);
             if (observer == null) {
-                removeOfflineObserver(server, observerId, targetId);
+                TARGET_BY_OBSERVER.remove(observerId);
+                ObserverNativeSessionManager.removeOfflineObserver(server, observerId);
             } else if (!observer.isSpectator() || target == null) {
                 stop(observer, true);
             }
         }
     }
 
-    private static void removeOfflineObserver(MinecraftServer server, UUID observerId, UUID targetId) {
-        TARGET_BY_OBSERVER.remove(observerId);
-        if (targetId != null && observerCount(targetId) == 0) {
-            FRAME_GATE_BY_TARGET.remove(targetId);
-            ServerPlayer target = server.getPlayerList().getPlayer(targetId);
-            if (target != null && ServerPlayNetworking.canSend(target, ObserverPayloads.CaptureControl.TYPE)) {
-                ServerPlayNetworking.send(target, new ObserverPayloads.CaptureControl(false, 0, 0, 0));
-            }
-        }
-    }
-
-    private static int observerCount(UUID targetId) {
-        int count = 0;
-        for (UUID value : TARGET_BY_OBSERVER.values()) {
-            if (targetId.equals(value)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static void forEachObserver(MinecraftServer server, UUID targetId, java.util.function.Consumer<ServerPlayer> action) {
+    private static void forEachObserver(
+            MinecraftServer server,
+            UUID targetId,
+            java.util.function.Consumer<ServerPlayer> action
+    ) {
         for (Map.Entry<UUID, UUID> entry : TARGET_BY_OBSERVER.entrySet()) {
             if (!targetId.equals(entry.getValue())) {
                 continue;
             }
             ServerPlayer observer = server.getPlayerList().getPlayer(entry.getKey());
-            if (observer != null && observer.isSpectator()
-                    && ServerPlayNetworking.canSend(observer, ObserverPayloads.FrameRelay.TYPE)) {
+            if (observer != null
+                    && observer.isSpectator()
+                    && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE)) {
                 action.accept(observer);
             }
-        }
-    }
-
-    private static void sendInactive(ServerPlayer observer) {
-        if (ServerPlayNetworking.canSend(observer, ObserverPayloads.Session.TYPE)) {
-            ServerPlayNetworking.send(observer, new ObserverPayloads.Session(false, EMPTY_TARGET, ""));
-        }
-    }
-
-    private static final class FrameGate {
-        private final long frameId;
-        private final long acceptedAtNanos;
-        private final int chunkCount;
-        private final int frameWidth;
-        private final int frameHeight;
-        private final int sourceWidth;
-        private final int sourceHeight;
-        private final boolean[] seenChunks;
-
-        private FrameGate(ObserverPayloads.FrameChunk payload, long acceptedAtNanos) {
-            this.frameId = payload.frameId();
-            this.acceptedAtNanos = acceptedAtNanos;
-            this.chunkCount = payload.chunkCount();
-            this.frameWidth = payload.frameWidth();
-            this.frameHeight = payload.frameHeight();
-            this.sourceWidth = payload.sourceWidth();
-            this.sourceHeight = payload.sourceHeight();
-            this.seenChunks = new boolean[chunkCount];
-        }
-
-        private boolean accept(ObserverPayloads.FrameChunk payload) {
-            if (payload.frameId() != frameId
-                    || payload.chunkCount() != chunkCount
-                    || payload.frameWidth() != frameWidth
-                    || payload.frameHeight() != frameHeight
-                    || payload.sourceWidth() != sourceWidth
-                    || payload.sourceHeight() != sourceHeight) {
-                return false;
-            }
-            int index = payload.chunkIndex();
-            if (seenChunks[index]) {
-                return false;
-            }
-            seenChunks[index] = true;
-            return true;
         }
     }
 }

@@ -52,8 +52,6 @@ loom {
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
             programArg '--username'
             programArg 'Target'
-            programArg '--quickPlayMultiplayer'
-            programArg '127.0.0.1:25570'
         }
         e2eObserver {
             client()
@@ -65,8 +63,6 @@ loom {
             vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
             programArg '--username'
             programArg 'Observer'
-            programArg '--quickPlayMultiplayer'
-            programArg '127.0.0.1:25570'
         }
     }
 }
@@ -216,6 +212,21 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
 tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
     dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
     classpath(sourceSets.e2e.output)
+}
+
+// Keep E2E clients deterministic on fresh CI machines: suppress Minecraft's
+// first-launch accessibility screen and let the test driver connect only after
+// resources have had time to finish loading.
+tasks.matching { task -> task.name in ["runE2eTarget", "runE2eObserver"] }.configureEach {
+    doFirst {
+        String runDirName = name == 'runE2eTarget' ? 'target' : 'observer'
+        File dir = file("build/e2e/${runDirName}")
+        dir.mkdirs()
+        new File(dir, 'options.txt').text = '''onboardAccessibility:false
+skipMultiplayerWarning:true
+tutorialStep:none
+'''
+    }
 }
 
 tasks.named('runE2eServer').configure {
