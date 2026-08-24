@@ -57,6 +57,14 @@ public final class VanillaTweaksPayloadRegistration {
                 ObserverNativeScreenPayloads.FurnaceRelay.TYPE,
                 ObserverNativeScreenPayloads.FurnaceRelay.CODEC
         );
+        PayloadTypeRegistry.serverboundPlay().register(
+                ObserverBookScreenPayloads.BookState.TYPE,
+                ObserverBookScreenPayloads.BookState.CODEC
+        );
+        PayloadTypeRegistry.clientboundPlay().register(
+                ObserverBookScreenPayloads.BookRelay.TYPE,
+                ObserverBookScreenPayloads.BookRelay.CODEC
+        );
 
         ServerPlayNetworking.registerGlobalReceiver(
                 ObserverPayloads.ScreenState.TYPE,
@@ -82,6 +90,11 @@ public final class VanillaTweaksPayloadRegistration {
                 ObserverNativeScreenPayloads.FurnaceState.TYPE,
                 (payload, context) -> context.server().execute(() ->
                         ObserverNativeSessionManager.acceptFurnaceState(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ObserverBookScreenPayloads.BookState.TYPE,
+                (payload, context) -> context.server().execute(() ->
+                        ObserverNativeSessionManager.acceptBookState(context.player(), payload))
         );
     }
 }
