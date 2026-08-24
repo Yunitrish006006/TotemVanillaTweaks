@@ -8,7 +8,7 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  contents: write
 
 jobs:
   dispatch:
@@ -18,10 +18,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Keep this helper isolated; it exists only to dispatch the release workflow
-          # from the default branch, matching the path used by the last successful publish.
+          set -euo pipefail
           gh workflow run publish-modrinth.yml \
             --ref main \
             -f release_ref=d5bef305ca2961d691156c9023c5f4237d256546 \
             -f dry_run=true \
             -f release_type=beta
+
+          marker='.github/staging/modrinth-dispatch-0.1.15.json'
+          body="$(jq -n --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" '{helper_run:$run,helper_sha:$sha,dispatch:"submitted",dry_run:true,release_type:"beta"}')"
+          encoded="$(printf '%s\n' "$body" | base64 -w0)"
+          api="repos/${GITHUB_REPOSITORY}/contents/${marker}"
+          old="$(gh api "$api" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$old" ]]; then
+            gh api --method PUT "$api" -f message='ci: record Modrinth 0.1.15 dispatch' -f content="$encoded" -f branch=main -f sha="$old" >/dev/null
+          else
+            gh api --method PUT "$api" -f message='ci: record Modrinth 0.1.15 dispatch' -f content="$encoded" -f branch=main >/dev/null
+          fi
