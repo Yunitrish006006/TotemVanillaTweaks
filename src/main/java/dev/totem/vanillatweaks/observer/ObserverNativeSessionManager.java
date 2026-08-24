@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.observer;
 
+import dev.totem.vanillatweaks.network.ObserverAnvilScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
@@ -26,6 +27,7 @@ public final class ObserverNativeSessionManager {
     private static final Map<UUID, Long> LAST_BOOK_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_CRAFTING_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_MERCHANT_SEQUENCE_BY_TARGET = new HashMap<>();
+    private static final Map<UUID, Long> LAST_ANVIL_SEQUENCE_BY_TARGET = new HashMap<>();
 
     private ObserverNativeSessionManager() {}
 
@@ -111,8 +113,7 @@ public final class ObserverNativeSessionManager {
         relayToNativeObservers(target, ObserverBookScreenPayloads.BookRelay.TYPE,
                 new ObserverBookScreenPayloads.BookRelay(target.getUUID(), payload.protocolVersion(), payload.sequence(),
                         payload.open(), payload.familyId(), payload.variant(), payload.screenClass(), payload.title(),
-                        payload.pageIndex(), payload.pageCount(), payload.pageText(), payload.bookTitle(), payload.author()),
-                capability);
+                        payload.pageIndex(), payload.pageCount(), payload.pageText(), payload.bookTitle(), payload.author()), capability);
     }
 
     public static void acceptCraftingState(ServerPlayer target, ObserverCraftingScreenPayloads.CraftingState payload) {
@@ -137,6 +138,17 @@ public final class ObserverNativeSessionManager {
                         payload.open(), payload.familyId(), payload.variant(), payload.screenClass(), payload.title(),
                         payload.selectedOffer(), payload.traderLevel(), payload.traderXp(), payload.futureTraderXp(),
                         payload.showProgressBar(), payload.canRestock(), payload.offers()), capability);
+    }
+
+    public static void acceptAnvilState(ServerPlayer target, ObserverAnvilScreenPayloads.AnvilState payload) {
+        long capability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validAnvil(payload) || capability != ObserverNativeScreenPayloads.CAPABILITY_ANVIL
+                || !targetSupports(target, capability) || nativeObserverCount(target.getUUID()) == 0
+                || !acceptSequence(LAST_ANVIL_SEQUENCE_BY_TARGET, target.getUUID(), payload.sequence())) return;
+        relayToNativeObservers(target, ObserverAnvilScreenPayloads.AnvilRelay.TYPE,
+                new ObserverAnvilScreenPayloads.AnvilRelay(target.getUUID(), payload.protocolVersion(), payload.sequence(),
+                        payload.open(), payload.familyId(), payload.screenClass(), payload.title(), payload.itemName(),
+                        payload.levelCost(), payload.tooExpensive(), payload.resultAvailable(), payload.slots()), capability);
     }
 
     private static boolean targetSupports(ServerPlayer target, long capability) {
@@ -183,8 +195,7 @@ public final class ObserverNativeSessionManager {
     private static boolean validContainer(ObserverNativeScreenPayloads.ContainerState p) {
         return p.protocolVersion() == ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION
                 && ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS.equals(p.familyId()) && p.sequence() >= 0L
-                && validSlots(p.slots()) && validScreenGeometry(p.open(), p.contentWidth(), p.contentHeight(),
-                p.mouseX(), p.mouseY(), p.slots());
+                && validSlots(p.slots()) && validScreenGeometry(p.open(), p.contentWidth(), p.contentHeight(), p.mouseX(), p.mouseY(), p.slots());
     }
 
     private static boolean validFurnace(ObserverNativeScreenPayloads.FurnaceState p) {
@@ -210,13 +221,10 @@ public final class ObserverNativeSessionManager {
 
     private static boolean validCrafting(ObserverCraftingScreenPayloads.CraftingState p) {
         if (p.protocolVersion() != ObserverCraftingScreenPayloads.PROTOCOL_VERSION
-                || !ObserverNativeScreenPayloads.FAMILY_CRAFTING.equals(p.familyId()) || p.sequence() < 0L
-                || !validSlots(p.slots())) return false;
+                || !ObserverNativeScreenPayloads.FAMILY_CRAFTING.equals(p.familyId()) || p.sequence() < 0L || !validSlots(p.slots())) return false;
         if (!p.open()) return p.slots().isEmpty() && p.gridWidth() == 0 && p.gridHeight() == 0;
-        boolean player = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(p.variant())
-                && p.gridWidth() == 2 && p.gridHeight() == 2;
-        boolean table = ObserverCraftingScreenPayloads.VARIANT_TABLE_3X3.equals(p.variant())
-                && p.gridWidth() == 3 && p.gridHeight() == 3;
+        boolean player = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(p.variant()) && p.gridWidth() == 2 && p.gridHeight() == 2;
+        boolean table = ObserverCraftingScreenPayloads.VARIANT_TABLE_3X3.equals(p.variant()) && p.gridWidth() == 3 && p.gridHeight() == 3;
         return (player || table) && p.resultSlotIndex() >= 0 && p.resultSlotIndex() < ObserverNativeScreenPayloads.MAX_SLOTS
                 && validScreenGeometry(true, p.contentWidth(), p.contentHeight(), p.mouseX(), p.mouseY(), p.slots());
     }
@@ -224,21 +232,26 @@ public final class ObserverNativeSessionManager {
     private static boolean validMerchant(ObserverMerchantScreenPayloads.MerchantState p) {
         if (p.protocolVersion() != ObserverMerchantScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_MERCHANT.equals(p.familyId()) || p.sequence() < 0L) return false;
-        if (!p.open()) {
-            return p.offers().isEmpty() && p.traderLevel() == 0 && p.traderXp() == 0 && p.futureTraderXp() == 0;
-        }
+        if (!p.open()) return p.offers().isEmpty() && p.traderLevel() == 0 && p.traderXp() == 0 && p.futureTraderXp() == 0;
         if (!ObserverMerchantScreenPayloads.VARIANT_VANILLA.equals(p.variant())
                 || p.offers().size() > ObserverMerchantScreenPayloads.MAX_OFFERS
-                || p.traderLevel() < 0 || p.traderLevel() > 5
-                || p.traderXp() < 0 || p.futureTraderXp() < 0
+                || p.traderLevel() < 0 || p.traderLevel() > 5 || p.traderXp() < 0 || p.futureTraderXp() < 0
                 || p.selectedOffer() < 0 || (!p.offers().isEmpty() && p.selectedOffer() >= p.offers().size())) return false;
         for (ObserverMerchantScreenPayloads.OfferState offer : p.offers()) {
             if (offer.index() < 0 || offer.index() >= ObserverMerchantScreenPayloads.MAX_OFFERS
-                    || offer.uses() < 0 || offer.maxUses() < 0 || offer.uses() > offer.maxUses()
-                    || offer.xp() < 0 || !validMerchantItem(offer.costA())
-                    || !validMerchantItem(offer.costB()) || !validMerchantItem(offer.result())) return false;
+                    || offer.uses() < 0 || offer.maxUses() < 0 || offer.uses() > offer.maxUses() || offer.xp() < 0
+                    || !validMerchantItem(offer.costA()) || !validMerchantItem(offer.costB()) || !validMerchantItem(offer.result())) return false;
         }
         return true;
+    }
+
+    private static boolean validAnvil(ObserverAnvilScreenPayloads.AnvilState p) {
+        if (p.protocolVersion() != ObserverAnvilScreenPayloads.PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_ANVIL.equals(p.familyId()) || p.sequence() < 0L
+                || p.levelCost() < 0 || p.levelCost() > 32767 || !validSlots(p.slots())) return false;
+        if (!p.open()) return p.slots().isEmpty() && p.levelCost() == 0 && !p.tooExpensive() && !p.resultAvailable();
+        if (p.slots().size() < 3 || p.itemName().length() > 50) return false;
+        return !p.tooExpensive() || p.resultAvailable();
     }
 
     private static boolean validMerchantItem(ObserverMerchantScreenPayloads.ItemState item) {
@@ -264,16 +277,12 @@ public final class ObserverNativeSessionManager {
 
     private static long negotiatedScreenCapabilities(ServerPlayer observer) {
         long capabilities = 0L;
-        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE))
-            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
-        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.FurnaceRelay.TYPE))
-            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
-        if (ServerPlayNetworking.canSend(observer, ObserverBookScreenPayloads.BookRelay.TYPE))
-            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_BOOK;
-        if (ServerPlayNetworking.canSend(observer, ObserverCraftingScreenPayloads.CraftingRelay.TYPE))
-            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CRAFTING;
-        if (ServerPlayNetworking.canSend(observer, ObserverMerchantScreenPayloads.MerchantRelay.TYPE))
-            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
+        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
+        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.FurnaceRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
+        if (ServerPlayNetworking.canSend(observer, ObserverBookScreenPayloads.BookRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_BOOK;
+        if (ServerPlayNetworking.canSend(observer, ObserverCraftingScreenPayloads.CraftingRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CRAFTING;
+        if (ServerPlayNetworking.canSend(observer, ObserverMerchantScreenPayloads.MerchantRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
+        if (ServerPlayNetworking.canSend(observer, ObserverAnvilScreenPayloads.AnvilRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_ANVIL;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
 
@@ -301,8 +310,7 @@ public final class ObserverNativeSessionManager {
         long capabilities = enabled ? screenCapabilitiesForTarget(targetId) : 0L;
         if (!enabled) clearTargetSequences(targetId);
         ServerPlayNetworking.send(target, new ObserverNativePayloads.NativeControl(enabled,
-                ObserverNativePayloads.PROTOCOL_VERSION, enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0,
-                capabilities));
+                ObserverNativePayloads.PROTOCOL_VERSION, enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0, capabilities));
     }
 
     private static void clearTargetSequences(UUID targetId) {
@@ -311,5 +319,6 @@ public final class ObserverNativeSessionManager {
         LAST_BOOK_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_CRAFTING_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_MERCHANT_SEQUENCE_BY_TARGET.remove(targetId);
+        LAST_ANVIL_SEQUENCE_BY_TARGET.remove(targetId);
     }
 }
