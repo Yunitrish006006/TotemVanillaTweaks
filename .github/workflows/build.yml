@@ -52,6 +52,16 @@ jobs:
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
+      - name: Assert Observer production source is framebuffer-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='Screenshot\.takeScreenshot|FrameChunk|FrameRelay|DynamicTexture|ObserverFrameRules|observer_frame_chunk|observer_frame_relay|observer_capture_control'
+          if grep -R -n -E "$forbidden" src/main; then
+            echo 'Protocol-native Observer production source still contains framebuffer transport code.' >&2
+            exit 1
+          fi
+
       - name: Run server GameTests
         shell: bash
         run: |
@@ -175,7 +185,6 @@ jobs:
 
             if [[ -f "$results/server-session-started.txt" \
                && -f "$results/target-world-ready.txt" \
-               && -f "$results/target-capture-enabled.txt" \
                && -f "$results/target-native-state-enabled.txt" \
                && -f "$results/target-native-no-frame.txt" \
                && -f "$results/observer-native-state-ok.txt" \
@@ -237,8 +246,8 @@ jobs:
           fi
 
           printf '%s\n' \
-            'Dedicated server + Target JVM + Observer JVM protocol-native Observer E2E passed.' \
-            'Verified native world/HUD state, local HUD extraction, structured InventoryScreen reconstruction, metadata-only unsupported-screen fallback, zero PNG/framebuffer frames across the full native session, Stop, CaptureControl(false), and server cleanup.'
+            'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
+            'Verified protocol-v3 world/HUD state, vanilla Target camera rendering, structured InventoryScreen reconstruction, metadata-only unsupported-screen handling, Stop, and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
