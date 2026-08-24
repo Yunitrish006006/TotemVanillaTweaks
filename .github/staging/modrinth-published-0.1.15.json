@@ -1,0 +1,14 @@
+{
+  "version": "0.1.15",
+  "release_ref": "d5bef305ca2961d691156c9023c5f4237d256546",
+  "release_type": "beta",
+  "modrinth_project_id": "mEcpkZT2",
+  "modrinth_version_id": "GnIKknfN",
+  "sha512": "0e9cf2f344ae286811ea06d0222c079a99d2586dc62d7b63267e781db8f9c38fab9a117a67f95e9cc48850f9845c9cc293cf3f34450f9dc52e9d9863f43d4174",
+  "verified_by_repo": "Yunitrish006006/TotemCore",
+  "verified_by_run": "32704722400",
+  "required_dependencies": {
+    "fabric_api": "P7dR8mSH",
+    "totem_core": "ZggYV6cS"
+  }
+}
