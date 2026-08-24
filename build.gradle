@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.17.12'
+    id 'net.fabricmc.fabric-loom' version '1.17.12'
     id 'maven-publish'
 }
 
@@ -83,104 +83,39 @@ fabricApi {
 
 repositories {
     mavenCentral()
-    maven { url = 'https://repo.codemc.io/repository/relativitymc/' }
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    compileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    runtimeOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation files(totemCoreJar)
+
+    // Minecraft 26.1+ ships unobfuscated. Loom 1.17 uses the game's official
+    // namespace directly; adding legacy Yarn/intermediary mappings creates mixed
+    // method descriptors in production (for example Difficulty vs class_1267).
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation files(totemCoreJar)
+
+    // Loom production run tasks use the remapped/distribution artifacts rather
+    // than the named development classpath. Keep the real runtime dependencies
+    // explicit so CI exercises the same namespace users receive.
+    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    productionRuntimeMods files(totemCoreJar)
+
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
 
-tasks.register("normalizeFabricApiTweakersForNamedDevRuntime") {
-    group = "fabric"
-    description = "Normalizes Fabric API tweaker namespaces for the named development runtime."
-
-    doLast {
-        def jarFiles = new LinkedHashSet<File>()
-        jarFiles.addAll(configurations.runtimeClasspath.resolve().findAll { file ->
-            file.name.endsWith(".jar") && file.absolutePath.contains("${File.separator}net.fabricmc.fabric-api${File.separator}")
-        })
-
-        [gradle.gradleUserHomeDir, new File(System.getProperty("user.home"), ".gradle")].each { File cacheRoot ->
-            File fabricApiCache = new File(cacheRoot, "caches/modules-2/files-2.1/net.fabricmc.fabric-api")
-            if (fabricApiCache.isDirectory()) {
-                jarFiles.addAll(fileTree(dir: fabricApiCache, include: "**/*.jar").files.findAll { file ->
-                    !file.name.endsWith("-sources.jar")
-                })
-            }
-        }
-
-        int patchedFiles = 0
-        int patchedEntries = 0
-
-        jarFiles.each { File jarFile ->
-            File tempFile = new File(buildDir, "tmp/tweaker-normalized/${jarFile.name}.tmp")
-            tempFile.parentFile.mkdirs()
-            boolean fileChanged = false
-
-            def zipFile = new java.util.zip.ZipFile(jarFile)
-            def zipOut = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(tempFile)))
-
-            try {
-                def entries = zipFile.entries()
-                while (entries.hasMoreElements()) {
-                    def entry = entries.nextElement()
-                    def outEntry = new java.util.zip.ZipEntry(entry.name)
-                    zipOut.putNextEntry(outEntry)
-
-                    byte[] bytes = entry.isDirectory() ? new byte[0] : zipFile.getInputStream(entry).bytes
-                    if (!entry.isDirectory() && (entry.name.endsWith(".classtweaker") || entry.name.endsWith(".accesswidener"))) {
-                        String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-                        String normalized = text
-                                .replaceFirst(/(?m)^(classTweaker\s+v\d+\s+)official(\s*)$/, '$1named$2')
-                                .replaceFirst(/(?m)^(accessWidener\s+v\d+\s+)official(\s*)$/, '$1named$2')
-
-                        if (normalized != text) {
-                            bytes = normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-                            fileChanged = true
-                            patchedEntries++
-                        }
-                    }
-
-                    zipOut.write(bytes)
-                    zipOut.closeEntry()
-                }
-            } finally {
-                zipOut.close()
-                zipFile.close()
-            }
-
-            if (fileChanged) {
-                java.nio.file.Files.move(
-                        tempFile.toPath(),
-                        jarFile.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                )
-                patchedFiles++
-            } else {
-                tempFile.delete()
-            }
-        }
-
-        logger.lifecycle("Normalized ${patchedEntries} Fabric API tweaker entries in ${patchedFiles} jars for named dev runtime.")
-    }
-}
-
-tasks.matching { task ->
-    task.name in [
-            "runClient", "runServer", "runDatagen", "runGameTest", "runClientGametest",
-            "runE2eServer", "runE2eTarget", "runE2eObserver"
-    ]
-}.configureEach {
-    dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
+// Production-namespace client GameTests are intentionally separate from the
+// development runClientGametest task. This gate catches ABI/remapping errors that
+// compile and named-development tests cannot detect.
+tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    jvmArgs.add('-Dfabric.client.gametest')
+    // Fabric documents a CI-only synchronizer race; disabling it keeps this gate
+    // focused on mod/runtime linkage rather than the test harness transport.
+    jvmArgs.add('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    useXVFB = true
 }
 
 // A Loom run has exactly one primary SourceSet. The E2E runs use main so the
