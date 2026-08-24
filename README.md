@@ -29,10 +29,10 @@ Client 與 Server 都放入：
 | 必要 Totem 模組 | `totem-core >=0.7.0 <0.8.0` |
 
 Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
-提供整理按鍵、目標選擇與 Observer capture/render。使用 DeadRecall 整合 JAR
-時不要再安裝獨立 TotemVanillaTweaks。
+提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。
+使用 DeadRecall 整合 JAR 時不要再安裝獨立 TotemVanillaTweaks。
 
-## Spectator Observer View（0.1.15+ Beta）
+## Spectator Observer View（protocol v3 開發版）
 
 管理員可在 Spectator 模式使用：
 
@@ -41,17 +41,21 @@ Server 負責規則、整理 transaction 與 Observer session authority；Client
 /observeui stop
 ```
 
-Observer View 目前可把 Target Client 的即時 Minecraft framebuffer 經由
-Dedicated Server relay 到 Observer Client，包含正常第一人稱世界、HUD 與
-開啟中的 GUI。Server 端控制 session、權限、Target capture 啟停與 cleanup；
-Observer 關閉 Mirror 後會送出 Stop，Target 會收到 `CaptureControl(false)`。
+Observer View 現在使用 **protocol-native v3**。Dedicated Server 負責 session、權限、
+Target／Observer capability 驗證與 cleanup；Target Client 只傳送版本化的結構化
+玩家、HUD、container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI
+重建觀察畫面。
 
-目前 framebuffer relay 是 **過渡實作**，不是長期架構。永久目標是完全停止
-傳送整張截圖／framebuffer，只透過版本化協定傳送結構化世界、玩家、HUD、
-容器／UI 與事件狀態，再由 Observer Client 本地重建畫面。詳細方向見
-[`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
+production 路徑已完全移除整張 framebuffer／PNG 傳輸，不再存在 `FrameChunk`、
+`FrameRelay`、`CaptureControl`、frame texture 或 `DynamicTexture` 安裝 fallback。
+如果 Target 或 Observer Client 不支援目前的 protocol-native capability，`/observeui`
+會拒絕建立 session，而不是退回截圖傳輸。
 
-Observer 已由 CI 驗證真正的三 JVM 路徑：
+目前支援的觀察面包含正常世界／HUD、已實作的 container 與 screen family；對尚未
+支援重建的 Screen，Observer 只顯示本地 metadata placeholder，不會取得 Target 的
+畫面像素。完整架構與剩餘相容性工作見 [`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
+
+Observer 由 CI 驗證真正的三 JVM 路徑：
 
 ```text
 Dedicated Server JVM
@@ -61,9 +65,9 @@ Target Minecraft Client JVM
 Observer Minecraft Client JVM
 ```
 
-測試會要求 Target 在沒有開 GUI 的正常遊戲世界中持續送出 framebuffer，並驗證
-Observer 實際收到、重組與顯示 relayed frame，最後完成 Stop、capture disable
-與 server cleanup。
+三 JVM E2E 會驗證 protocol-native world/HUD、container、unsupported-screen metadata、
+Stop 與 server/client cleanup；另外有 source-level gate，若 `src/main` 再出現舊的
+framebuffer transport surface，CI 會直接失敗。
 
 ## 容器整理
 
@@ -137,6 +141,6 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 
 CI 會另外執行 Server GameTests、Client GameTests、production-runtime Client GameTests，
 以及 Observer 的 Dedicated Server + Target Client + Observer Client 三 JVM E2E。
-production-runtime gate 使用實際 distribution namespace 啟動單人世界並召喚骷髏，
-專門攔截開發環境可能看不到的 ABI/remapping 問題。所有權與驗證契約見
-[`EXTRACTION.md`](EXTRACTION.md)。
+Observer 另有 framebuffer-free production source gate；production-runtime gate 使用實際
+distribution namespace 啟動單人世界並召喚骷髏，專門攔截開發環境可能看不到的
+ABI/remapping 問題。所有權與驗證契約見 [`EXTRACTION.md`](EXTRACTION.md)。
