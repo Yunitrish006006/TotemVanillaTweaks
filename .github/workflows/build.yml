@@ -166,7 +166,7 @@ jobs:
           observer_pid=$!
 
           complete=false
-          for _ in $(seq 1 300); do
+          for _ in $(seq 1 360); do
             if compgen -G "$results/failure-*.txt" >/dev/null; then
               echo 'Observer E2E reported a failure:' >&2
               cat "$results"/failure-*.txt >&2 || true
@@ -192,6 +192,13 @@ jobs:
                && -f "$results/observer-native-container-saved.txt" \
                && -f "$results/observer-native-container.png" \
                && -f "$results/target-native-container-closed.txt" \
+               && -f "$results/observer-ready-for-generic-screen.txt" \
+               && -f "$results/target-native-generic-opened.txt" \
+               && -f "$results/target-native-generic-no-frame.txt" \
+               && -f "$results/observer-native-generic-screen-ok.txt" \
+               && -f "$results/observer-native-generic-screen-saved.txt" \
+               && -f "$results/observer-native-generic-screen.png" \
+               && -f "$results/target-native-generic-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -231,7 +238,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM protocol-native Observer E2E passed.' \
-            'Verified protocol-v2 world/HUD state, local HUD extraction, vanilla Target camera rendering, structured InventoryScreen reconstruction, zero PNG/framebuffer frames, Stop, CaptureControl(false), and server cleanup.'
+            'Verified native world/HUD state, local HUD extraction, structured InventoryScreen reconstruction, metadata-only unsupported-screen fallback, zero PNG/framebuffer frames across the full native session, Stop, CaptureControl(false), and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
