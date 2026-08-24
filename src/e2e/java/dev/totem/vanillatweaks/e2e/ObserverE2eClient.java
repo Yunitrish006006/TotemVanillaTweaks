@@ -230,7 +230,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
         boolean sessionActive = getBoolean("sessionActive");
         Screen screen = minecraft.gui.screen();
-        boolean mirrorOpen = screen != null && screen.getClass().getName().contains("ObserverMirrorScreen");
+        boolean mirrorOpen = isObserverMirror(screen);
         boolean textureRegistered = getBoolean("textureRegistered");
 
         if (nativeGetBoolean("observerSessionActive")) {
@@ -263,11 +263,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
                 throw new AssertionError("Observer received invalid structured HUD state: health="
                         + health + " maxHealth=" + maxHealth + " food=" + food);
             }
-            var camera = minecraft.getCameraEntity();
-            if (camera == null || !"Target".equals(camera.getName().getString())) {
-                throw new AssertionError("Observer native camera is not attached to Target: "
-                        + (camera == null ? "null" : camera.getName().getString()));
-            }
+            requireTargetCamera(minecraft);
             observerNativeSeen = true;
             observerNativeWorldStableTicks = 0;
             ObserverE2eCommon.marker(
@@ -281,17 +277,17 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (observerNativeSeen && !observerScreenshotRequested) {
-            if (nativeGetBoolean("observerSessionActive")
-                    && minecraft.gui.screen() == null
-                    && !getBoolean("textureRegistered")
-                    && getLong("lastFrameId") < 0L) {
+            if (nativeWorldPathIsStable(minecraft, sessionActive, mirrorOpen, textureRegistered)) {
                 observerNativeWorldStableTicks++;
                 if (observerNativeWorldStableTicks >= NATIVE_WORLD_SETTLE_TICKS) {
                     observerScreenshotRequested = true;
+                    String overlay = screen == null ? "none" : screen.getClass().getName();
                     ObserverE2eCommon.marker(
                             "observer-native-world-settled.txt",
                             "Observer stayed on Minecraft-native Target camera rendering for "
-                                    + NATIVE_WORLD_SETTLE_TICKS + " client ticks with no framebuffer.\n"
+                                    + NATIVE_WORLD_SETTLE_TICKS
+                                    + " client ticks with zero framebuffer state; non-mirror screen="
+                                    + overlay + ".\n"
                     );
                     saveNativeWorldScreenshot(minecraft);
                 }
@@ -301,8 +297,12 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (observerNativeSeen && observerScreenshotSaved && !observerStopRequested) {
-            if (minecraft.gui.screen() != null) {
-                throw new AssertionError("Observer opened a Screen before native Stop request");
+            if (isObserverMirror(minecraft.gui.screen())) {
+                throw new AssertionError("ObserverMirrorScreen opened before native Stop request");
+            }
+            requireTargetCamera(minecraft);
+            if (getBoolean("textureRegistered") || getLong("lastFrameId") >= 0L) {
+                throw new AssertionError("Framebuffer state appeared before native Stop request");
             }
             ClientPlayNetworking.send(new ObserverPayloads.Stop());
             observerStopRequested = true;
@@ -314,8 +314,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
             if (getBoolean("textureRegistered") || nativeGetBoolean("observerSessionActive")) {
                 return;
             }
-            Screen current = minecraft.gui.screen();
-            if (current != null && current.getClass().getName().contains("ObserverMirrorScreen")) {
+            if (isObserverMirror(minecraft.gui.screen())) {
                 return;
             }
             ObserverE2eCommon.marker(
@@ -325,6 +324,36 @@ public final class ObserverE2eClient implements ClientModInitializer {
             finished = true;
             stopMinecraft(minecraft);
         }
+    }
+
+    private static boolean nativeWorldPathIsStable(
+            Minecraft minecraft,
+            boolean sessionActive,
+            boolean mirrorOpen,
+            boolean textureRegistered
+    ) {
+        if (!nativeGetBoolean("observerSessionActive")
+                || !sessionActive
+                || !getBoolean("nativeSession")
+                || mirrorOpen
+                || textureRegistered
+                || getLong("lastFrameId") >= 0L) {
+            return false;
+        }
+        requireTargetCamera(minecraft);
+        return true;
+    }
+
+    private static void requireTargetCamera(Minecraft minecraft) {
+        var camera = minecraft.getCameraEntity();
+        if (camera == null || !"Target".equals(camera.getName().getString())) {
+            throw new AssertionError("Observer native camera is not attached to Target: "
+                    + (camera == null ? "null" : camera.getName().getString()));
+        }
+    }
+
+    private static boolean isObserverMirror(Screen screen) {
+        return screen != null && screen.getClass().getName().contains("ObserverMirrorScreen");
     }
 
     private static void saveNativeWorldScreenshot(Minecraft minecraft) {
@@ -395,14 +424,6 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static boolean nativeGetBoolean(String name) {
         try {
             return nativeField(name).getBoolean(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
-    }
-
-    private static int getInt(String name) {
-        try {
-            return field(name).getInt(null);
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
         }
