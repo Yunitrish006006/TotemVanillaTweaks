@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /** Versioned structured-state transport for the protocol-native Observer View migration. */
 public final class ObserverNativePayloads {
-    public static final int PROTOCOL_VERSION = 1;
+    public static final int PROTOCOL_VERSION = 2;
     public static final int TARGET_STATE_FPS = 10;
     private static final int MAX_TEXT = 256;
 
@@ -82,6 +82,9 @@ public final class ObserverNativePayloads {
             float maxHealth,
             int food,
             float saturation,
+            float experienceProgress,
+            int experienceLevel,
+            int selectedHotbarSlot,
             boolean sprinting,
             boolean crouching,
             boolean usingItem
@@ -108,6 +111,9 @@ public final class ObserverNativePayloads {
             float maxHealth,
             int food,
             float saturation,
+            float experienceProgress,
+            int experienceLevel,
+            int selectedHotbarSlot,
             boolean sprinting,
             boolean crouching,
             boolean usingItem
@@ -126,6 +132,9 @@ public final class ObserverNativePayloads {
                             value.maxHealth,
                             value.food,
                             value.saturation,
+                            value.experienceProgress,
+                            value.experienceLevel,
+                            value.selectedHotbarSlot,
                             value.sprinting,
                             value.crouching,
                             value.usingItem
@@ -144,6 +153,9 @@ public final class ObserverNativePayloads {
                             state.maxHealth,
                             state.food,
                             state.saturation,
+                            state.experienceProgress,
+                            state.experienceLevel,
+                            state.selectedHotbarSlot,
                             state.sprinting,
                             state.crouching,
                             state.usingItem
@@ -168,6 +180,9 @@ public final class ObserverNativePayloads {
                 value.maxHealth,
                 value.food,
                 value.saturation,
+                value.experienceProgress,
+                value.experienceLevel,
+                value.selectedHotbarSlot,
                 value.sprinting,
                 value.crouching,
                 value.usingItem
@@ -184,6 +199,9 @@ public final class ObserverNativePayloads {
                 buf.readFloat(),
                 buf.readVarInt(),
                 buf.readFloat(),
+                buf.readFloat(),
+                buf.readVarInt(),
+                buf.readVarInt(),
                 buf.readBoolean(),
                 buf.readBoolean(),
                 buf.readBoolean()
@@ -200,6 +218,9 @@ public final class ObserverNativePayloads {
             float maxHealth,
             int food,
             float saturation,
+            float experienceProgress,
+            int experienceLevel,
+            int selectedHotbarSlot,
             boolean sprinting,
             boolean crouching,
             boolean usingItem
@@ -212,6 +233,9 @@ public final class ObserverNativePayloads {
         buf.writeFloat(maxHealth);
         buf.writeVarInt(food);
         buf.writeFloat(saturation);
+        buf.writeFloat(experienceProgress);
+        buf.writeVarInt(experienceLevel);
+        buf.writeVarInt(selectedHotbarSlot);
         buf.writeBoolean(sprinting);
         buf.writeBoolean(crouching);
         buf.writeBoolean(usingItem);
