@@ -1,8 +1,8 @@
 {
-  "version": "0.1.15",
-  "release_ref": "d5bef305ca2961d691156c9023c5f4237d256546",
+  "version": "0.1.17",
+  "release_ref": "41c5af786cb25647475101daf2122464e0a73623",
   "release_type": "beta",
-  "dry_run": true,
-  "request_id": "modrinth-0.1.15-beta-dry-run-20260824",
-  "reason": "Validate TotemVanillaTweaks 0.1.15 Beta and its required dependency metadata before publication."
+  "dry_run": false,
+  "request_id": "modrinth-0.1.17-beta-publish-20260824",
+  "reason": "Publish the fully validated TotemVanillaTweaks 0.1.17 Beta release candidate with protocol-native Observer v4 and furnace semantic reconstruction."
 }
