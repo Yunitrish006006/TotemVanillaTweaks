@@ -29,13 +29,14 @@ public final class ObserverE2eClient implements ClientModInitializer {
     private static final int RECONNECT_DELAY_TICKS = 20 * 2;
     private static final int TARGET_WORLD_SETTLE_TICKS = 40;
     private static final int NATIVE_WORLD_SETTLE_TICKS = 20;
+    private static final int INITIAL_CONNECTION_DELAY_TICKS = 20 * 10;
     private static final ServerAddress E2E_SERVER = new ServerAddress("127.0.0.1", 25570);
 
     private static String role;
     private static int ticks;
     private static boolean connectionStarted;
     private static int connectionAttempts;
-    private static int nextConnectionTick = 5;
+    private static int nextConnectionTick = INITIAL_CONNECTION_DELAY_TICKS;
     private static int targetWorldStableTicks;
     private static boolean targetReady;
     private static boolean targetCaptureSeen;
