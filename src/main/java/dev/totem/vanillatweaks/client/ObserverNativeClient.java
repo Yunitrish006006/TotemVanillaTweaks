@@ -1,0 +1,133 @@
+package dev.totem.vanillatweaks.client;
+
+import dev.totem.vanillatweaks.network.ObserverNativePayloads;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.Minecraft;
+
+import java.util.UUID;
+
+/** Client-side structured-state transport for protocol-native Observer View. */
+public final class ObserverNativeClient {
+    private static boolean targetStateEnabled;
+    private static int targetProtocolVersion;
+    private static int targetStateFps = ObserverNativePayloads.TARGET_STATE_FPS;
+    private static long lastTargetStateNanos;
+    private static long nextTargetStateSequence;
+
+    private static boolean observerSessionActive;
+    private static int observerProtocolVersion;
+    private static UUID observerTargetId;
+    private static String observerTargetName = "";
+    private static long lastNativeStateSequence = -1L;
+    private static float remoteYaw;
+    private static float remotePitch;
+    private static float remoteHealth;
+    private static float remoteMaxHealth;
+    private static int remoteFood;
+    private static float remoteSaturation;
+    private static boolean remoteSprinting;
+    private static boolean remoteCrouching;
+    private static boolean remoteUsingItem;
+
+    private ObserverNativeClient() {
+    }
+
+    public static void register() {
+        ClientPlayNetworking.registerGlobalReceiver(
+                ObserverNativePayloads.NativeControl.TYPE,
+                (payload, context) -> context.client().execute(() -> applyControl(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(
+                ObserverNativePayloads.NativeSession.TYPE,
+                (payload, context) -> context.client().execute(() -> applySession(payload))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(
+                ObserverNativePayloads.NativeViewRelay.TYPE,
+                (payload, context) -> context.client().execute(() -> acceptRelay(payload))
+        );
+        ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeClient::tick);
+    }
+
+    private static void applyControl(ObserverNativePayloads.NativeControl payload) {
+        targetStateEnabled = payload.enabled()
+                && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
+        targetProtocolVersion = payload.protocolVersion();
+        targetStateFps = clamp(payload.stateFps(), 1, 20);
+        lastTargetStateNanos = 0L;
+        if (!targetStateEnabled) {
+            targetProtocolVersion = 0;
+        }
+    }
+
+    private static void applySession(ObserverNativePayloads.NativeSession payload) {
+        observerSessionActive = payload.active()
+                && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
+        observerProtocolVersion = payload.protocolVersion();
+        observerTargetId = observerSessionActive ? payload.targetId() : null;
+        observerTargetName = observerSessionActive ? payload.targetName() : "";
+        lastNativeStateSequence = -1L;
+        if (!observerSessionActive) {
+            observerProtocolVersion = 0;
+            remoteYaw = 0.0F;
+            remotePitch = 0.0F;
+            remoteHealth = 0.0F;
+            remoteMaxHealth = 0.0F;
+            remoteFood = 0;
+            remoteSaturation = 0.0F;
+            remoteSprinting = false;
+            remoteCrouching = false;
+            remoteUsingItem = false;
+        }
+    }
+
+    private static void tick(Minecraft minecraft) {
+        if (!targetStateEnabled || minecraft.player == null || minecraft.level == null) {
+            return;
+        }
+        long now = System.nanoTime();
+        long interval = 1_000_000_000L / Math.max(1, targetStateFps);
+        if (now - lastTargetStateNanos < interval) {
+            return;
+        }
+        lastTargetStateNanos = now;
+
+        ClientPlayNetworking.send(new ObserverNativePayloads.NativeViewState(
+                targetProtocolVersion,
+                ++nextTargetStateSequence,
+                minecraft.player.getYRot(),
+                minecraft.player.getXRot(),
+                minecraft.player.getHealth(),
+                minecraft.player.getMaxHealth(),
+                minecraft.player.getFoodData().getFoodLevel(),
+                minecraft.player.getFoodData().getSaturationLevel(),
+                minecraft.player.isSprinting(),
+                minecraft.player.isCrouching(),
+                minecraft.player.isUsingItem()
+        ));
+    }
+
+    private static void acceptRelay(ObserverNativePayloads.NativeViewRelay payload) {
+        if (!observerSessionActive
+                || observerTargetId == null
+                || !observerTargetId.equals(payload.targetId())
+                || payload.protocolVersion() != observerProtocolVersion
+                || payload.sequence() <= lastNativeStateSequence) {
+            return;
+        }
+        lastNativeStateSequence = payload.sequence();
+        remoteYaw = payload.yaw();
+        remotePitch = payload.pitch();
+        remoteHealth = payload.health();
+        remoteMaxHealth = payload.maxHealth();
+        remoteFood = payload.food();
+        remoteSaturation = payload.saturation();
+        remoteSprinting = payload.sprinting();
+        remoteCrouching = payload.crouching();
+        remoteUsingItem = payload.usingItem();
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+}
