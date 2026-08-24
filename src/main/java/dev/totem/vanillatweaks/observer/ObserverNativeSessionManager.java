@@ -12,10 +12,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Server-authoritative structured-state and screen relay for protocol-native Observer View. */
+/** Server-authoritative structured-state and semantic-screen relay for Observer View. */
 public final class ObserverNativeSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
+    private static final Map<UUID, Long> SCREEN_CAPABILITIES_BY_OBSERVER = new HashMap<>();
     private static final Map<UUID, Long> LAST_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_SCREEN_SEQUENCE_BY_TARGET = new HashMap<>();
 
@@ -25,7 +26,6 @@ public final class ObserverNativeSessionManager {
     public static boolean supports(ServerPlayer observer, ServerPlayer target) {
         return ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)
                 && ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeViewRelay.TYPE)
-                && ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)
                 && ServerPlayNetworking.canSend(observer, ObserverPayloads.ScreenRelay.TYPE)
                 && ServerPlayNetworking.canSend(target, ObserverNativePayloads.NativeControl.TYPE);
     }
@@ -34,26 +34,32 @@ public final class ObserverNativeSessionManager {
         if (!supports(observer, target)) {
             return false;
         }
+        long screenCapabilities = negotiatedScreenCapabilities(observer);
         TARGET_BY_OBSERVER.put(observer.getUUID(), target.getUUID());
+        SCREEN_CAPABILITIES_BY_OBSERVER.put(observer.getUUID(), screenCapabilities);
         ServerPlayNetworking.send(observer, new ObserverNativePayloads.NativeSession(
                 true,
                 target.getUUID(),
                 target.getGameProfile().name(),
-                ObserverNativePayloads.PROTOCOL_VERSION
+                ObserverNativePayloads.PROTOCOL_VERSION,
+                screenCapabilities
         ));
         updateTargetControl(target.level().getServer(), target.getUUID());
         return true;
     }
 
     public static boolean stop(ServerPlayer observer) {
-        UUID targetId = TARGET_BY_OBSERVER.remove(observer.getUUID());
+        UUID observerId = observer.getUUID();
+        UUID targetId = TARGET_BY_OBSERVER.remove(observerId);
+        SCREEN_CAPABILITIES_BY_OBSERVER.remove(observerId);
         boolean wasNative = targetId != null;
         if (ServerPlayNetworking.canSend(observer, ObserverNativePayloads.NativeSession.TYPE)) {
             ServerPlayNetworking.send(observer, new ObserverNativePayloads.NativeSession(
                     false,
                     EMPTY_TARGET,
                     "",
-                    ObserverNativePayloads.PROTOCOL_VERSION
+                    ObserverNativePayloads.PROTOCOL_VERSION,
+                    0L
             ));
         }
         if (targetId != null) {
@@ -64,6 +70,7 @@ public final class ObserverNativeSessionManager {
 
     public static void removeOfflineObserver(MinecraftServer server, UUID observerId) {
         UUID targetId = TARGET_BY_OBSERVER.remove(observerId);
+        SCREEN_CAPABILITIES_BY_OBSERVER.remove(observerId);
         if (targetId != null) {
             updateTargetControl(server, targetId);
         }
@@ -100,11 +107,18 @@ public final class ObserverNativeSessionManager {
                 payload.crouching(),
                 payload.usingItem()
         );
-        relayToNativeObservers(target, ObserverNativePayloads.NativeViewRelay.TYPE, relay);
+        relayToNativeObservers(target, ObserverNativePayloads.NativeViewRelay.TYPE, relay, 0L);
     }
 
     public static void acceptContainerState(ServerPlayer target, ObserverNativeScreenPayloads.ContainerState payload) {
-        if (!validContainer(payload) || nativeObserverCount(target.getUUID()) == 0) {
+        long familyCapability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validContainer(payload)
+                || familyCapability == 0L
+                || !ObserverNativeScreenPayloads.supports(
+                        screenCapabilitiesForTarget(target.getUUID()),
+                        familyCapability
+                )
+                || nativeObserverCount(target.getUUID()) == 0) {
             return;
         }
         long lastSequence = LAST_SCREEN_SEQUENCE_BY_TARGET.getOrDefault(target.getUUID(), -1L);
@@ -118,6 +132,7 @@ public final class ObserverNativeSessionManager {
                 payload.protocolVersion(),
                 payload.sequence(),
                 payload.open(),
+                payload.familyId(),
                 payload.screenClass(),
                 payload.title(),
                 payload.contentWidth(),
@@ -126,20 +141,34 @@ public final class ObserverNativeSessionManager {
                 payload.mouseY(),
                 payload.slots()
         );
-        relayToNativeObservers(target, ObserverNativeScreenPayloads.ContainerRelay.TYPE, relay);
+        relayToNativeObservers(
+                target,
+                ObserverNativeScreenPayloads.ContainerRelay.TYPE,
+                relay,
+                familyCapability
+        );
     }
 
     private static <T extends CustomPacketPayload> void relayToNativeObservers(
             ServerPlayer target,
             CustomPacketPayload.Type<T> type,
-            T relay
+            T relay,
+            long requiredScreenCapability
     ) {
         MinecraftServer server = target.level().getServer();
         for (Map.Entry<UUID, UUID> entry : TARGET_BY_OBSERVER.entrySet()) {
             if (!target.getUUID().equals(entry.getValue())) {
                 continue;
             }
-            ServerPlayer observer = server.getPlayerList().getPlayer(entry.getKey());
+            UUID observerId = entry.getKey();
+            if (requiredScreenCapability != 0L
+                    && !ObserverNativeScreenPayloads.supports(
+                            SCREEN_CAPABILITIES_BY_OBSERVER.getOrDefault(observerId, 0L),
+                            requiredScreenCapability
+                    )) {
+                continue;
+            }
+            ServerPlayer observer = server.getPlayerList().getPlayer(observerId);
             if (observer != null && observer.isSpectator() && ServerPlayNetworking.canSend(observer, type)) {
                 ServerPlayNetworking.send(observer, relay);
             }
@@ -166,7 +195,9 @@ public final class ObserverNativeSessionManager {
     }
 
     private static boolean validContainer(ObserverNativeScreenPayloads.ContainerState payload) {
+        long familyCapability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
         if (payload.protocolVersion() != ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION
+                || familyCapability == 0L
                 || payload.sequence() < 0L
                 || payload.slots().size() > ObserverNativeScreenPayloads.MAX_SLOTS) {
             return false;
@@ -192,6 +223,24 @@ public final class ObserverNativeSessionManager {
         return true;
     }
 
+    private static long negotiatedScreenCapabilities(ServerPlayer observer) {
+        long capabilities = 0L;
+        if (ServerPlayNetworking.canSend(observer, ObserverNativeScreenPayloads.ContainerRelay.TYPE)) {
+            capabilities |= ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
+        }
+        return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
+    }
+
+    private static long screenCapabilitiesForTarget(UUID targetId) {
+        long capabilities = 0L;
+        for (Map.Entry<UUID, UUID> entry : TARGET_BY_OBSERVER.entrySet()) {
+            if (targetId.equals(entry.getValue())) {
+                capabilities |= SCREEN_CAPABILITIES_BY_OBSERVER.getOrDefault(entry.getKey(), 0L);
+            }
+        }
+        return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
+    }
+
     private static int nativeObserverCount(UUID targetId) {
         int count = 0;
         for (UUID value : TARGET_BY_OBSERVER.values()) {
@@ -210,6 +259,7 @@ public final class ObserverNativeSessionManager {
             return;
         }
         boolean enabled = nativeObserverCount(targetId) > 0;
+        long screenCapabilities = enabled ? screenCapabilitiesForTarget(targetId) : 0L;
         if (!enabled) {
             LAST_SEQUENCE_BY_TARGET.remove(targetId);
             LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
@@ -217,7 +267,8 @@ public final class ObserverNativeSessionManager {
         ServerPlayNetworking.send(target, new ObserverNativePayloads.NativeControl(
                 enabled,
                 ObserverNativePayloads.PROTOCOL_VERSION,
-                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0
+                enabled ? ObserverNativePayloads.TARGET_STATE_FPS : 0,
+                screenCapabilities
         ));
     }
 }
