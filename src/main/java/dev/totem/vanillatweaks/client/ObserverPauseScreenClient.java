@@ -4,12 +4,13 @@ import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Local semantic reconstruction for the vanilla pause/game menu using existing screen metadata. */
 public final class ObserverPauseScreenClient {
-    static final String PAUSE_SCREEN_CLASS = "net.minecraft.client.gui.screens.PauseScreen";
+    static final String PAUSE_SCREEN_CLASS = PauseScreen.class.getName();
 
     private static boolean remoteOpen;
     private static String remoteTitle = "";
@@ -120,8 +121,8 @@ public final class ObserverPauseScreenClient {
             y += 36;
             button(g, left, y, buttonWidth, "Session exit controls", false);
 
-            g.text(font, "No framebuffer transmitted — reconstructed from PauseScreen metadata.",
-                    centerX - Math.min(170, font.width("No framebuffer transmitted — reconstructed from PauseScreen metadata.") / 2),
+            String note = "No framebuffer transmitted — reconstructed from PauseScreen metadata.";
+            g.text(font, note, centerX - Math.min(170, font.width(note) / 2),
                     Math.min(height - 20, y + 38), 0xFF80CBC4, false);
             extractedFrames++;
         }
