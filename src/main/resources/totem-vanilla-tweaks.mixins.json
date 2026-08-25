@@ -16,6 +16,7 @@
     "ObserverNativeSessionManagerGrindstoneCapabilityMixin",
     "ObserverNativeSessionManagerLoomCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
+    "ObserverNativeSessionManagerSignCapabilityMixin",
     "ObserverNativeSessionManagerSmithingCapabilityMixin",
     "ObserverNativeSessionManagerStonecutterCapabilityMixin",
     "ObserverNativeSessionManagerVillagersCapabilityMixin",
