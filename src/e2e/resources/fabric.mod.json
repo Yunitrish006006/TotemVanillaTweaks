@@ -17,6 +17,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverNexusE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverVillagersWoodcutterE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverBrewingE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverSmithingE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]

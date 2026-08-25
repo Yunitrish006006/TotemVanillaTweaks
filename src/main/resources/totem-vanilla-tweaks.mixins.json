@@ -12,6 +12,7 @@
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
+    "ObserverNativeSessionManagerSmithingCapabilityMixin",
     "ObserverNativeSessionManagerVillagersCapabilityMixin",
     "RecipeManagerMixin",
     "StructureTemplateMixin"
