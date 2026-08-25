@@ -10,6 +10,7 @@ import dev.totem.vanillatweaks.observer.ObserverLoomRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
+import dev.totem.vanillatweaks.observer.ObserverSignRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSmithingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverStonecutterRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverVillagersWoodcutterRelayManager;
@@ -17,21 +18,16 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 public final class VanillaTweaksPayloadRegistration {
-    private VanillaTweaksPayloadRegistration() {
-    }
+    private VanillaTweaksPayloadRegistration() {}
 
     public static void register() {
         PayloadTypeRegistry.serverboundPlay().register(SortBackpackPayload.TYPE, SortBackpackPayload.CODEC);
-        ServerPlayNetworking.registerGlobalReceiver(
-                SortBackpackPayload.TYPE,
-                (payload, context) -> context.server().execute(() ->
-                        ContainerSortService.sortOpenContainer(context.player(), payload.target()))
-        );
+        ServerPlayNetworking.registerGlobalReceiver(SortBackpackPayload.TYPE,
+                (payload, context) -> context.server().execute(() -> ContainerSortService.sortOpenContainer(context.player(), payload.target())));
 
         PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.ScreenState.TYPE, ObserverPayloads.ScreenState.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.Stop.TYPE, ObserverPayloads.Stop.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.ScreenRelay.TYPE, ObserverPayloads.ScreenRelay.CODEC);
-
         PayloadTypeRegistry.serverboundPlay().register(ObserverNativePayloads.NativeViewState.TYPE, ObserverNativePayloads.NativeViewState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativePayloads.NativeControl.TYPE, ObserverNativePayloads.NativeControl.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativePayloads.NativeSession.TYPE, ObserverNativePayloads.NativeSession.CODEC);
@@ -73,6 +69,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverCartographyScreenPayloads.CartographyRelay.TYPE, ObserverCartographyScreenPayloads.CartographyRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverBeaconScreenPayloads.BeaconState.TYPE, ObserverBeaconScreenPayloads.BeaconState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverBeaconScreenPayloads.BeaconRelay.TYPE, ObserverBeaconScreenPayloads.BeaconRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverSignScreenPayloads.SignState.TYPE, ObserverSignScreenPayloads.SignState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverSignScreenPayloads.SignRelay.TYPE, ObserverSignScreenPayloads.SignRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -116,5 +114,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverCartographyRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverBeaconScreenPayloads.BeaconState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverBeaconRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverSignScreenPayloads.SignState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverSignRelayManager.acceptState(context.player(), payload)));
     }
 }

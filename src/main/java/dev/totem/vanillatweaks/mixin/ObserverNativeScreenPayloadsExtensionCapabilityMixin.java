@@ -6,6 +6,7 @@ import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
@@ -27,6 +28,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverGrindstoneScreenPayloads.CAPABILITY
                 | ObserverLoomScreenPayloads.CAPABILITY
                 | ObserverCartographyScreenPayloads.CAPABILITY
-                | ObserverBeaconScreenPayloads.CAPABILITY));
+                | ObserverBeaconScreenPayloads.CAPABILITY
+                | ObserverSignScreenPayloads.CAPABILITY));
     }
 }
