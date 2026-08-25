@@ -7,6 +7,7 @@ import dev.totem.vanillatweaks.client.ObserverBrewingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverCartographyScreenClient;
 import dev.totem.vanillatweaks.client.ObserverCrafterScreenClient;
 import dev.totem.vanillatweaks.client.ObserverGrindstoneScreenClient;
+import dev.totem.vanillatweaks.client.ObserverLocksmithManagementScreenClient;
 import dev.totem.vanillatweaks.client.ObserverLoomScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeAnvilScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeBookScreenClient;
@@ -60,6 +61,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverAutomataCopperGolemScreenClient.register();
         ObserverNexusScreenClient.register();
         ObserverNexusDeathNodeAdminScreenClient.register();
+        ObserverLocksmithManagementScreenClient.register();
         ObserverVillagersWoodcutterScreenClient.register();
         ObserverBrewingScreenClient.register();
         ObserverSmithingScreenClient.register();
