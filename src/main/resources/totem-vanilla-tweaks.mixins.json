@@ -11,6 +11,7 @@
     "ObserverNativeScreenPayloadsExtensionCapabilityMixin",
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
+    "ObserverNativeSessionManagerCartographyCapabilityMixin",
     "ObserverNativeSessionManagerGrindstoneCapabilityMixin",
     "ObserverNativeSessionManagerLoomCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
