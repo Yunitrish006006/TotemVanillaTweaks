@@ -23,6 +23,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -170,9 +171,9 @@ public final class ObserverAdvancementsScreenClient {
         return parent;
     }
 
-    private static String itemId(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) return "";
-        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+    private static String itemId(ItemStackTemplate stack) {
+        if (stack == null || stack.item() == null) return "";
+        return BuiltInRegistries.ITEM.getKey(stack.item().value()).toString();
     }
 
     private static void acceptRelay(ObserverAdvancementsScreenPayloads.AdvancementsRelay p) {
