@@ -19,12 +19,14 @@
     "ObserverNativeScreenClientGrindstonePriorityMixin",
     "ObserverNativeScreenClientLoomPriorityMixin",
     "ObserverNativeScreenClientCartographyPriorityMixin",
+    "ObserverNativeScreenClientBeaconPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
     "MerchantScreenAccessor",
     "AnvilScreenAccessor",
-    "LoomScreenAccessor"
+    "LoomScreenAccessor",
+    "BeaconScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
