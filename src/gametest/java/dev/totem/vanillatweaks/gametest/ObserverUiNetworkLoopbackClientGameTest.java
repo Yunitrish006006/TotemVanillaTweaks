@@ -16,6 +16,7 @@ import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
@@ -68,6 +69,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE, "NexusDeathNodeAdminRelay v1");
                 assertCanSend(player, ObserverLocksmithManagementPayloads.ManagementRelay.TYPE, "LocksmithManagementRelay v1");
                 assertCanSend(player, ObserverAdvancementsScreenPayloads.AdvancementsRelay.TYPE, "AdvancementsRelay v1");
+                assertCanSend(player, ObserverStatsScreenPayloads.StatsRelay.TYPE, "StatsRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -89,7 +91,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     | ObserverCrafterScreenPayloads.CAPABILITY
                     | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
                     | ObserverLocksmithManagementPayloads.CAPABILITY
-                    | ObserverAdvancementsScreenPayloads.CAPABILITY;
+                    | ObserverAdvancementsScreenPayloads.CAPABILITY
+                    | ObserverStatsScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
