@@ -21,6 +21,7 @@
     "ObserverNativeScreenClientCartographyPriorityMixin",
     "ObserverNativeScreenClientBeaconPriorityMixin",
     "ObserverNativeScreenClientSignPriorityMixin",
+    "ObserverNativeScreenClientCrafterPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
