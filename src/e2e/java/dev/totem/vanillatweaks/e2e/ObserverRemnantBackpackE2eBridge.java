@@ -14,6 +14,7 @@ import net.minecraft.client.Screenshot;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Inserts a real cross-JVM Remnant backpack semantic relay phase after enchanting and before Stop. */
@@ -124,15 +125,69 @@ public final class ObserverRemnantBackpackE2eBridge implements ClientModInitiali
                 4,
                 true,
                 true,
-                List.of(
-                        new ObserverNativeScreenPayloads.SlotState(18, 8, 18, "minecraft:diamond", 12, 0),
-                        new ObserverNativeScreenPayloads.SlotState(19, 26, 18, "minecraft:iron_ingot", 32, 0),
-                        new ObserverNativeScreenPayloads.SlotState(72, 8, 139, "minecraft:bread", 8, 0),
-                        new ObserverNativeScreenPayloads.SlotState(108, 192, 17, "minecraft:nether_star", 1, 0),
-                        new ObserverNativeScreenPayloads.SlotState(112, 257, 76, "minecraft:crafting_table", 1, 0),
-                        new ObserverNativeScreenPayloads.SlotState(113, 184, 58, "minecraft:oak_planks", 4, 0)
-                )
+                backpackSlots()
         );
+    }
+
+    private static List<ObserverNativeScreenPayloads.SlotState> backpackSlots() {
+        List<ObserverNativeScreenPayloads.SlotState> slots = new ArrayList<>(122);
+
+        // 8 storage rows. With firstVisibleRow=2, the first two rows are just above the viewport.
+        for (int index = 0; index < 72; index++) {
+            int row = index / 9;
+            int column = index % 9;
+            String itemId = "";
+            int count = 0;
+            if (index == 18) { itemId = "minecraft:diamond"; count = 12; }
+            else if (index == 19) { itemId = "minecraft:iron_ingot"; count = 32; }
+            slots.add(new ObserverNativeScreenPayloads.SlotState(
+                    index, 8 + column * 18, 18 + (row - 2) * 18, itemId, count, 0));
+        }
+
+        // Player inventory: 27 main slots and 9 hotbar slots.
+        for (int playerIndex = 0; playerIndex < 36; playerIndex++) {
+            int index = 72 + playerIndex;
+            int x;
+            int y;
+            if (playerIndex < 27) {
+                x = 8 + playerIndex % 9 * 18;
+                y = 6 * 18 + 31 + playerIndex / 9 * 18;
+            } else {
+                x = 8 + (playerIndex - 27) * 18;
+                y = 6 * 18 + 89;
+            }
+            String itemId = playerIndex == 0 ? "minecraft:bread" : "";
+            int count = playerIndex == 0 ? 8 : 0;
+            slots.add(new ObserverNativeScreenPayloads.SlotState(index, x, y, itemId, count, 0));
+        }
+
+        // Four upgrade slots.
+        int upgradeStartX = 177 + (102 - 4 * 18) / 2;
+        for (int upgradeIndex = 0; upgradeIndex < 4; upgradeIndex++) {
+            slots.add(new ObserverNativeScreenPayloads.SlotState(
+                    108 + upgradeIndex,
+                    upgradeStartX + upgradeIndex * 18,
+                    17,
+                    upgradeIndex == 0 ? "minecraft:nether_star" : "",
+                    upgradeIndex == 0 ? 1 : 0,
+                    0));
+        }
+
+        // Embedded crafting result followed by the 3x3 grid.
+        slots.add(new ObserverNativeScreenPayloads.SlotState(
+                112, 257, 76, "minecraft:crafting_table", 1, 0));
+        for (int craftingIndex = 0; craftingIndex < 9; craftingIndex++) {
+            int row = craftingIndex / 3;
+            int column = craftingIndex % 3;
+            slots.add(new ObserverNativeScreenPayloads.SlotState(
+                    113 + craftingIndex,
+                    184 + column * 18,
+                    58 + row * 18,
+                    craftingIndex == 0 ? "minecraft:oak_planks" : "",
+                    craftingIndex == 0 ? 4 : 0,
+                    0));
+        }
+        return List.copyOf(slots);
     }
 
     private static ObserverRemnantBackpackPayloads.BackpackState closeState() {
