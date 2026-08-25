@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks.network;
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverBrewingRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverCartographyRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverGrindstoneRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverLoomRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
@@ -67,6 +68,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverGrindstoneScreenPayloads.GrindstoneRelay.TYPE, ObserverGrindstoneScreenPayloads.GrindstoneRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverLoomScreenPayloads.LoomState.TYPE, ObserverLoomScreenPayloads.LoomState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverLoomScreenPayloads.LoomRelay.TYPE, ObserverLoomScreenPayloads.LoomRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverCartographyScreenPayloads.CartographyState.TYPE, ObserverCartographyScreenPayloads.CartographyState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverCartographyScreenPayloads.CartographyRelay.TYPE, ObserverCartographyScreenPayloads.CartographyRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -106,5 +109,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverGrindstoneRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverLoomScreenPayloads.LoomState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverLoomRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverCartographyScreenPayloads.CartographyState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverCartographyRelayManager.acceptState(context.player(), payload)));
     }
 }

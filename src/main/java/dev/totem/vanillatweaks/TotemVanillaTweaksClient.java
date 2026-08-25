@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.totem.vanillatweaks.client.ObserverAutomataCopperGolemScreenClient;
 import dev.totem.vanillatweaks.client.ObserverBrewingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverCartographyScreenClient;
 import dev.totem.vanillatweaks.client.ObserverGrindstoneScreenClient;
 import dev.totem.vanillatweaks.client.ObserverLoomScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeAnvilScreenClient;
@@ -60,6 +61,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverStonecutterScreenClient.register();
         ObserverGrindstoneScreenClient.register();
         ObserverLoomScreenClient.register();
+        ObserverCartographyScreenClient.register();
         ObserverNativeHud.register();
     }
 }
