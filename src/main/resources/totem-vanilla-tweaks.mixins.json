@@ -13,6 +13,7 @@
     "ObserverNativeSessionManagerBeaconCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
     "ObserverNativeSessionManagerCartographyCapabilityMixin",
+    "ObserverNativeSessionManagerCrafterCapabilityMixin",
     "ObserverNativeSessionManagerGrindstoneCapabilityMixin",
     "ObserverNativeSessionManagerLoomCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
