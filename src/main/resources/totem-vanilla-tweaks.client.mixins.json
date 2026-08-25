@@ -18,6 +18,7 @@
     "ObserverNativeScreenClientStonecutterPriorityMixin",
     "ObserverNativeScreenClientGrindstonePriorityMixin",
     "ObserverNativeScreenClientLoomPriorityMixin",
+    "ObserverNativeScreenClientCartographyPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
