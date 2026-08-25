@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.gametest;
 
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverAdvancementsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBeaconScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
@@ -66,6 +67,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverCrafterScreenPayloads.CrafterRelay.TYPE, "CrafterRelay v1");
                 assertCanSend(player, ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE, "NexusDeathNodeAdminRelay v1");
                 assertCanSend(player, ObserverLocksmithManagementPayloads.ManagementRelay.TYPE, "LocksmithManagementRelay v1");
+                assertCanSend(player, ObserverAdvancementsScreenPayloads.AdvancementsRelay.TYPE, "AdvancementsRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -86,7 +88,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     | ObserverSignScreenPayloads.CAPABILITY
                     | ObserverCrafterScreenPayloads.CAPABILITY
                     | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
-                    | ObserverLocksmithManagementPayloads.CAPABILITY;
+                    | ObserverLocksmithManagementPayloads.CAPABILITY
+                    | ObserverAdvancementsScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
