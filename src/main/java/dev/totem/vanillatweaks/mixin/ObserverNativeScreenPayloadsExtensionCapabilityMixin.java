@@ -12,6 +12,7 @@ import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,6 +38,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverCrafterScreenPayloads.CAPABILITY
                 | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
                 | ObserverLocksmithManagementPayloads.CAPABILITY
-                | ObserverAdvancementsScreenPayloads.CAPABILITY));
+                | ObserverAdvancementsScreenPayloads.CAPABILITY
+                | ObserverStatsScreenPayloads.CAPABILITY));
     }
 }

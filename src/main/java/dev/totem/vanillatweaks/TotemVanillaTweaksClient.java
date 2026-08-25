@@ -23,6 +23,7 @@ import dev.totem.vanillatweaks.client.ObserverNexusScreenClient;
 import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.client.ObserverSignScreenClient;
 import dev.totem.vanillatweaks.client.ObserverSmithingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverStatsScreenClient;
 import dev.totem.vanillatweaks.client.ObserverStonecutterScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import dev.totem.vanillatweaks.client.ObserverVillagersWoodcutterScreenClient;
@@ -74,6 +75,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverSignScreenClient.register();
         ObserverCrafterScreenClient.register();
         ObserverAdvancementsScreenClient.register();
+        ObserverStatsScreenClient.register();
         ObserverNativeHud.register();
     }
 }
