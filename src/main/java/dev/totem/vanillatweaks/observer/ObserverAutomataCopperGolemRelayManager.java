@@ -5,6 +5,7 @@ import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.Identifier;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -58,10 +59,16 @@ public final class ObserverAutomataCopperGolemRelayManager {
         return false;
     }
 
-    private static boolean valid(ObserverAutomataCopperGolemPayloads.CopperGolemState p) {
+    static boolean valid(ObserverAutomataCopperGolemPayloads.CopperGolemState p) {
         if (p.protocolVersion() != ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION
                 || p.sequence() < 0L
                 || !ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM.equals(p.familyId())) return false;
+        if (p.open() && (!ObserverAutomataCopperGolemPayloads.SCREEN_CLASS.equals(p.screenClass())
+                || !ObserverAutomataCopperGolemPayloads.SCREEN_TITLE.equals(p.title()))) return false;
+        if (!validConfiguredToken(p.editorApiUrl()) || !validConfiguredToken(p.editorModel())
+                || !validConfiguredToken(p.editorGatheringPrompt()) || !validConfiguredToken(p.editorBindingPrompt())
+                || !validCacheToken(p.cacheValueText()) || !validBindingPrompt(p.sourceContainer())) return false;
+        for (var binding : p.bindings()) if (!validBindingPrompt(binding)) return false;
         if (!p.open()) {
             return p.bindings().isEmpty() && p.slots().isEmpty()
                     && p.gatheringManualTargets().isEmpty()
@@ -70,6 +77,13 @@ public final class ObserverAutomataCopperGolemRelayManager {
         }
         if (!("sorting".equals(p.mode()) || "gathering".equals(p.mode()))) return false;
         if (!("bindings".equals(p.tab()) || "llm".equals(p.tab()))) return false;
+        if (!validIdentifier(p.fuelItemId(), true) || !validIdentifier(p.toolItemId(), true)
+                || !validIdentifier(p.storageItemId(), true)
+                || !validIdentifiers(p.gatheringManualTargets())
+                || !validIdentifiers(p.gatheringLlmAllowedBlockIds())
+                || !validIdentifiers(p.gatheringLlmDeniedBlockIds())
+                || !validIdentifiers(p.gatheringLlmAllowedTags())
+                || !validIdentifiers(p.gatheringLlmDeniedTags())) return false;
         if (p.bindings().size() > ObserverAutomataCopperGolemPayloads.MAX_BINDINGS
                 || p.gatheringManualTargets().size() > ObserverAutomataCopperGolemPayloads.MAX_VALUES
                 || p.gatheringLlmAllowedBlockIds().size() > ObserverAutomataCopperGolemPayloads.MAX_VALUES
@@ -84,7 +98,7 @@ public final class ObserverAutomataCopperGolemRelayManager {
                 || (p.toolMaxDamage() > 0 && p.toolDamage() > p.toolMaxDamage())
                 || !validCount(p.storageCount()) || p.llmActiveCount() < 0
                 || p.gatheringLlmCachedBlockIds() < 0 || p.gatheringLlmCachedTags() < 0) return false;
-        if (!validBinding(p.sourceContainer())) return false;
+        if (!validBinding(p.sourceContainer()) || !validArea(p.gatheringArea())) return false;
         for (var binding : p.bindings()) if (!validBinding(binding)) return false;
         return validSlots(p.slots());
     }
@@ -96,19 +110,53 @@ public final class ObserverAutomataCopperGolemRelayManager {
     private static boolean validBinding(ObserverAutomataCopperGolemPayloads.BindingState b) {
         if (b == null) return true;
         if (b.llmCachedItemIds() < 0 || b.llmCachedTags() < 0) return false;
-        return b.llmAllowedItemIds().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES
+        return validIdentifier(b.dimension(), false)
+                && validIdentifier(b.blockId(), false)
+                && validIdentifier(b.itemId(), true)
+                && b.llmAllowedItemIds().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES
                 && b.llmDeniedItemIds().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES
                 && b.llmAllowedTags().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES
-                && b.llmDeniedTags().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES;
+                && b.llmDeniedTags().size() <= ObserverAutomataCopperGolemPayloads.MAX_VALUES
+                && validIdentifiers(b.llmAllowedItemIds())
+                && validIdentifiers(b.llmDeniedItemIds())
+                && validIdentifiers(b.llmAllowedTags())
+                && validIdentifiers(b.llmDeniedTags());
+    }
+
+    private static boolean validBindingPrompt(ObserverAutomataCopperGolemPayloads.BindingState binding) {
+        return binding == null || validConfiguredToken(binding.llmPrompt());
+    }
+
+    private static boolean validArea(ObserverAutomataCopperGolemPayloads.GatheringAreaState area) {
+        return area == null || validIdentifier(area.dimension(), false);
+    }
+
+    private static boolean validConfiguredToken(String value) {
+        return ObserverAutomataCopperGolemPayloads.isConfiguredToken(value);
+    }
+
+    private static boolean validCacheToken(String value) {
+        return ObserverAutomataCopperGolemPayloads.isValidToken(value);
     }
 
     private static boolean validSlots(List<ObserverNativeScreenPayloads.SlotState> slots) {
         if (slots.size() > ObserverNativeScreenPayloads.MAX_SLOTS) return false;
         for (var slot : slots) {
             if (slot.index() < 0 || slot.x() < -1024 || slot.x() > 1024 || slot.y() < -1024 || slot.y() > 1024
-                    || slot.count() < 0 || slot.count() > 127 || slot.damage() < 0) return false;
+                    || slot.count() < 0 || slot.count() > 127 || slot.damage() < 0
+                    || !validIdentifier(slot.itemId(), true)) return false;
         }
         return true;
+    }
+
+    private static boolean validIdentifiers(List<String> values) {
+        for (String value : values) if (!validIdentifier(value, false)) return false;
+        return true;
+    }
+
+    private static boolean validIdentifier(String value, boolean allowBlank) {
+        if (value == null || value.isBlank()) return allowBlank;
+        return Identifier.tryParse(value) != null;
     }
 
     private static Field staticField(String name) {
