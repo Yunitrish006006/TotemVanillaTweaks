@@ -8,6 +8,7 @@
     "AbstractSkeletonAmmoMixin",
     "ConcretePowderItemEntityMixin",
     "HopperBlockEntityMixin",
+    "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "RecipeManagerMixin",
     "StructureTemplateMixin"
   ],

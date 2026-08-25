@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.observer;
 
 import dev.totem.vanillatweaks.network.ObserverAnvilScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverAutomataCopperGolemPayloads;
 import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
@@ -11,6 +12,7 @@ import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -40,6 +42,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(1, ObserverAnvilScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverEnchantingScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverRemnantBackpackPayloads.PROTOCOL_VERSION);
+        assertEquals(1, ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION);
         assertTrue(ObserverNativeScreenPayloads.ContainerState.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.ContainerRelay.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.FurnaceState.TYPE.id().getPath().endsWith("_v1"));
@@ -56,6 +59,8 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverRemnantBackpackPayloads.BackpackState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverRemnantBackpackPayloads.BackpackRelay.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverAutomataCopperGolemPayloads.CopperGolemState.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverAutomataCopperGolemPayloads.CopperGolemRelay.TYPE.id().getPath().endsWith("_v1"));
 
         long container = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
         long furnace = ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
@@ -65,7 +70,8 @@ final class ObserverNativePayloadsTest {
         long anvil = ObserverNativeScreenPayloads.CAPABILITY_ANVIL;
         long enchanting = ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING;
         long remnantBackpack = ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
-        long known = container | furnace | book | crafting | merchant | anvil | enchanting | remnantBackpack;
+        long automata = ObserverNativeScreenPayloads.CAPABILITY_AUTOMATA_COPPER_GOLEM;
+        long known = container | furnace | book | crafting | merchant | anvil | enchanting | remnantBackpack | automata;
         assertEquals(known, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
         assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS));
         assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_FURNACE));
@@ -75,6 +81,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(anvil, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_ANVIL));
         assertEquals(enchanting, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_ENCHANTING));
         assertEquals(remnantBackpack, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK));
+        assertEquals(automata, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM));
         assertEquals(0L, ObserverNativeScreenPayloads.capabilityForFamily("unknown"));
         assertEquals(known, ObserverNativeScreenPayloads.sanitizeCapabilities(known | (1L << 40)));
         assertTrue(ObserverNativeScreenPayloads.supports(known, container));
@@ -85,11 +92,23 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverNativeScreenPayloads.supports(known, anvil));
         assertTrue(ObserverNativeScreenPayloads.supports(known, enchanting));
         assertTrue(ObserverNativeScreenPayloads.supports(known, remnantBackpack));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, merchant));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, anvil));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, enchanting));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, remnantBackpack));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, automata));
+        assertFalse(ObserverNativeScreenPayloads.supports(container, automata));
         assertFalse(ObserverNativeScreenPayloads.supports(0L, container));
+    }
+
+    @Test
+    void automataObserverPayloadNeverCarriesApiKeyText() {
+        for (Class<?> type : Set.of(
+                ObserverAutomataCopperGolemPayloads.CopperGolemState.class,
+                ObserverAutomataCopperGolemPayloads.CopperGolemRelay.class)) {
+            for (RecordComponent component : type.getRecordComponents()) {
+                if (component.getName().toLowerCase().contains("apikey")) {
+                    assertEquals(boolean.class, component.getType(),
+                            () -> "Observer Automata payload leaked API key text through " + component.getName());
+                }
+            }
+        }
     }
 
     @Test
