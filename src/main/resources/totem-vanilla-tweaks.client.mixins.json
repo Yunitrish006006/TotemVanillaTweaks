@@ -24,6 +24,7 @@
     "ObserverNativeScreenClientCrafterPriorityMixin",
     "ObserverNativeScreenClientNexusDeathNodeAdminPriorityMixin",
     "ObserverNativeScreenClientLocksmithManagementPriorityMixin",
+    "ObserverNativeScreenClientAdvancementsPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
@@ -31,7 +32,10 @@
     "AnvilScreenAccessor",
     "LoomScreenAccessor",
     "BeaconScreenAccessor",
-    "AbstractSignEditScreenAccessor"
+    "AbstractSignEditScreenAccessor",
+    "AdvancementsScreenAccessor",
+    "AdvancementTabAccessor",
+    "ClientAdvancementsAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
