@@ -9,6 +9,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeEnchantingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeHud;
 import dev.totem.vanillatweaks.client.ObserverNativeMerchantScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
+import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -42,6 +43,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverNativeMerchantScreenClient.register();
         ObserverNativeAnvilScreenClient.register();
         ObserverNativeEnchantingScreenClient.register();
+        ObserverRemnantBackpackScreenClient.register();
         ObserverNativeHud.register();
     }
 }

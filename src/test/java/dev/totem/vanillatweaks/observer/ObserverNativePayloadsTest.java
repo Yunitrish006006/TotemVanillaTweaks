@@ -8,6 +8,7 @@ import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
+import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -38,6 +39,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(1, ObserverMerchantScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverAnvilScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverEnchantingScreenPayloads.PROTOCOL_VERSION);
+        assertEquals(1, ObserverRemnantBackpackPayloads.PROTOCOL_VERSION);
         assertTrue(ObserverNativeScreenPayloads.ContainerState.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.ContainerRelay.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.FurnaceState.TYPE.id().getPath().endsWith("_v1"));
@@ -52,6 +54,8 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverAnvilScreenPayloads.AnvilRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverEnchantingScreenPayloads.EnchantingState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverRemnantBackpackPayloads.BackpackState.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverRemnantBackpackPayloads.BackpackRelay.TYPE.id().getPath().endsWith("_v1"));
 
         long container = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
         long furnace = ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
@@ -60,7 +64,8 @@ final class ObserverNativePayloadsTest {
         long merchant = ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
         long anvil = ObserverNativeScreenPayloads.CAPABILITY_ANVIL;
         long enchanting = ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING;
-        long known = container | furnace | book | crafting | merchant | anvil | enchanting;
+        long remnantBackpack = ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
+        long known = container | furnace | book | crafting | merchant | anvil | enchanting | remnantBackpack;
         assertEquals(known, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
         assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS));
         assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_FURNACE));
@@ -69,6 +74,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(merchant, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_MERCHANT));
         assertEquals(anvil, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_ANVIL));
         assertEquals(enchanting, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_ENCHANTING));
+        assertEquals(remnantBackpack, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK));
         assertEquals(0L, ObserverNativeScreenPayloads.capabilityForFamily("unknown"));
         assertEquals(known, ObserverNativeScreenPayloads.sanitizeCapabilities(known | (1L << 40)));
         assertTrue(ObserverNativeScreenPayloads.supports(known, container));
@@ -78,9 +84,11 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverNativeScreenPayloads.supports(known, merchant));
         assertTrue(ObserverNativeScreenPayloads.supports(known, anvil));
         assertTrue(ObserverNativeScreenPayloads.supports(known, enchanting));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, remnantBackpack));
         assertFalse(ObserverNativeScreenPayloads.supports(container, merchant));
         assertFalse(ObserverNativeScreenPayloads.supports(container, anvil));
         assertFalse(ObserverNativeScreenPayloads.supports(container, enchanting));
+        assertFalse(ObserverNativeScreenPayloads.supports(container, remnantBackpack));
         assertFalse(ObserverNativeScreenPayloads.supports(0L, container));
     }
 

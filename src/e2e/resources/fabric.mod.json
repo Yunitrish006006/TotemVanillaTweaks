@@ -12,6 +12,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverMerchantE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverAnvilE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverEnchantingE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverRemnantBackpackE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]

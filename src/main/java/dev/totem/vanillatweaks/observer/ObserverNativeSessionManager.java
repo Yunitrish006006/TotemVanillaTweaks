@@ -8,6 +8,7 @@ import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
+import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
@@ -30,6 +31,7 @@ public final class ObserverNativeSessionManager {
     private static final Map<UUID, Long> LAST_MERCHANT_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_ANVIL_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_ENCHANTING_SEQUENCE_BY_TARGET = new HashMap<>();
+    private static final Map<UUID, Long> LAST_REMNANT_BACKPACK_SEQUENCE_BY_TARGET = new HashMap<>();
 
     private ObserverNativeSessionManager() {}
 
@@ -164,6 +166,18 @@ public final class ObserverNativeSessionManager {
                         payload.lapisCount(), payload.options(), payload.slots()), capability);
     }
 
+    public static void acceptRemnantBackpackState(ServerPlayer target, ObserverRemnantBackpackPayloads.BackpackState payload) {
+        long capability = ObserverNativeScreenPayloads.capabilityForFamily(payload.familyId());
+        if (!validRemnantBackpack(payload) || capability != ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK
+                || !targetSupports(target, capability) || nativeObserverCount(target.getUUID()) == 0
+                || !acceptSequence(LAST_REMNANT_BACKPACK_SEQUENCE_BY_TARGET, target.getUUID(), payload.sequence())) return;
+        relayToNativeObservers(target, ObserverRemnantBackpackPayloads.BackpackRelay.TYPE,
+                new ObserverRemnantBackpackPayloads.BackpackRelay(target.getUUID(), payload.protocolVersion(), payload.sequence(),
+                        payload.open(), payload.familyId(), payload.screenClass(), payload.title(), payload.rowCount(),
+                        payload.visibleRows(), payload.firstVisibleRow(), payload.upgradeSlotCount(),
+                        payload.craftingEnabled(), payload.enderAccessVisible(), payload.slots()), capability);
+    }
+
     private static boolean targetSupports(ServerPlayer target, long capability) {
         return ObserverNativeScreenPayloads.supports(screenCapabilitiesForTarget(target.getUUID()), capability);
     }
@@ -284,6 +298,22 @@ public final class ObserverNativeSessionManager {
         return true;
     }
 
+    private static boolean validRemnantBackpack(ObserverRemnantBackpackPayloads.BackpackState p) {
+        if (p.protocolVersion() != ObserverRemnantBackpackPayloads.PROTOCOL_VERSION
+                || !ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK.equals(p.familyId())
+                || p.sequence() < 0L || !validSlots(p.slots())) return false;
+        if (!p.open()) {
+            return p.rowCount() == 0 && p.visibleRows() == 0 && p.firstVisibleRow() == 0
+                    && p.upgradeSlotCount() == 0 && !p.craftingEnabled() && !p.enderAccessVisible()
+                    && p.slots().isEmpty();
+        }
+        if (p.rowCount() < 1 || p.rowCount() > 10 || p.visibleRows() < 1 || p.visibleRows() > 6
+                || p.visibleRows() > p.rowCount() || p.firstVisibleRow() < 0
+                || p.firstVisibleRow() > p.rowCount() - p.visibleRows()
+                || p.upgradeSlotCount() < 0 || p.upgradeSlotCount() > 8) return false;
+        return p.slots().size() >= Math.min(p.rowCount() * 9 + 36, ObserverNativeScreenPayloads.MAX_SLOTS);
+    }
+
     private static boolean validMerchantItem(ObserverMerchantScreenPayloads.ItemState item) {
         return item != null && item.count() >= 0 && item.count() <= 127 && item.damage() >= 0
                 && (item.count() > 0 || item.itemId().isEmpty());
@@ -314,6 +344,7 @@ public final class ObserverNativeSessionManager {
         if (ServerPlayNetworking.canSend(observer, ObserverMerchantScreenPayloads.MerchantRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
         if (ServerPlayNetworking.canSend(observer, ObserverAnvilScreenPayloads.AnvilRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_ANVIL;
         if (ServerPlayNetworking.canSend(observer, ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING;
+        if (ServerPlayNetworking.canSend(observer, ObserverRemnantBackpackPayloads.BackpackRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
 
@@ -352,5 +383,6 @@ public final class ObserverNativeSessionManager {
         LAST_MERCHANT_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_ANVIL_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_ENCHANTING_SEQUENCE_BY_TARGET.remove(targetId);
+        LAST_REMNANT_BACKPACK_SEQUENCE_BY_TARGET.remove(targetId);
     }
 }

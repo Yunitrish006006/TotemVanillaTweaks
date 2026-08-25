@@ -31,6 +31,8 @@ public final class ObserverNativeScreenClient {
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
     private static final int GENERIC_SCREEN_DELAY_TICKS = 3;
+    private static final String REMNANT_BACKPACK_SCREEN_CLASS =
+            "dev.totem.remnant.client.screen.BackpackScreen";
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
@@ -85,6 +87,12 @@ public final class ObserverNativeScreenClient {
     }
 
     static boolean isStructuredTargetScreen(Screen screen) {
+        if (screen != null
+                && REMNANT_BACKPACK_SCREEN_CLASS.equals(screen.getClass().getName())
+                && ObserverNativeClient.targetSupportsScreen(
+                        ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK)) {
+            return true;
+        }
         if (screen instanceof AbstractFurnaceScreen<?>
                 && ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_FURNACE)) {
             return true;
@@ -186,6 +194,16 @@ public final class ObserverNativeScreenClient {
         boolean supportsContainer = ObserverNativeClient.targetSupportsScreen(
                 ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
         );
+        boolean supportsRemnantBackpack = ObserverNativeClient.targetSupportsScreen(
+                ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK
+        );
+
+        if (supportsRemnantBackpack && screen != null
+                && REMNANT_BACKPACK_SCREEN_CLASS.equals(screen.getClass().getName())) {
+            closeTargetFurnace(supportsFurnace);
+            closeTargetContainer(supportsContainer);
+            return;
+        }
 
         if (supportsFurnace
                 && screen instanceof AbstractFurnaceScreen<?>

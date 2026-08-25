@@ -30,6 +30,8 @@ public final class ObserverNativeScreenPayloads {
     public static final String FAMILY_ANVIL = "anvil";
     /** Enchanting-table three-offer semantic adapter. */
     public static final String FAMILY_ENCHANTING = "enchanting";
+    /** Optional TotemRemnant backpack storage/upgrade/crafting semantic adapter. */
+    public static final String FAMILY_REMNANT_BACKPACK = "remnant_backpack";
 
     public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
     public static final long CAPABILITY_FURNACE = 1L << 1;
@@ -38,13 +40,15 @@ public final class ObserverNativeScreenPayloads {
     public static final long CAPABILITY_MERCHANT = 1L << 4;
     public static final long CAPABILITY_ANVIL = 1L << 5;
     public static final long CAPABILITY_ENCHANTING = 1L << 6;
+    public static final long CAPABILITY_REMNANT_BACKPACK = 1L << 7;
     public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS
             | CAPABILITY_FURNACE
             | CAPABILITY_BOOK
             | CAPABILITY_CRAFTING
             | CAPABILITY_MERCHANT
             | CAPABILITY_ANVIL
-            | CAPABILITY_ENCHANTING;
+            | CAPABILITY_ENCHANTING
+            | CAPABILITY_REMNANT_BACKPACK;
 
     private static final int MAX_TEXT = 256;
 
@@ -72,6 +76,7 @@ public final class ObserverNativeScreenPayloads {
             case FAMILY_MERCHANT -> CAPABILITY_MERCHANT;
             case FAMILY_ANVIL -> CAPABILITY_ANVIL;
             case FAMILY_ENCHANTING -> CAPABILITY_ENCHANTING;
+            case FAMILY_REMNANT_BACKPACK -> CAPABILITY_REMNANT_BACKPACK;
             default -> 0L;
         };
     }

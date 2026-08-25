@@ -215,6 +215,27 @@ jobs:
                && -f "$results/observer-native-merchant.png" \
                && -f "$results/target-native-merchant-close-sent.txt" \
                && -f "$results/observer-native-merchant-closed.txt" \
+               && -f "$results/observer-ready-for-anvil.txt" \
+               && -f "$results/target-native-anvil-state-sent.txt" \
+               && -f "$results/observer-native-anvil-ok.txt" \
+               && -f "$results/observer-native-anvil-saved.txt" \
+               && -f "$results/observer-native-anvil.png" \
+               && -f "$results/target-native-anvil-close-sent.txt" \
+               && -f "$results/observer-native-anvil-closed.txt" \
+               && -f "$results/observer-ready-for-enchanting.txt" \
+               && -f "$results/target-native-enchanting-state-sent.txt" \
+               && -f "$results/observer-native-enchanting-ok.txt" \
+               && -f "$results/observer-native-enchanting-saved.txt" \
+               && -f "$results/observer-native-enchanting.png" \
+               && -f "$results/target-native-enchanting-close-sent.txt" \
+               && -f "$results/observer-native-enchanting-closed.txt" \
+               && -f "$results/observer-ready-for-remnant-backpack.txt" \
+               && -f "$results/target-native-remnant-backpack-state-sent.txt" \
+               && -f "$results/observer-native-remnant-backpack-ok.txt" \
+               && -f "$results/observer-native-remnant-backpack-saved.txt" \
+               && -f "$results/observer-native-remnant-backpack.png" \
+               && -f "$results/target-native-remnant-backpack-close-sent.txt" \
+               && -f "$results/observer-native-remnant-backpack-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -254,7 +275,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
-            'Verified world/HUD state, Target camera rendering, crafting Inventory reconstruction, metadata-only unsupported-screen handling, merchant semantic relay/reconstruction, Stop, and server cleanup.'
+            'Verified world/HUD, crafting, unsupported metadata fallback, merchant, anvil, enchanting, Remnant backpack semantics, Stop, and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
