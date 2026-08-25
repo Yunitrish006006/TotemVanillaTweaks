@@ -104,8 +104,7 @@ public final class ObserverAutomataCopperGolemClientGameTest implements FabricCl
             persistForCi(context.takeScreenshot("observer-ui-native-automata-copper-golem-screen"),
                     "observer-ui-native-automata-copper-golem-screen.png");
 
-            var close = new ObserverAutomataCopperGolemPayloads.CopperGolemRelay(
-                    targetId, emptyState(2L));
+            var close = ObserverAutomataCopperGolemPayloads.relay(targetId, emptyState(2L));
             context.runOnClient(minecraft -> {
                 invoke(ObserverAutomataCopperGolemScreenClient.class, "acceptRelay",
                         new Class<?>[]{ObserverAutomataCopperGolemPayloads.CopperGolemRelay.class}, close);
