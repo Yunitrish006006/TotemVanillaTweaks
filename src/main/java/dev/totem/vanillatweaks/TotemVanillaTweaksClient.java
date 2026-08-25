@@ -14,6 +14,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNexusScreenClient;
 import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.client.ObserverSmithingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverStonecutterScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import dev.totem.vanillatweaks.client.ObserverVillagersWoodcutterScreenClient;
 import net.fabricmc.api.ClientModInitializer;
@@ -54,6 +55,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverVillagersWoodcutterScreenClient.register();
         ObserverBrewingScreenClient.register();
         ObserverSmithingScreenClient.register();
+        ObserverStonecutterScreenClient.register();
         ObserverNativeHud.register();
     }
 }
