@@ -8,8 +8,10 @@
     "AbstractSkeletonAmmoMixin",
     "ConcretePowderItemEntityMixin",
     "HopperBlockEntityMixin",
+    "ObserverNativeScreenPayloadsVillagersCapabilityMixin",
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
+    "ObserverNativeSessionManagerVillagersCapabilityMixin",
     "RecipeManagerMixin",
     "StructureTemplateMixin"
   ],

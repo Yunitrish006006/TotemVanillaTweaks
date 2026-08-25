@@ -5,6 +5,7 @@ import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
+import dev.totem.vanillatweaks.observer.ObserverVillagersWoodcutterRelayManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
@@ -49,6 +50,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverAutomataCopperGolemPayloads.CopperGolemRelay.TYPE, ObserverAutomataCopperGolemPayloads.CopperGolemRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverNexusScreenPayloads.NexusState.TYPE, ObserverNexusScreenPayloads.NexusState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNexusScreenPayloads.NexusRelay.TYPE, ObserverNexusScreenPayloads.NexusRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverVillagersWoodcutterPayloads.WoodcutterState.TYPE, ObserverVillagersWoodcutterPayloads.WoodcutterState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverVillagersWoodcutterPayloads.WoodcutterRelay.TYPE, ObserverVillagersWoodcutterPayloads.WoodcutterRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -76,5 +79,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverAutomataCopperGolemRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverNexusScreenPayloads.NexusState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNexusRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverVillagersWoodcutterPayloads.WoodcutterState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverVillagersWoodcutterRelayManager.acceptState(context.player(), payload)));
     }
 }

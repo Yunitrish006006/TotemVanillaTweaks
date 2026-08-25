@@ -15,6 +15,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverRemnantBackpackE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverAutomataCopperGolemE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverNexusE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverVillagersWoodcutterE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]
