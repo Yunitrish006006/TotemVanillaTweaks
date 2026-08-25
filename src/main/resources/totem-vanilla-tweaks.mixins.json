@@ -10,6 +10,7 @@
     "HopperBlockEntityMixin",
     "ObserverNativeScreenPayloadsExtensionCapabilityMixin",
     "ObserverNativeSessionManagerAdvancementsCapabilityMixin",
+    "ObserverNativeSessionManagerStatsCapabilityMixin",
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerBeaconCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
