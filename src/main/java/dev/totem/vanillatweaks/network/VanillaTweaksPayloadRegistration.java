@@ -9,6 +9,7 @@ import dev.totem.vanillatweaks.observer.ObserverCrafterRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverGrindstoneRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverLoomRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
+import dev.totem.vanillatweaks.observer.ObserverNexusDeathNodeAdminRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSignRelayManager;
@@ -74,6 +75,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverSignScreenPayloads.SignRelay.TYPE, ObserverSignScreenPayloads.SignRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverCrafterScreenPayloads.CrafterState.TYPE, ObserverCrafterScreenPayloads.CrafterState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverCrafterScreenPayloads.CrafterRelay.TYPE, ObserverCrafterScreenPayloads.CrafterRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverNexusDeathNodeAdminPayloads.AdminState.TYPE, ObserverNexusDeathNodeAdminPayloads.AdminState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE, ObserverNexusDeathNodeAdminPayloads.AdminRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -121,5 +124,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverSignRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverCrafterScreenPayloads.CrafterState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverCrafterRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverNexusDeathNodeAdminPayloads.AdminState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNexusDeathNodeAdminRelayManager.acceptState(context.player(), payload)));
     }
 }

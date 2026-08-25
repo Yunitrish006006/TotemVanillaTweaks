@@ -10,6 +10,7 @@ import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
@@ -62,6 +63,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverBeaconScreenPayloads.BeaconRelay.TYPE, "BeaconRelay v1");
                 assertCanSend(player, ObserverSignScreenPayloads.SignRelay.TYPE, "SignRelay v1");
                 assertCanSend(player, ObserverCrafterScreenPayloads.CrafterRelay.TYPE, "CrafterRelay v1");
+                assertCanSend(player, ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE, "NexusDeathNodeAdminRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -80,7 +82,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     | ObserverCartographyScreenPayloads.CAPABILITY
                     | ObserverBeaconScreenPayloads.CAPABILITY
                     | ObserverSignScreenPayloads.CAPABILITY
-                    | ObserverCrafterScreenPayloads.CAPABILITY;
+                    | ObserverCrafterScreenPayloads.CAPABILITY
+                    | ObserverNexusDeathNodeAdminPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
