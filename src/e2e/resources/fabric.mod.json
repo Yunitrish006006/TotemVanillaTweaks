@@ -20,6 +20,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverSmithingE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverStonecutterE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverGrindstoneE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverLoomE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]
