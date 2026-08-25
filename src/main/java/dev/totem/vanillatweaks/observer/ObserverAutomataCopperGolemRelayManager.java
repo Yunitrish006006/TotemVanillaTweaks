@@ -44,6 +44,10 @@ public final class ObserverAutomataCopperGolemRelayManager {
         }
     }
 
+    public static void clearTarget(UUID targetId) {
+        LAST_SEQUENCE_BY_TARGET.remove(targetId);
+    }
+
     private static boolean hasCapableObserver(UUID targetId) {
         for (Map.Entry<UUID, UUID> entry : targetByObserver().entrySet()) {
             if (!targetId.equals(entry.getValue())) continue;
