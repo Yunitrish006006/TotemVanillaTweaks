@@ -14,6 +14,7 @@ import java.util.UUID;
 
 /** Relay and validation for Stonecutter selector semantics. */
 public final class ObserverStonecutterRelayManager {
+    private static final int VANILLA_SLOT_COUNT = 38;
     private static final Map<UUID, Long> LAST_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Field TARGET_BY_OBSERVER = staticField("TARGET_BY_OBSERVER");
     private static final Field SCREEN_CAPABILITIES_BY_OBSERVER = staticField("SCREEN_CAPABILITIES_BY_OBSERVER");
@@ -57,10 +58,14 @@ public final class ObserverStonecutterRelayManager {
         if (!p.open()) return p.selectedRecipeIndex() == -1 && p.recipeCount() == 0 && !p.hasInputItem()
                 && !p.resultAvailable() && p.slots().isEmpty();
         if (!ObserverStonecutterScreenPayloads.SCREEN_CLASS.equals(p.screenClass())
-                || p.recipeCount() < 0 || p.recipeCount() > ObserverStonecutterScreenPayloads.MAX_RECIPES) return false;
+                || p.recipeCount() < 0 || p.recipeCount() > ObserverStonecutterScreenPayloads.MAX_RECIPES
+                || p.slots().size() != VANILLA_SLOT_COUNT) return false;
         if (p.recipeCount() == 0) {
             if (p.selectedRecipeIndex() != -1 || p.resultAvailable()) return false;
-        } else if (p.selectedRecipeIndex() < 0 || p.selectedRecipeIndex() >= p.recipeCount()) return false;
+        } else {
+            if (p.selectedRecipeIndex() < -1 || p.selectedRecipeIndex() >= p.recipeCount()) return false;
+            if (p.selectedRecipeIndex() == -1 && p.resultAvailable()) return false;
+        }
         return validSlots(p.slots());
     }
 
