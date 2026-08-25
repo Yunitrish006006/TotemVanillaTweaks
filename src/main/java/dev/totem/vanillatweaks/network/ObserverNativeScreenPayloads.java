@@ -16,13 +16,21 @@ public final class ObserverNativeScreenPayloads {
     public static final int FURNACE_PROTOCOL_VERSION = 1;
     public static final int MAX_SLOTS = 128;
 
+    /** Generic slot-layout adapter used for AbstractContainerScreen families. */
     public static final String FAMILY_CONTAINER_SLOTS = "container_slots";
+    /** Furnace, blast-furnace and smoker adapter with progress/fuel semantics. */
     public static final String FAMILY_FURNACE = "furnace";
+    /** Written/writable/lectern/signing book semantic adapter. */
     public static final String FAMILY_BOOK = "book";
+    /** Player 2x2 and crafting-table 3x3 semantic adapter. */
     public static final String FAMILY_CRAFTING = "crafting";
+    /** Villager and wandering-trader semantic adapter. */
     public static final String FAMILY_MERCHANT = "merchant";
+    /** Anvil rename/repair semantic adapter. */
     public static final String FAMILY_ANVIL = "anvil";
+    /** Enchanting-table three-offer semantic adapter. */
     public static final String FAMILY_ENCHANTING = "enchanting";
+    /** Optional TotemRemnant backpack storage/upgrade/crafting semantic adapter. */
     public static final String FAMILY_REMNANT_BACKPACK = "remnant_backpack";
 
     public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
@@ -34,18 +42,27 @@ public final class ObserverNativeScreenPayloads {
     public static final long CAPABILITY_ENCHANTING = 1L << 6;
     public static final long CAPABILITY_REMNANT_BACKPACK = 1L << 7;
     public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS
-            | CAPABILITY_FURNACE | CAPABILITY_BOOK | CAPABILITY_CRAFTING | CAPABILITY_MERCHANT
-            | CAPABILITY_ANVIL | CAPABILITY_ENCHANTING | CAPABILITY_REMNANT_BACKPACK;
+            | CAPABILITY_FURNACE
+            | CAPABILITY_BOOK
+            | CAPABILITY_CRAFTING
+            | CAPABILITY_MERCHANT
+            | CAPABILITY_ANVIL
+            | CAPABILITY_ENCHANTING
+            | CAPABILITY_REMNANT_BACKPACK;
 
     private static final int MAX_TEXT = 256;
 
-    private ObserverNativeScreenPayloads() {}
+    private ObserverNativeScreenPayloads() {
+    }
 
     private static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
     }
 
-    public static long sanitizeCapabilities(long capabilities) { return capabilities & KNOWN_CAPABILITIES; }
+    public static long sanitizeCapabilities(long capabilities) {
+        return capabilities & KNOWN_CAPABILITIES;
+    }
+
     public static boolean supports(long capabilities, long capability) {
         return (sanitizeCapabilities(capabilities) & capability) == capability;
     }
@@ -64,15 +81,22 @@ public final class ObserverNativeScreenPayloads {
         };
     }
 
-    public record SlotState(int index, int x, int y, String itemId, int count, int damage) {}
+    public record SlotState(int index, int x, int y, String itemId, int count, int damage) {
+    }
 
     public record ContainerState(int protocolVersion, long sequence, boolean open, String familyId,
                                  String screenClass, String title, int contentWidth, int contentHeight,
                                  int mouseX, int mouseY, List<SlotState> slots) implements CustomPacketPayload {
         public static final Type<ContainerState> TYPE = new Type<>(id("observer_native_container_state_v2"));
         public static final StreamCodec<FriendlyByteBuf, ContainerState> CODEC = StreamCodec.of(
-                ObserverNativeScreenPayloads::writeContainerState, ObserverNativeScreenPayloads::readContainerState);
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+                ObserverNativeScreenPayloads::writeContainerState,
+                ObserverNativeScreenPayloads::readContainerState
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     public record ContainerRelay(UUID targetId, int protocolVersion, long sequence, boolean open, String familyId,
@@ -92,8 +116,13 @@ public final class ObserverNativeScreenPayloads {
                     return new ContainerRelay(targetId, state.protocolVersion(), state.sequence(), state.open(),
                             state.familyId(), state.screenClass(), state.title(), state.contentWidth(),
                             state.contentHeight(), state.mouseX(), state.mouseY(), state.slots());
-                });
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+                }
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     public record FurnaceState(int protocolVersion, long sequence, boolean open, String familyId,
@@ -102,8 +131,14 @@ public final class ObserverNativeScreenPayloads {
                                float fuelProgress, boolean lit) implements CustomPacketPayload {
         public static final Type<FurnaceState> TYPE = new Type<>(id("observer_native_furnace_state_v1"));
         public static final StreamCodec<FriendlyByteBuf, FurnaceState> CODEC = StreamCodec.of(
-                ObserverNativeScreenPayloads::writeFurnaceState, ObserverNativeScreenPayloads::readFurnaceState);
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+                ObserverNativeScreenPayloads::writeFurnaceState,
+                ObserverNativeScreenPayloads::readFurnaceState
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     public record FurnaceRelay(UUID targetId, int protocolVersion, long sequence, boolean open, String familyId,
@@ -116,7 +151,8 @@ public final class ObserverNativeScreenPayloads {
                     buf.writeUUID(value.targetId());
                     writeFurnaceFields(buf, value.protocolVersion(), value.sequence(), value.open(), value.familyId(),
                             value.screenClass(), value.title(), value.contentWidth(), value.contentHeight(),
-                            value.mouseX(), value.mouseY(), value.slots(), value.cookProgress(), value.fuelProgress(), value.lit());
+                            value.mouseX(), value.mouseY(), value.slots(), value.cookProgress(), value.fuelProgress(),
+                            value.lit());
                 },
                 buf -> {
                     UUID targetId = buf.readUUID();
@@ -125,13 +161,19 @@ public final class ObserverNativeScreenPayloads {
                             state.familyId(), state.screenClass(), state.title(), state.contentWidth(),
                             state.contentHeight(), state.mouseX(), state.mouseY(), state.slots(), state.cookProgress(),
                             state.fuelProgress(), state.lit());
-                });
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+                }
+        );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 
     private static void writeContainerState(FriendlyByteBuf buf, ContainerState value) {
         writeContainerFields(buf, value.protocolVersion(), value.sequence(), value.open(), value.familyId(),
-                value.screenClass(), value.title(), value.contentWidth(), value.contentHeight(), value.mouseX(), value.mouseY(), value.slots());
+                value.screenClass(), value.title(), value.contentWidth(), value.contentHeight(), value.mouseX(),
+                value.mouseY(), value.slots());
     }
 
     private static void writeContainerFields(FriendlyByteBuf buf, int protocolVersion, long sequence, boolean open,
@@ -219,7 +261,9 @@ public final class ObserverNativeScreenPayloads {
 
     private static List<SlotState> readSlots(FriendlyByteBuf buf) {
         int slotCount = buf.readVarInt();
-        if (slotCount < 0 || slotCount > MAX_SLOTS) throw new IllegalArgumentException("Observer container slot count out of range: " + slotCount);
+        if (slotCount < 0 || slotCount > MAX_SLOTS) {
+            throw new IllegalArgumentException("Observer container slot count out of range: " + slotCount);
+        }
         List<SlotState> slots = new ArrayList<>(slotCount);
         for (int i = 0; i < slotCount; i++) {
             slots.add(new SlotState(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readUtf(MAX_TEXT),
@@ -230,5 +274,6 @@ public final class ObserverNativeScreenPayloads {
 
     private record CommonScreenFields(int protocolVersion, long sequence, boolean open, String familyId,
                                       String screenClass, String title, int contentWidth, int contentHeight,
-                                      int mouseX, int mouseY, List<SlotState> slots) {}
+                                      int mouseX, int mouseY, List<SlotState> slots) {
+    }
 }
