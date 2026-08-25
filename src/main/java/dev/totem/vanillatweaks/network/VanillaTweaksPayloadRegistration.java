@@ -16,6 +16,7 @@ import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSignRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSmithingRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverStatsRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverStonecutterRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverVillagersWoodcutterRelayManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -83,6 +84,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverLocksmithManagementPayloads.ManagementRelay.TYPE, ObserverLocksmithManagementPayloads.ManagementRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverAdvancementsScreenPayloads.AdvancementsState.TYPE, ObserverAdvancementsScreenPayloads.AdvancementsState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverAdvancementsScreenPayloads.AdvancementsRelay.TYPE, ObserverAdvancementsScreenPayloads.AdvancementsRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverStatsScreenPayloads.StatsState.TYPE, ObserverStatsScreenPayloads.StatsState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverStatsScreenPayloads.StatsRelay.TYPE, ObserverStatsScreenPayloads.StatsRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -136,5 +139,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverLocksmithManagementRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverAdvancementsScreenPayloads.AdvancementsState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverAdvancementsRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverStatsScreenPayloads.StatsState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverStatsRelayManager.acceptState(context.player(), payload)));
     }
 }
