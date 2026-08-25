@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks.mixin;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,6 +18,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
         cir.setReturnValue(capabilities & (ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
                 | ObserverVillagersWoodcutterPayloads.CAPABILITY
                 | ObserverBrewingScreenPayloads.CAPABILITY
-                | ObserverSmithingScreenPayloads.CAPABILITY));
+                | ObserverSmithingScreenPayloads.CAPABILITY
+                | ObserverStonecutterScreenPayloads.CAPABILITY));
     }
 }
