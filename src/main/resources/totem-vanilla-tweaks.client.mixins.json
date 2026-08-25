@@ -13,6 +13,7 @@
     "ObserverNativeScreenClientAutomataPriorityMixin",
     "ObserverNativeScreenClientNexusPriorityMixin",
     "ObserverNativeScreenClientVillagersPriorityMixin",
+    "ObserverNativeScreenClientBrewingPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
