@@ -6,6 +6,7 @@ import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
+import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -54,6 +55,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay v2");
                 assertCanSend(player, ObserverNativeScreenPayloads.FurnaceRelay.TYPE, "FurnaceRelay v1");
                 assertCanSend(player, ObserverBrewingScreenPayloads.BrewingRelay.TYPE, "BrewingRelay v1");
+                assertCanSend(player, ObserverSmithingScreenPayloads.SmithingRelay.TYPE, "SmithingRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -66,7 +68,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
             });
 
             long expectedCapabilities = ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
-                    | ObserverBrewingScreenPayloads.CAPABILITY;
+                    | ObserverBrewingScreenPayloads.CAPABILITY
+                    | ObserverSmithingScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
