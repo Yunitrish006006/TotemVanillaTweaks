@@ -17,11 +17,13 @@
     "ObserverNativeScreenClientSmithingPriorityMixin",
     "ObserverNativeScreenClientStonecutterPriorityMixin",
     "ObserverNativeScreenClientGrindstonePriorityMixin",
+    "ObserverNativeScreenClientLoomPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",
     "MerchantScreenAccessor",
-    "AnvilScreenAccessor"
+    "AnvilScreenAccessor",
+    "LoomScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

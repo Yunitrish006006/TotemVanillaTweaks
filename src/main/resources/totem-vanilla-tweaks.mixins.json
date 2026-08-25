@@ -12,6 +12,7 @@
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
     "ObserverNativeSessionManagerGrindstoneCapabilityMixin",
+    "ObserverNativeSessionManagerLoomCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
     "ObserverNativeSessionManagerSmithingCapabilityMixin",
     "ObserverNativeSessionManagerStonecutterCapabilityMixin",
