@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.network;
 
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
+import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -69,6 +70,6 @@ public final class VanillaTweaksPayloadRegistration {
         ServerPlayNetworking.registerGlobalReceiver(ObserverRemnantBackpackPayloads.BackpackState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptRemnantBackpackState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverAutomataCopperGolemPayloads.CopperGolemState.TYPE,
-                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptAutomataCopperGolemState(context.player(), payload)));
+                (payload, context) -> context.server().execute(() -> ObserverAutomataCopperGolemRelayManager.acceptState(context.player(), payload)));
     }
 }
