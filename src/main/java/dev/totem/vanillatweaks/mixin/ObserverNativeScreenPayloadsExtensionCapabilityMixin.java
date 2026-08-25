@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.mixin;
 
+import dev.totem.vanillatweaks.network.ObserverAdvancementsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBeaconScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
@@ -35,6 +36,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverSignScreenPayloads.CAPABILITY
                 | ObserverCrafterScreenPayloads.CAPABILITY
                 | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
-                | ObserverLocksmithManagementPayloads.CAPABILITY));
+                | ObserverLocksmithManagementPayloads.CAPABILITY
+                | ObserverAdvancementsScreenPayloads.CAPABILITY));
     }
 }
