@@ -13,6 +13,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNexusScreenClient;
 import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.client.ObserverVillagersWoodcutterScreenClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
@@ -48,6 +49,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         ObserverRemnantBackpackScreenClient.register();
         ObserverAutomataCopperGolemScreenClient.register();
         ObserverNexusScreenClient.register();
+        ObserverVillagersWoodcutterScreenClient.register();
         ObserverNativeHud.register();
     }
 }
