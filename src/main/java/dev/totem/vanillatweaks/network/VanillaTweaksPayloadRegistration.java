@@ -5,6 +5,7 @@ import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverBeaconRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverBrewingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverCartographyRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverCrafterRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverGrindstoneRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverLoomRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
@@ -71,6 +72,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverBeaconScreenPayloads.BeaconRelay.TYPE, ObserverBeaconScreenPayloads.BeaconRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverSignScreenPayloads.SignState.TYPE, ObserverSignScreenPayloads.SignState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverSignScreenPayloads.SignRelay.TYPE, ObserverSignScreenPayloads.SignRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverCrafterScreenPayloads.CrafterState.TYPE, ObserverCrafterScreenPayloads.CrafterState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverCrafterScreenPayloads.CrafterRelay.TYPE, ObserverCrafterScreenPayloads.CrafterRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -116,5 +119,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverBeaconRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverSignScreenPayloads.SignState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSignRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverCrafterScreenPayloads.CrafterState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverCrafterRelayManager.acceptState(context.player(), payload)));
     }
 }
