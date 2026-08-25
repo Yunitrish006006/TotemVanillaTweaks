@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.mixin;
 
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
@@ -19,6 +20,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverVillagersWoodcutterPayloads.CAPABILITY
                 | ObserverBrewingScreenPayloads.CAPABILITY
                 | ObserverSmithingScreenPayloads.CAPABILITY
-                | ObserverStonecutterScreenPayloads.CAPABILITY));
+                | ObserverStonecutterScreenPayloads.CAPABILITY
+                | ObserverGrindstoneScreenPayloads.CAPABILITY));
     }
 }
