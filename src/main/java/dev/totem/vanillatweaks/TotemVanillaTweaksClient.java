@@ -20,14 +20,21 @@ import org.lwjgl.glfw.GLFW;
 public final class TotemVanillaTweaksClient implements ClientModInitializer {
     private static KeyMapping sortBackpackKey;
 
-    public static KeyMapping sortBackpackKey() { return sortBackpackKey; }
+    public static KeyMapping sortBackpackKey() {
+        return sortBackpackKey;
+    }
 
     @Override
     public void onInitializeClient() {
         KeyMapping.Category category = KeyMapping.Category.register(
-                Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category"));
+                Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category")
+        );
         sortBackpackKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.deadrecall.sort_backpack", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_MIDDLE, category));
+                "key.deadrecall.sort_backpack",
+                InputConstants.Type.MOUSE,
+                GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
+                category
+        ));
         ObserverUiClient.register();
         ObserverNativeClient.register();
         ObserverNativeScreenClient.register();
