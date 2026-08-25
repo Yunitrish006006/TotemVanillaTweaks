@@ -94,6 +94,8 @@ public final class ObserverAutomataCopperGolemClientGameTest implements FabricCl
             context.waitFor(minecraft -> minecraft.gui.screen() != null
                     && minecraft.gui.screen().getClass().getName().contains("NativeAutomataCopperGolemMirrorScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
+            long firstCompleteFrame = getLong("extractedFrames");
+            context.waitFor(minecraft -> getLong("extractedFrames") > firstCompleteFrame, 100);
             if (!"sorting".equals(getString("remoteMode")) || !"bindings".equals(getString("remoteTab"))) {
                 throw new AssertionError("Automata mode/tab state was not reconstructed");
             }
