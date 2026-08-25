@@ -23,6 +23,7 @@
     "ObserverNativeScreenClientSignPriorityMixin",
     "ObserverNativeScreenClientCrafterPriorityMixin",
     "ObserverNativeScreenClientNexusDeathNodeAdminPriorityMixin",
+    "ObserverNativeScreenClientLocksmithManagementPriorityMixin",
     "BookViewScreenAccessor",
     "BookEditScreenAccessor",
     "BookSignScreenAccessor",

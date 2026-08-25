@@ -15,6 +15,7 @@
     "ObserverNativeSessionManagerCartographyCapabilityMixin",
     "ObserverNativeSessionManagerCrafterCapabilityMixin",
     "ObserverNativeSessionManagerGrindstoneCapabilityMixin",
+    "ObserverNativeSessionManagerLocksmithManagementCapabilityMixin",
     "ObserverNativeSessionManagerLoomCapabilityMixin",
     "ObserverNativeSessionManagerNexusCapabilityMixin",
     "ObserverNativeSessionManagerNexusDeathNodeAdminCapabilityMixin",

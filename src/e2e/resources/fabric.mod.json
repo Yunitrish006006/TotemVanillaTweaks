@@ -26,6 +26,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverSignE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverCrafterE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverNexusDeathNodeAdminE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverLocksmithManagementE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]

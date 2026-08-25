@@ -5,6 +5,7 @@ import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCrafterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverLocksmithManagementPayloads;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
@@ -33,6 +34,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverBeaconScreenPayloads.CAPABILITY
                 | ObserverSignScreenPayloads.CAPABILITY
                 | ObserverCrafterScreenPayloads.CAPABILITY
-                | ObserverNexusDeathNodeAdminPayloads.CAPABILITY));
+                | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
+                | ObserverLocksmithManagementPayloads.CAPABILITY));
     }
 }
