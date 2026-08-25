@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.gametest;
 
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -52,6 +53,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverNativePayloads.NativeViewRelay.TYPE, "NativeViewRelay v4");
                 assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay v2");
                 assertCanSend(player, ObserverNativeScreenPayloads.FurnaceRelay.TYPE, "FurnaceRelay v1");
+                assertCanSend(player, ObserverBrewingScreenPayloads.BrewingRelay.TYPE, "BrewingRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -63,14 +65,14 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 return id;
             });
 
+            long expectedCapabilities = ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
+                    | ObserverBrewingScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
                     && nativeGetInt("targetProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
-                    && nativeGetLong("observerScreenCapabilities")
-                    == ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
-                    && nativeGetLong("targetScreenCapabilities")
-                    == ObserverNativeScreenPayloads.KNOWN_CAPABILITIES, 100);
+                    && nativeGetLong("observerScreenCapabilities") == expectedCapabilities
+                    && nativeGetLong("targetScreenCapabilities") == expectedCapabilities, 100);
 
             context.waitFor(minecraft -> nativeGetLong("nextTargetStateSequence") > 0L
                     && nativeGetLong("lastNativeStateSequence") > 0L, 200);

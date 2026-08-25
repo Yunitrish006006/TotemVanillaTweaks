@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.network;
 
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverBrewingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
@@ -52,6 +53,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverNexusScreenPayloads.NexusRelay.TYPE, ObserverNexusScreenPayloads.NexusRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverVillagersWoodcutterPayloads.WoodcutterState.TYPE, ObserverVillagersWoodcutterPayloads.WoodcutterState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverVillagersWoodcutterPayloads.WoodcutterRelay.TYPE, ObserverVillagersWoodcutterPayloads.WoodcutterRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverBrewingScreenPayloads.BrewingState.TYPE, ObserverBrewingScreenPayloads.BrewingState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverBrewingScreenPayloads.BrewingRelay.TYPE, ObserverBrewingScreenPayloads.BrewingRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -81,5 +84,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverNexusRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverVillagersWoodcutterPayloads.WoodcutterState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverVillagersWoodcutterRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverBrewingScreenPayloads.BrewingState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverBrewingRelayManager.acceptState(context.player(), payload)));
     }
 }
