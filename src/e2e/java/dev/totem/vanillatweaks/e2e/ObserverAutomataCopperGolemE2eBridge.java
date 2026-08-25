@@ -68,6 +68,14 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
                 fail("Automata Copper Golem configured-key semantic flag missing");
                 return;
             }
+            if (!ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteApiUrl"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteModel"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteGatheringPrompt"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteBindingPrompt"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_VALID.equals(getObject(AUTOMATA, "remoteCacheValueText"))) {
+                fail("Automata Copper Golem privacy-token semantic state mismatch");
+                return;
+            }
             if (hasStringApiKeyField()) {
                 fail("Observer Automata client retained API-key text field");
                 return;
@@ -114,7 +122,7 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
     private static ObserverAutomataCopperGolemPayloads.CopperGolemState openState() {
         var binding = new ObserverAutomataCopperGolemPayloads.BindingState(
                 "minecraft:overworld", 10, 64, -5, "minecraft:chest", "minecraft:chest",
-                true, true, true, "Sort ores only", 3, 1,
+                true, true, true, ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED, 3, 1,
                 List.of("minecraft:iron_ingot"), List.of("minecraft:dirt"), List.of("c:ingots"), List.of());
         return new ObserverAutomataCopperGolemPayloads.CopperGolemState(
                 ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION,
@@ -144,13 +152,13 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
                 250,
                 "minecraft:chest",
                 1,
-                "https://example.invalid/v1/chat/completions",
+                ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
                 true,
-                "test-model",
+                ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
                 1,
-                "Gather useful stone blocks",
-                "Sort ores only",
-                "",
+                ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
+                ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
+                ObserverAutomataCopperGolemPayloads.TOKEN_VALID,
                 binding,
                 new ObserverAutomataCopperGolemPayloads.GatheringAreaState(
                         "minecraft:overworld", true, 0, 60, 0, true, 8, 70, 8),

@@ -17,6 +17,7 @@
     "fabric-client-gametest": [
       "dev.totem.vanillatweaks.gametest.ObserverUiClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverMerchantClientGameTest",
+      "dev.totem.vanillatweaks.gametest.ObserverAutomataCopperGolemClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverUiNetworkLoopbackClientGameTest",
       "dev.totem.vanillatweaks.gametest.SkeletonAmmoRuntimeClientGameTest"
     ]

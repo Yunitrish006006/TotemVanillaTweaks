@@ -15,6 +15,10 @@ public final class ObserverAutomataCopperGolemPayloads {
     public static final int PROTOCOL_VERSION = 1;
     public static final int MAX_BINDINGS = 128;
     public static final int MAX_VALUES = 64;
+    public static final String SCREEN_CLASS = "dev.totem.automata.client.CopperGolemMenuScreen";
+    public static final String SCREEN_TITLE = "Copper Golem";
+    public static final String TOKEN_CONFIGURED = "configured";
+    public static final String TOKEN_VALID = "valid";
     private static final int MAX_TEXT = 256;
     private static final int MAX_LONG_TEXT = 2048;
 
@@ -92,6 +96,29 @@ public final class ObserverAutomataCopperGolemPayloads {
 
     public static CopperGolemRelay relay(UUID targetId, CopperGolemState s) { return fromState(targetId, s); }
 
+    /** Redacts configured free text before a Target constructs its semantic state payload. */
+    public static String configuredToken(String value) {
+        return value == null || value.isBlank() ? "" : TOKEN_CONFIGURED;
+    }
+
+    /** Redacts a locally validated editor value before a Target constructs its semantic state payload. */
+    public static String validToken(String value) {
+        return value == null || value.isBlank() ? "" : TOKEN_VALID;
+    }
+
+    /** The complete wire allowlist for fields that formerly carried editor free text. */
+    public static boolean isSafeTextToken(String value) {
+        return "".equals(value) || TOKEN_CONFIGURED.equals(value) || TOKEN_VALID.equals(value);
+    }
+
+    public static boolean isConfiguredToken(String value) {
+        return "".equals(value) || TOKEN_CONFIGURED.equals(value);
+    }
+
+    public static boolean isValidToken(String value) {
+        return "".equals(value) || TOKEN_VALID.equals(value);
+    }
+
     private static CopperGolemRelay fromState(UUID targetId, CopperGolemState s) {
         return new CopperGolemRelay(targetId, s.protocolVersion(), s.sequence(), s.open(), s.familyId(),
                 s.screenClass(), s.title(), s.running(), s.mode(), s.activity(), s.tab(), s.selectedBinding(),
@@ -134,13 +161,13 @@ public final class ObserverAutomataCopperGolemPayloads {
         buf.writeVarInt(v.toolDamage());
         buf.writeVarInt(v.toolMaxDamage());
         writeItemSummary(buf, v.storageItemId(), v.storageCount());
-        buf.writeUtf(v.editorApiUrl(), MAX_LONG_TEXT);
+        buf.writeUtf(configuredToken(v.editorApiUrl()), MAX_LONG_TEXT);
         buf.writeBoolean(v.apiKeyConfigured());
-        buf.writeUtf(v.editorModel(), MAX_TEXT);
+        buf.writeUtf(configuredToken(v.editorModel()), MAX_TEXT);
         buf.writeVarInt(v.llmActiveCount());
-        buf.writeUtf(v.editorGatheringPrompt(), MAX_LONG_TEXT);
-        buf.writeUtf(v.editorBindingPrompt(), MAX_LONG_TEXT);
-        buf.writeUtf(v.cacheValueText(), MAX_TEXT);
+        buf.writeUtf(configuredToken(v.editorGatheringPrompt()), MAX_LONG_TEXT);
+        buf.writeUtf(configuredToken(v.editorBindingPrompt()), MAX_LONG_TEXT);
+        buf.writeUtf(validToken(v.cacheValueText()), MAX_TEXT);
         writeOptionalBinding(buf, v.sourceContainer());
         writeOptionalArea(buf, v.gatheringArea());
         writeStrings(buf, v.gatheringManualTargets());
@@ -214,7 +241,7 @@ public final class ObserverAutomataCopperGolemPayloads {
         buf.writeInt(value.x()); buf.writeInt(value.y()); buf.writeInt(value.z());
         buf.writeUtf(value.blockId(), MAX_TEXT); buf.writeUtf(value.itemId(), MAX_TEXT);
         buf.writeBoolean(value.loaded()); buf.writeBoolean(value.available()); buf.writeBoolean(value.llmEnabled());
-        buf.writeUtf(value.llmPrompt(), MAX_LONG_TEXT);
+        buf.writeUtf(configuredToken(value.llmPrompt()), MAX_LONG_TEXT);
         buf.writeVarInt(value.llmCachedItemIds()); buf.writeVarInt(value.llmCachedTags());
         writeStrings(buf, value.llmAllowedItemIds()); writeStrings(buf, value.llmDeniedItemIds());
         writeStrings(buf, value.llmAllowedTags()); writeStrings(buf, value.llmDeniedTags());

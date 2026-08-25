@@ -28,7 +28,7 @@ public final class ObserverAutomataCopperGolemClientGameTest implements FabricCl
             UUID targetId = UUID.randomUUID();
             var binding = new ObserverAutomataCopperGolemPayloads.BindingState(
                     "minecraft:overworld", 10, 64, -5, "minecraft:chest", "minecraft:chest",
-                    true, true, true, "Sort ores only", 3, 1,
+                    true, true, true, ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED, 3, 1,
                     List.of("minecraft:iron_ingot"), List.of("minecraft:dirt"),
                     List.of("c:ingots"), List.of());
             var relay = new ObserverAutomataCopperGolemPayloads.CopperGolemRelay(
@@ -60,13 +60,13 @@ public final class ObserverAutomataCopperGolemClientGameTest implements FabricCl
                     250,
                     "minecraft:chest",
                     1,
-                    "https://example.invalid/v1/chat/completions",
+                    ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
                     true,
-                    "test-model",
+                    ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
                     1,
-                    "Gather useful stone blocks",
-                    "Sort ores only",
-                    "",
+                    ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
+                    ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED,
+                    ObserverAutomataCopperGolemPayloads.TOKEN_VALID,
                     binding,
                     new ObserverAutomataCopperGolemPayloads.GatheringAreaState(
                             "minecraft:overworld", true, 0, 60, 0, true, 8, 70, 8),
@@ -94,11 +94,20 @@ public final class ObserverAutomataCopperGolemClientGameTest implements FabricCl
             context.waitFor(minecraft -> minecraft.gui.screen() != null
                     && minecraft.gui.screen().getClass().getName().contains("NativeAutomataCopperGolemMirrorScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
+            long firstCompleteFrame = getLong("extractedFrames");
+            context.waitFor(minecraft -> getLong("extractedFrames") > firstCompleteFrame, 100);
             if (!"sorting".equals(getString("remoteMode")) || !"bindings".equals(getString("remoteTab"))) {
                 throw new AssertionError("Automata mode/tab state was not reconstructed");
             }
             if (!getBoolean("remoteApiKeyConfigured")) {
                 throw new AssertionError("Automata configured-key semantic flag was not reconstructed");
+            }
+            if (!ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getString("remoteApiUrl"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getString("remoteModel"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getString("remoteGatheringPrompt"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getString("remoteBindingPrompt"))
+                    || !ObserverAutomataCopperGolemPayloads.TOKEN_VALID.equals(getString("remoteCacheValueText"))) {
+                throw new AssertionError("Automata privacy-token state was not reconstructed");
             }
             assertNoRemoteApiKeyStringField();
             persistForCi(context.takeScreenshot("observer-ui-native-automata-copper-golem-screen"),

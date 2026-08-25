@@ -27,7 +27,7 @@ import java.util.UUID;
 
 /** Optional semantic adapter for TotemAutomata's Copper Golem control screen. */
 public final class ObserverAutomataCopperGolemScreenClient {
-    private static final String SCREEN_CLASS = "dev.totem.automata.client.CopperGolemMenuScreen";
+    private static final String SCREEN_CLASS = ObserverAutomataCopperGolemPayloads.SCREEN_CLASS;
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
     private static final int PANEL_WIDTH = 176;
     private static final int PANEL_HEIGHT = 222;
@@ -143,7 +143,8 @@ public final class ObserverAutomataCopperGolemScreenClient {
         int selected = integer(invoke(ui, "selected"));
         int scroll = integer(invoke(ui, "scroll"));
         String apiUrl = editValue(screen, "apiUrlField");
-        String apiKey = editValue(screen, "apiKeyField");
+        boolean apiKeyConfigured = !editValue(screen, "apiKeyField").isBlank()
+                || !string(invoke(snapshot, "llmApiKey")).isBlank();
         String model = editValue(screen, "modelField");
         String gatheringPrompt = editValue(screen, "gatheringPromptField");
         String bindingPrompt = editValue(screen, "bindingPromptField");
@@ -155,7 +156,7 @@ public final class ObserverAutomataCopperGolemScreenClient {
                 open,
                 ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM,
                 SCREEN_CLASS,
-                screen.getTitle() == null ? "" : screen.getTitle().getString(),
+                ObserverAutomataCopperGolemPayloads.SCREEN_TITLE,
                 bool(invoke(snapshot, "running")),
                 string(invoke(snapshot, "mode")),
                 string(invoke(snapshot, "activity")),
@@ -177,13 +178,16 @@ public final class ObserverAutomataCopperGolemScreenClient {
                 integer(invoke(snapshot, "gatheringToolMaxDamage")),
                 string(invoke(snapshot, "gatheringStorageItemId")),
                 integer(invoke(snapshot, "gatheringStorageCount")),
-                apiUrl.isBlank() ? string(invoke(snapshot, "llmApiUrl")) : apiUrl,
-                !apiKey.isBlank() || !string(invoke(snapshot, "llmApiKey")).isBlank(),
-                model.isBlank() ? string(invoke(snapshot, "llmModel")) : model,
+                ObserverAutomataCopperGolemPayloads.configuredToken(
+                        apiUrl.isBlank() ? string(invoke(snapshot, "llmApiUrl")) : apiUrl),
+                apiKeyConfigured,
+                ObserverAutomataCopperGolemPayloads.configuredToken(
+                        model.isBlank() ? string(invoke(snapshot, "llmModel")) : model),
                 integer(invoke(snapshot, "llmActiveCount")),
-                gatheringPrompt.isBlank() ? string(invoke(snapshot, "gatheringLlmPrompt")) : gatheringPrompt,
-                bindingPrompt,
-                cacheValue,
+                ObserverAutomataCopperGolemPayloads.configuredToken(
+                        gatheringPrompt.isBlank() ? string(invoke(snapshot, "gatheringLlmPrompt")) : gatheringPrompt),
+                ObserverAutomataCopperGolemPayloads.configuredToken(bindingPrompt),
+                ObserverAutomataCopperGolemPayloads.validToken(cacheValue),
                 binding(invoke(snapshot, "sourceContainer")),
                 area(invoke(snapshot, "gatheringArea")),
                 strings(invoke(snapshot, "gatheringManualTargets")),
@@ -239,7 +243,8 @@ public final class ObserverAutomataCopperGolemScreenClient {
                 string(invoke(value, "dimension")), integer(invoke(value, "x")), integer(invoke(value, "y")),
                 integer(invoke(value, "z")), string(invoke(value, "blockId")), string(invoke(value, "itemId")),
                 bool(invoke(value, "loaded")), bool(invoke(value, "available")), bool(invoke(value, "llmEnabled")),
-                string(invoke(value, "llmPrompt")), integer(invoke(value, "llmCachedItemIds")),
+                ObserverAutomataCopperGolemPayloads.configuredToken(string(invoke(value, "llmPrompt"))),
+                integer(invoke(value, "llmCachedItemIds")),
                 integer(invoke(value, "llmCachedTags")), strings(invoke(value, "llmAllowedItemIds")),
                 strings(invoke(value, "llmDeniedItemIds")), strings(invoke(value, "llmAllowedTags")),
                 strings(invoke(value, "llmDeniedTags")));
@@ -425,11 +430,11 @@ public final class ObserverAutomataCopperGolemScreenClient {
         }
 
         private void drawLlm(GuiGraphicsExtractor g, int left, int top) {
-            g.text(minecraft.font, "API: " + trim(remoteApiUrl, 25), left + 7, top + 54, 0xFF404040, false);
+            g.text(minecraft.font, "API: " + tokenLabel(remoteApiUrl), left + 7, top + 54, 0xFF404040, false);
             g.text(minecraft.font, "Key: " + (remoteApiKeyConfigured ? "configured" : "empty"), left + 7, top + 66, 0xFF404040, false);
-            g.text(minecraft.font, "Model: " + trim(remoteModel, 22), left + 7, top + 78, 0xFF404040, false);
+            g.text(minecraft.font, "Model: " + tokenLabel(remoteModel), left + 7, top + 78, 0xFF404040, false);
             g.text(minecraft.font, "LLM active: " + remoteLlmActiveCount, left + 7, top + 90, 0xFF404040, false);
-            g.text(minecraft.font, "Prompt: " + trim(remoteGatheringPrompt, 24), left + 7, top + 104, 0xFF505050, false);
+            g.text(minecraft.font, "Prompt: " + tokenLabel(remoteGatheringPrompt), left + 7, top + 104, 0xFF505050, false);
         }
 
         private void drawBindings(GuiGraphicsExtractor g, int left, int top) {
@@ -448,11 +453,12 @@ public final class ObserverAutomataCopperGolemScreenClient {
             }
             if (remoteBindingDetailVisible && remoteSelectedBinding >= 0 && remoteSelectedBinding < remoteBindings.size()) {
                 var selected = remoteBindings.get(remoteSelectedBinding);
-                g.text(minecraft.font, "LLM " + (selected.llmEnabled() ? "on" : "off") + ": " + trim(remoteBindingPrompt.isBlank() ? selected.llmPrompt() : remoteBindingPrompt, 18),
+                g.text(minecraft.font, "LLM " + (selected.llmEnabled() ? "on" : "off") + ": "
+                                + tokenLabel(remoteBindingPrompt.isBlank() ? selected.llmPrompt() : remoteBindingPrompt),
                         left + 7, top + 145, 0xFF505050, false);
                 if (remoteFilterTextEntryVisible) {
                     g.text(minecraft.font, (remoteFilterTextEntryAllowed ? "Allow " : "Deny ")
-                                    + (remoteCacheValueIsTag ? "tag " : "item ") + trim(remoteCacheValueText, 14),
+                                    + (remoteCacheValueIsTag ? "tag " : "item ") + tokenLabel(remoteCacheValueText),
                             left + 7, top + 157, 0xFF6A1B9A, false);
                 }
             }
@@ -469,7 +475,7 @@ public final class ObserverAutomataCopperGolemScreenClient {
                     left + 7, top + 66, 0xFF404040, false);
             g.text(minecraft.font, "LLM: " + (remoteGatheringLlmEnabled ? "on" : "off") + " cache "
                     + remoteGatheringCachedIds + "+" + remoteGatheringCachedTags, left + 7, top + 78, 0xFF404040, false);
-            g.text(minecraft.font, "Prompt: " + trim(remoteGatheringPrompt, 23), left + 7, top + 90, 0xFF505050, false);
+            g.text(minecraft.font, "Prompt: " + tokenLabel(remoteGatheringPrompt), left + 7, top + 90, 0xFF505050, false);
             drawItemSummary(g, left + 7, top + 110, "Tool", remoteToolItemId, remoteToolCount, remoteToolDamage);
             drawItemSummary(g, left + 7, top + 130, "Store", remoteStorageItemId, remoteStorageCount, 0);
             g.text(minecraft.font, "Fuel: " + (remoteInfiniteFuel ? "infinite" : remoteFuelCount + " / " + remoteFuelTicks + "t"),
@@ -479,6 +485,12 @@ public final class ObserverAutomataCopperGolemScreenClient {
         private String trim(String value, int max) {
             if (value == null) return "";
             return value.length() <= max ? value : value.substring(0, Math.max(0, max - 1)) + "…";
+        }
+
+        private String tokenLabel(String value) {
+            if (ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(value)
+                    || ObserverAutomataCopperGolemPayloads.TOKEN_VALID.equals(value)) return value;
+            return "empty";
         }
 
         @Override public boolean isPauseScreen() { return false; }
