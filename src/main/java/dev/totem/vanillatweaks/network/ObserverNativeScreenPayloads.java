@@ -32,6 +32,8 @@ public final class ObserverNativeScreenPayloads {
     public static final String FAMILY_ENCHANTING = "enchanting";
     /** Optional TotemRemnant backpack storage/upgrade/crafting semantic adapter. */
     public static final String FAMILY_REMNANT_BACKPACK = "remnant_backpack";
+    /** Optional TotemAutomata Copper Golem control-screen semantic adapter. */
+    public static final String FAMILY_AUTOMATA_COPPER_GOLEM = "automata_copper_golem";
 
     public static final long CAPABILITY_CONTAINER_SLOTS = 1L;
     public static final long CAPABILITY_FURNACE = 1L << 1;
@@ -41,6 +43,7 @@ public final class ObserverNativeScreenPayloads {
     public static final long CAPABILITY_ANVIL = 1L << 5;
     public static final long CAPABILITY_ENCHANTING = 1L << 6;
     public static final long CAPABILITY_REMNANT_BACKPACK = 1L << 7;
+    public static final long CAPABILITY_AUTOMATA_COPPER_GOLEM = 1L << 8;
     public static final long KNOWN_CAPABILITIES = CAPABILITY_CONTAINER_SLOTS
             | CAPABILITY_FURNACE
             | CAPABILITY_BOOK
@@ -48,7 +51,8 @@ public final class ObserverNativeScreenPayloads {
             | CAPABILITY_MERCHANT
             | CAPABILITY_ANVIL
             | CAPABILITY_ENCHANTING
-            | CAPABILITY_REMNANT_BACKPACK;
+            | CAPABILITY_REMNANT_BACKPACK
+            | CAPABILITY_AUTOMATA_COPPER_GOLEM;
 
     private static final int MAX_TEXT = 256;
 
@@ -77,6 +81,7 @@ public final class ObserverNativeScreenPayloads {
             case FAMILY_ANVIL -> CAPABILITY_ANVIL;
             case FAMILY_ENCHANTING -> CAPABILITY_ENCHANTING;
             case FAMILY_REMNANT_BACKPACK -> CAPABILITY_REMNANT_BACKPACK;
+            case FAMILY_AUTOMATA_COPPER_GOLEM -> CAPABILITY_AUTOMATA_COPPER_GOLEM;
             default -> 0L;
         };
     }
