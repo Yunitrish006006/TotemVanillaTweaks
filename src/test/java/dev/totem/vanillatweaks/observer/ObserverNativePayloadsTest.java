@@ -8,6 +8,7 @@ import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverNexusScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(1, ObserverEnchantingScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverRemnantBackpackPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION);
+        assertEquals(1, ObserverNexusScreenPayloads.PROTOCOL_VERSION);
         assertTrue(ObserverNativeScreenPayloads.ContainerState.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.ContainerRelay.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverNativeScreenPayloads.FurnaceState.TYPE.id().getPath().endsWith("_v1"));
@@ -61,6 +63,8 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverRemnantBackpackPayloads.BackpackRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverAutomataCopperGolemPayloads.CopperGolemState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverAutomataCopperGolemPayloads.CopperGolemRelay.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverNexusScreenPayloads.NexusState.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverNexusScreenPayloads.NexusRelay.TYPE.id().getPath().endsWith("_v1"));
 
         long container = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS;
         long furnace = ObserverNativeScreenPayloads.CAPABILITY_FURNACE;
@@ -71,7 +75,8 @@ final class ObserverNativePayloadsTest {
         long enchanting = ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING;
         long remnantBackpack = ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
         long automata = ObserverNativeScreenPayloads.CAPABILITY_AUTOMATA_COPPER_GOLEM;
-        long known = container | furnace | book | crafting | merchant | anvil | enchanting | remnantBackpack | automata;
+        long nexus = ObserverNativeScreenPayloads.CAPABILITY_NEXUS;
+        long known = container | furnace | book | crafting | merchant | anvil | enchanting | remnantBackpack | automata | nexus;
         assertEquals(known, ObserverNativeScreenPayloads.KNOWN_CAPABILITIES);
         assertEquals(container, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS));
         assertEquals(furnace, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_FURNACE));
@@ -82,6 +87,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(enchanting, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_ENCHANTING));
         assertEquals(remnantBackpack, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK));
         assertEquals(automata, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM));
+        assertEquals(nexus, ObserverNativeScreenPayloads.capabilityForFamily(ObserverNativeScreenPayloads.FAMILY_NEXUS));
         assertEquals(0L, ObserverNativeScreenPayloads.capabilityForFamily("unknown"));
         assertEquals(known, ObserverNativeScreenPayloads.sanitizeCapabilities(known | (1L << 40)));
         assertTrue(ObserverNativeScreenPayloads.supports(known, container));
@@ -93,7 +99,8 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverNativeScreenPayloads.supports(known, enchanting));
         assertTrue(ObserverNativeScreenPayloads.supports(known, remnantBackpack));
         assertTrue(ObserverNativeScreenPayloads.supports(known, automata));
-        assertFalse(ObserverNativeScreenPayloads.supports(container, automata));
+        assertTrue(ObserverNativeScreenPayloads.supports(known, nexus));
+        assertFalse(ObserverNativeScreenPayloads.supports(container, nexus));
         assertFalse(ObserverNativeScreenPayloads.supports(0L, container));
     }
 

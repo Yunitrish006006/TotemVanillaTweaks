@@ -9,6 +9,7 @@
     "ConcretePowderItemEntityMixin",
     "HopperBlockEntityMixin",
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
+    "ObserverNativeSessionManagerNexusCapabilityMixin",
     "RecipeManagerMixin",
     "StructureTemplateMixin"
   ],

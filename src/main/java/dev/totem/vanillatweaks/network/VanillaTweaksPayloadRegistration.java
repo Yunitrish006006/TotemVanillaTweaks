@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks.network;
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
+import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -46,6 +47,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverRemnantBackpackPayloads.BackpackRelay.TYPE, ObserverRemnantBackpackPayloads.BackpackRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverAutomataCopperGolemPayloads.CopperGolemState.TYPE, ObserverAutomataCopperGolemPayloads.CopperGolemState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverAutomataCopperGolemPayloads.CopperGolemRelay.TYPE, ObserverAutomataCopperGolemPayloads.CopperGolemRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverNexusScreenPayloads.NexusState.TYPE, ObserverNexusScreenPayloads.NexusState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverNexusScreenPayloads.NexusRelay.TYPE, ObserverNexusScreenPayloads.NexusRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -71,5 +74,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptRemnantBackpackState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverAutomataCopperGolemPayloads.CopperGolemState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverAutomataCopperGolemRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverNexusScreenPayloads.NexusState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNexusRelayManager.acceptState(context.player(), payload)));
     }
 }

@@ -243,6 +243,21 @@ jobs:
                && -f "$results/observer-native-automata-copper-golem.png" \
                && -f "$results/target-native-automata-copper-golem-close-sent.txt" \
                && -f "$results/observer-native-automata-copper-golem-closed.txt" \
+               && -f "$results/observer-ready-for-nexus-map.txt" \
+               && -f "$results/target-native-nexus-map-state-sent.txt" \
+               && -f "$results/observer-native-nexus-map-ok.txt" \
+               && -f "$results/observer-native-nexus-map-saved.txt" \
+               && -f "$results/observer-native-nexus-map.png" \
+               && -f "$results/target-native-nexus-friends-state-sent.txt" \
+               && -f "$results/observer-native-nexus-friends-ok.txt" \
+               && -f "$results/observer-native-nexus-friends-saved.txt" \
+               && -f "$results/observer-native-nexus-friends.png" \
+               && -f "$results/target-native-nexus-registration-state-sent.txt" \
+               && -f "$results/observer-native-nexus-registration-ok.txt" \
+               && -f "$results/observer-native-nexus-registration-saved.txt" \
+               && -f "$results/observer-native-nexus-registration.png" \
+               && -f "$results/target-native-nexus-close-sent.txt" \
+               && -f "$results/observer-native-nexus-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -282,7 +297,7 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
-            'Verified world/HUD, crafting, unsupported metadata fallback, merchant, anvil, enchanting, Remnant backpack, Automata Copper Golem semantics, Stop, and server cleanup.'
+            'Verified world/HUD, crafting, unsupported metadata fallback, merchant, anvil, enchanting, Remnant backpack, Automata Copper Golem, Nexus map/friends/registration semantics, Stop, and server cleanup.'
 
       - name: Upload client GameTest screenshots
         if: always()
