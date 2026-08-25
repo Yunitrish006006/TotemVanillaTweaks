@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.network;
 
 import dev.totem.vanillatweaks.inventory.ContainerSortService;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverBeaconRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverBrewingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverCartographyRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverGrindstoneRelayManager;
@@ -70,6 +71,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverLoomScreenPayloads.LoomRelay.TYPE, ObserverLoomScreenPayloads.LoomRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverCartographyScreenPayloads.CartographyState.TYPE, ObserverCartographyScreenPayloads.CartographyState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverCartographyScreenPayloads.CartographyRelay.TYPE, ObserverCartographyScreenPayloads.CartographyRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverBeaconScreenPayloads.BeaconState.TYPE, ObserverBeaconScreenPayloads.BeaconState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverBeaconScreenPayloads.BeaconRelay.TYPE, ObserverBeaconScreenPayloads.BeaconRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -111,5 +114,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverLoomRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverCartographyScreenPayloads.CartographyState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverCartographyRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverBeaconScreenPayloads.BeaconState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverBeaconRelayManager.acceptState(context.player(), payload)));
     }
 }

@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.gametest;
 
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverBeaconScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
@@ -64,6 +65,7 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverGrindstoneScreenPayloads.GrindstoneRelay.TYPE, "GrindstoneRelay v1");
                 assertCanSend(player, ObserverLoomScreenPayloads.LoomRelay.TYPE, "LoomRelay v1");
                 assertCanSend(player, ObserverCartographyScreenPayloads.CartographyRelay.TYPE, "CartographyRelay v1");
+                assertCanSend(player, ObserverBeaconScreenPayloads.BeaconRelay.TYPE, "BeaconRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -81,7 +83,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     | ObserverStonecutterScreenPayloads.CAPABILITY
                     | ObserverGrindstoneScreenPayloads.CAPABILITY
                     | ObserverLoomScreenPayloads.CAPABILITY
-                    | ObserverCartographyScreenPayloads.CAPABILITY;
+                    | ObserverCartographyScreenPayloads.CAPABILITY
+                    | ObserverBeaconScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION
@@ -99,10 +102,8 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 throw new AssertionError("Framebuffer state unexpectedly exists on ObserverUiClient");
             }
 
-            persistForCi(
-                    context.takeScreenshot("observer-ui-network-loopback"),
-                    "observer-ui-network-loopback.png"
-            );
+            persistForCi(context.takeScreenshot("observer-ui-network-loopback"),
+                    "observer-ui-network-loopback.png");
 
             context.runOnClient(minecraft -> ClientPlayNetworking.send(new ObserverPayloads.Stop()));
             context.waitFor(minecraft -> !nativeGetBoolean("observerSessionActive"), 100);
@@ -124,11 +125,9 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
         }
     }
 
-    private static void assertCanSend(
-            ServerPlayer player,
-            net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type,
-            String name
-    ) {
+    private static void assertCanSend(ServerPlayer player,
+                                      net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type,
+                                      String name) {
         if (!ServerPlayNetworking.canSend(player, type)) {
             throw new AssertionError("Connected client does not advertise Observer " + name + " support");
         }
@@ -145,33 +144,24 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
     }
 
     private static boolean hasField(Class<?> owner, String name) {
-        try {
-            owner.getDeclaredField(name);
-            return true;
-        } catch (NoSuchFieldException expected) {
-            return false;
-        }
+        try { owner.getDeclaredField(name); return true; }
+        catch (NoSuchFieldException expected) { return false; }
     }
 
     private static void cleanupServer(TestSingleplayerContext singleplayer, UUID playerId) {
-        if (playerId == null) {
-            return;
-        }
+        if (playerId == null) return;
         try {
             singleplayer.getServer().runOnServer(server -> {
                 mainTargetMap().remove(playerId);
                 nativeTargetMap().remove(playerId);
                 nativeScreenCapabilityMap().remove(playerId);
             });
-        } catch (Throwable ignored) {
-        }
+        } catch (Throwable ignored) {}
     }
 
     private static void persistForCi(Path screenshot, String fileName) {
         String workspace = System.getenv("GITHUB_WORKSPACE");
-        if (workspace == null || workspace.isBlank()) {
-            return;
-        }
+        if (workspace == null || workspace.isBlank()) return;
         try {
             Path destinationDir = Path.of(workspace).resolve("build/client-gametest-screenshots");
             Files.createDirectories(destinationDir);
@@ -181,62 +171,30 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<UUID, UUID> mainTargetMap() {
+    @SuppressWarnings("unchecked") private static Map<UUID, UUID> mainTargetMap() {
         return (Map<UUID, UUID>) getStatic(ObserverSessionManager.class, "TARGET_BY_OBSERVER");
     }
-
-    @SuppressWarnings("unchecked")
-    private static Map<UUID, UUID> nativeTargetMap() {
+    @SuppressWarnings("unchecked") private static Map<UUID, UUID> nativeTargetMap() {
         return (Map<UUID, UUID>) getStatic(ObserverNativeSessionManager.class, "TARGET_BY_OBSERVER");
     }
-
-    @SuppressWarnings("unchecked")
-    private static Map<UUID, Long> nativeScreenCapabilityMap() {
+    @SuppressWarnings("unchecked") private static Map<UUID, Long> nativeScreenCapabilityMap() {
         return (Map<UUID, Long>) getStatic(ObserverNativeSessionManager.class, "SCREEN_CAPABILITIES_BY_OBSERVER");
     }
-
     private static Object getStatic(Class<?> owner, String name) {
-        try {
-            Field field = owner.getDeclaredField(name);
-            field.setAccessible(true);
-            return field.get(null);
-        } catch (ReflectiveOperationException error) {
-            throw new RuntimeException("Missing " + owner.getSimpleName() + " field: " + name, error);
-        }
+        try { Field field = owner.getDeclaredField(name); field.setAccessible(true); return field.get(null); }
+        catch (ReflectiveOperationException error) { throw new RuntimeException("Missing " + owner.getSimpleName() + " field: " + name, error); }
     }
-
     private static Field nativeField(String name) {
-        try {
-            Field field = NATIVE_CLIENT.getDeclaredField(name);
-            field.setAccessible(true);
-            return field;
-        } catch (ReflectiveOperationException error) {
-            throw new RuntimeException("Missing ObserverNativeClient field: " + name, error);
-        }
+        try { Field field = NATIVE_CLIENT.getDeclaredField(name); field.setAccessible(true); return field; }
+        catch (ReflectiveOperationException error) { throw new RuntimeException("Missing ObserverNativeClient field: " + name, error); }
     }
-
     private static boolean nativeGetBoolean(String name) {
-        try {
-            return nativeField(name).getBoolean(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
+        try { return nativeField(name).getBoolean(null); } catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
-
     private static int nativeGetInt(String name) {
-        try {
-            return nativeField(name).getInt(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
+        try { return nativeField(name).getInt(null); } catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
-
     private static long nativeGetLong(String name) {
-        try {
-            return nativeField(name).getLong(null);
-        } catch (IllegalAccessException error) {
-            throw new RuntimeException(error);
-        }
+        try { return nativeField(name).getLong(null); } catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
 }
