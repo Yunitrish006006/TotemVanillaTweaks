@@ -4,6 +4,7 @@ import dev.totem.vanillatweaks.inventory.ContainerSortService;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverBrewingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverGrindstoneRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverLoomRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSessionManager;
@@ -64,6 +65,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverStonecutterScreenPayloads.StonecutterRelay.TYPE, ObserverStonecutterScreenPayloads.StonecutterRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverGrindstoneScreenPayloads.GrindstoneState.TYPE, ObserverGrindstoneScreenPayloads.GrindstoneState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverGrindstoneScreenPayloads.GrindstoneRelay.TYPE, ObserverGrindstoneScreenPayloads.GrindstoneRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverLoomScreenPayloads.LoomState.TYPE, ObserverLoomScreenPayloads.LoomState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverLoomScreenPayloads.LoomRelay.TYPE, ObserverLoomScreenPayloads.LoomRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -101,5 +104,7 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverStonecutterRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverGrindstoneScreenPayloads.GrindstoneState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverGrindstoneRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverLoomScreenPayloads.LoomState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverLoomRelayManager.acceptState(context.player(), payload)));
     }
 }
