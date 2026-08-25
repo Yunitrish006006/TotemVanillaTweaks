@@ -72,7 +72,8 @@ public final class ObserverStonecutterScreenClient {
         lastSnapshotNanos = now;
         AbstractContainerMenu menu = container.getMenu();
         int selected = invokeInt(menu, "getSelectedRecipeIndex", -1);
-        int recipeCount = invokeInt(menu, "getNumRecipes", 0);
+        int recipeCount = invokeInt(menu, "getNumberOfVisibleRecipes", -1);
+        if (recipeCount < 0) recipeCount = invokeInt(menu, "getNumRecipes", 0);
         boolean hasInput = invokeBoolean(menu, "hasInputItem");
         boolean resultAvailable = menu.slots.size() > 1 && !menu.slots.get(1).getItem().isEmpty();
         ClientPlayNetworking.send(new ObserverStonecutterScreenPayloads.StonecutterState(
@@ -199,7 +200,9 @@ public final class ObserverStonecutterScreenClient {
             graphics.text(font, remoteTitle.isBlank() ? "Stonecutter" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
             graphics.fill(left + 45, top + 17, left + 132, top + 62, 0xFFAAAAAA);
             String status = remoteRecipeCount > 0
-                    ? "Recipe " + (remoteSelectedRecipeIndex + 1) + "/" + remoteRecipeCount
+                    ? (remoteSelectedRecipeIndex >= 0
+                        ? "Recipe " + (remoteSelectedRecipeIndex + 1) + "/" + remoteRecipeCount
+                        : "Choose recipe")
                     : (remoteHasInputItem ? "No recipe" : "Insert stone");
             graphics.centeredText(font, status, left + 88, top + 20, 0xFF404040);
             graphics.centeredText(font, remoteResultAvailable ? "Result ready" : "Waiting", left + 88, top + 49, 0xFF555555);
