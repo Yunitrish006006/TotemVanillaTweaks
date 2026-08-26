@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Optional semantic adapter for TotemNexus normal-player map/friends/registration screens. */
 public final class ObserverNexusScreenClient {
@@ -27,6 +28,21 @@ public final class ObserverNexusScreenClient {
     private static final String REGISTRATION_LEGACY = "dev.totem.nexus.client.NexusRegistrationPreviewScreen";
     private static final String REGISTRATION_MODERN = "dev.totem.nexus.client.NexusSpaceUnitRegistrationPreviewScreen";
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    static final int MAP_SAFE_SCREEN_MARGIN = 12;
+    static final int MAP_MAX_PANEL_WIDTH = 640;
+    static final int MAP_MAX_PANEL_HEIGHT = 360;
+    static final int MAP_CONTENT_MARGIN = 12;
+    static final int MAP_TEXT_HEIGHT = 9;
+    static final int MAP_TITLE_Y = 10;
+    static final int MAP_SOURCE_Y = 28;
+    static final int MAP_FILTER_Y = 44;
+    static final int MAP_ZOOM_Y = 58;
+    static final int MAP_ROWS_Y = 80;
+    static final int MAP_ROW_HEIGHT = 24;
+    static final int MAP_ROW_PITCH = 27;
+    static final int MAP_DETAIL_BOTTOM_MARGIN = 20;
+    static final int MAP_ROW_DETAIL_GAP = 8;
+    static final int MAP_MAX_VISIBLE_ROWS = 8;
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
@@ -345,6 +361,91 @@ public final class ObserverNexusScreenClient {
     private static double decimal(Object value, double fallback) { return value instanceof Number n ? n.doubleValue() : fallback; }
     private static boolean bool(Object value) { return value instanceof Boolean b && b; }
 
+    /** Resolves the responsive map viewport without consuming the vanilla safe margin. */
+    static MapLayout mapLayout(int screenWidth, int screenHeight, int entryCount, int requestedScroll) {
+        int safeWidth = Math.max(1, screenWidth - MAP_SAFE_SCREEN_MARGIN * 2);
+        int safeHeight = Math.max(1, screenHeight - MAP_SAFE_SCREEN_MARGIN * 2);
+        int panelWidth = Math.min(MAP_MAX_PANEL_WIDTH, safeWidth);
+        int panelHeight = Math.min(MAP_MAX_PANEL_HEIGHT, safeHeight);
+        int left = (screenWidth - panelWidth) / 2;
+        int top = (screenHeight - panelHeight) / 2;
+        int contentWidth = Math.max(0, panelWidth - MAP_CONTENT_MARGIN * 2);
+        int detailY = panelHeight - MAP_DETAIL_BOTTOM_MARGIN;
+        int listBottom = detailY - MAP_ROW_DETAIL_GAP;
+        int rowPixels = Math.max(0, listBottom - MAP_ROWS_Y);
+        int rowCapacity = rowPixels < MAP_ROW_HEIGHT
+                ? 0
+                : 1 + (rowPixels - MAP_ROW_HEIGHT) / MAP_ROW_PITCH;
+        rowCapacity = Math.min(MAP_MAX_VISIBLE_ROWS, rowCapacity);
+
+        int safeEntryCount = Math.max(0, entryCount);
+        int visibleRows = Math.min(safeEntryCount, rowCapacity);
+        int maxStart = Math.max(0, safeEntryCount - visibleRows);
+        int firstRow = Math.min(Math.max(0, requestedScroll), maxStart);
+        return new MapLayout(left, top, panelWidth, panelHeight, contentWidth,
+                detailY, listBottom, rowCapacity, firstRow, visibleRows,
+                screenWidth, screenHeight);
+    }
+
+    /** Fits map semantics to a measured font width without splitting a Unicode code point. */
+    static MapLabel mapLabel(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        String safeText = text == null ? "" : text;
+        int safeMaxWidth = Math.max(0, maxWidth);
+        if (safeText.isEmpty() || safeMaxWidth == 0) return new MapLabel("", 0, safeMaxWidth);
+        if (widthOf.applyAsInt(safeText) <= safeMaxWidth) {
+            return new MapLabel(safeText, widthOf.applyAsInt(safeText), safeMaxWidth);
+        }
+        String ellipsis = "…";
+        int ellipsisWidth = widthOf.applyAsInt(ellipsis);
+        if (ellipsisWidth > safeMaxWidth) return new MapLabel("", 0, safeMaxWidth);
+        int low = 0;
+        int high = safeText.codePointCount(0, safeText.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = safeText.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(safeText.substring(0, end) + ellipsis) <= safeMaxWidth) low = middle;
+            else high = middle - 1;
+        }
+        String fitted = safeText.substring(0, safeText.offsetByCodePoints(0, low)) + ellipsis;
+        return new MapLabel(fitted, widthOf.applyAsInt(fitted), safeMaxWidth);
+    }
+
+    static record MapLabel(String text, int textWidth, int maxWidth) {
+        boolean fits() { return textWidth <= maxWidth; }
+    }
+
+    static record MapLayout(
+            int left,
+            int top,
+            int panelWidth,
+            int panelHeight,
+            int contentWidth,
+            int detailY,
+            int listBottom,
+            int rowCapacity,
+            int firstRow,
+            int visibleRows,
+            int screenWidth,
+            int screenHeight
+    ) {
+        int right() { return left + panelWidth; }
+        int bottom() { return top + panelHeight; }
+        int lastRowBottom() {
+            return visibleRows == 0
+                    ? MAP_ROWS_Y
+                    : MAP_ROWS_Y + (visibleRows - 1) * MAP_ROW_PITCH + MAP_ROW_HEIGHT;
+        }
+        boolean fits() {
+            return left >= MAP_SAFE_SCREEN_MARGIN
+                    && top >= MAP_SAFE_SCREEN_MARGIN
+                    && screenWidth - right() >= MAP_SAFE_SCREEN_MARGIN
+                    && screenHeight - bottom() >= MAP_SAFE_SCREEN_MARGIN
+                    && MAP_ZOOM_Y + MAP_TEXT_HEIGHT <= MAP_ROWS_Y
+                    && lastRowBottom() <= listBottom
+                    && detailY + MAP_TEXT_HEIGHT < panelHeight;
+        }
+    }
+
     private enum Missing { INSTANCE }
 
     private static final class NativeNexusMirrorScreen extends Screen {
@@ -363,35 +464,47 @@ public final class ObserverNexusScreenClient {
         }
 
         private void drawMap(GuiGraphicsExtractor g) {
-            int panelWidth = Math.min(640, Math.max(360, width - 24));
-            int panelHeight = Math.min(360, Math.max(240, height - 24));
-            int left = (width - panelWidth) / 2, top = (height - panelHeight) / 2;
+            MapLayout layout = mapLayout(width, height, remoteMapEntries.size(), remoteListScroll);
+            int panelWidth = layout.panelWidth(), panelHeight = layout.panelHeight();
+            int left = layout.left(), top = layout.top();
             panel(g, left, top, panelWidth, panelHeight);
-            g.text(font, titleText("Nexus Map"), left + 12, top + 10, 0xFFFFFFFF, true);
-            g.text(font, trim(remoteSourceName + " · " + remoteActiveDimension, 58), left + 12, top + 28, 0xFFB8C0C8, false);
-            g.text(font, "Search: " + trim(remoteSearch, 22) + "  Type: " + remoteTypeFilter + "  Friend: " + remoteFriendFilter
-                    + "  Sort: " + remoteSortMode, left + 12, top + 44, 0xFF9FB0C0, false);
-            g.text(font, "Zoom " + String.format(Locale.ROOT, "%.2f", remoteZoom) + "  scroll " + remoteListScroll
-                    + (remoteShowMaterials ? "  [materials]" : ""), left + 12, top + 58, 0xFF93A4B5, false);
+            int textX = left + MAP_CONTENT_MARGIN;
+            int textWidth = layout.contentWidth();
+            g.text(font, mapLabel(titleText("Nexus Map"), textWidth, font::width).text(),
+                    textX, top + MAP_TITLE_Y, 0xFFFFFFFF, true);
+            g.text(font, mapLabel(remoteSourceName + " · " + remoteActiveDimension,
+                            textWidth, font::width).text(),
+                    textX, top + MAP_SOURCE_Y, 0xFFB8C0C8, false);
+            String filters = "Search: " + remoteSearch + "  Type: " + remoteTypeFilter
+                    + "  Friend: " + remoteFriendFilter + "  Sort: " + remoteSortMode;
+            g.text(font, mapLabel(filters, textWidth, font::width).text(),
+                    textX, top + MAP_FILTER_Y, 0xFF9FB0C0, false);
+            String zoom = "Zoom " + String.format(Locale.ROOT, "%.2f", remoteZoom) + "  scroll " + remoteListScroll
+                    + (remoteShowMaterials ? "  [materials]" : "");
+            g.text(font, mapLabel(zoom, textWidth, font::width).text(),
+                    textX, top + MAP_ZOOM_Y, 0xFF93A4B5, false);
 
-            int rowY = top + 80;
-            int shown = 0;
-            int start = Math.min(Math.max(0, remoteListScroll), Math.max(0, remoteMapEntries.size() - 1));
-            for (int i = start; i < remoteMapEntries.size() && shown < 8 && rowY + 26 < top + panelHeight - 28; i++, shown++) {
+            int rowY = top + MAP_ROWS_Y;
+            int lastExclusive = layout.firstRow() + layout.visibleRows();
+            for (int i = layout.firstRow(); i < lastExclusive; i++) {
                 var e = remoteMapEntries.get(i);
                 boolean selected = e.id().equals(remoteSelectedId);
-                g.fill(left + 12, rowY, left + panelWidth - 12, rowY + 24, selected ? 0xFF33495D : 0xFF202830);
+                g.fill(textX, rowY, left + panelWidth - MAP_CONTENT_MARGIN, rowY + MAP_ROW_HEIGHT,
+                        selected ? 0xFF33495D : 0xFF202830);
                 String status = e.canTeleport() ? "ready" : e.blockedReason();
-                g.text(font, trim(e.name() + " · " + e.type() + " · " + e.dimension() + " · " + status, 74),
-                        left + 18, rowY + 7, 0xFFE0E6EC, false);
-                rowY += 27;
+                int rowTextWidth = Math.max(0, textWidth - 12);
+                String row = e.name() + " · " + e.type() + " · " + e.dimension() + " · " + status;
+                g.text(font, mapLabel(row, rowTextWidth, font::width).text(),
+                        textX + 6, rowY + 7, 0xFFE0E6EC, false);
+                rowY += MAP_ROW_PITCH;
             }
             var selected = selectedMapEntry();
             if (selected != null) {
                 String detail = "Tier " + selected.tier() + "  resonance " + Math.round(selected.resonance() * 100.0D)
                         + "%  distance " + selected.distanceBlocks() + "  food " + selected.foodCost()
                         + "  amethyst " + selected.amethystCost();
-                g.text(font, trim(detail, 82), left + 12, top + panelHeight - 20, 0xFFFFD166, false);
+                g.text(font, mapLabel(detail, textWidth, font::width).text(),
+                        textX, top + layout.detailY(), 0xFFFFD166, false);
             }
         }
 
