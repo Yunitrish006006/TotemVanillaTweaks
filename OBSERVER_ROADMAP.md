@@ -68,26 +68,52 @@ CI enforces the no-frame invariant by rejecting production source that contains 
 - Observer clients reconstruct furnace-family UI locally, including semantic progress indicators, without receiving Target pixels.
 - Client GameTests render furnace semantic state locally and persist screenshot evidence.
 
+### Phase 7 — expanded semantic coverage — complete for current main
+
+- The negotiated capability surface now occupies bits 0 through 23: `container_slots`, `furnace`,
+  `book`, `crafting`, `merchant`, `anvil`, `enchanting`, `remnant_backpack`,
+  `automata_copper_golem`, `nexus`, `villagers_woodcutter`, `brewing`, `smithing`,
+  `stonecutter`, `grindstone`, `loom`, `cartography`, `beacon`, `sign`, `crafter`,
+  `nexus_death_node_admin`, `locksmith_management`, `advancements` and `stats`.
+- `nexus` covers its map, friends and registration variants; the death-node administrator is a
+  separate capability with independent validation and relay filtering.
+- PauseScreen is reconstructed from structured screen metadata without allocating another
+  capability bit.
+- Dedicated family senders suppress lower-priority generic container or metadata output, and
+  lifecycle sequences are cleared with the Observer session.
+- Layout-focused unit tests and native-scale Client GameTest screenshots cover the semantic
+  mirrors, while each registered relay is represented in the three-JVM E2E manifest.
+- Screen metadata never includes a player's unsent ChatScreen message or command text.
+
+This list does not claim dedicated adapters for Death, Horse/Mount, sleeping, Recipe Book, Chat or
+Social Interactions screens. A screen without a listed family continues to use the generic
+`container_slots` representation when that is sufficient, or the metadata-only fallback otherwise.
+
 ## Current validation contract
 
 The Observer implementation is validated through:
 
 1. source-level CI that fails if retired framebuffer transport identifiers return to `src/main`;
 2. Server GameTests for authoritative session/protocol behavior;
-3. Client GameTests for v4 lifecycle, capability-mask negotiation, metadata-only fallback, local container/furnace UI reconstruction and removed frame surfaces;
+3. Client GameTests for v4 lifecycle, capability-mask negotiation, metadata-only fallback, local semantic UI reconstruction and removed frame surfaces;
 4. production-runtime Client GameTests using the distribution namespace;
 5. a real three-JVM E2E with Dedicated Server + Target Client + Observer Client.
 
-The three-JVM path exercises protocol-native world/HUD observation, negotiated semantic screen state, unsupported-screen metadata handling, Stop, and server/client cleanup without receiving a full-screen image frame from the Target.
+The three-JVM path exercises protocol-native world/HUD observation, every registered semantic relay,
+unsupported-screen metadata handling, Stop, and server/client cleanup without receiving a
+full-screen image frame from the Target.
 
-The integrated client/server loopback verifies that Target and Observer receive the negotiated `container_slots` and `furnace` capabilities, that the capability mask is cleared on Stop, and that the server removes per-Observer capability state. Separate Client GameTests verify capability-mask fallback behavior and local furnace rendering.
+The integrated client/server loopback verifies the complete registered capability mask, that the
+mask is cleared on Stop, and that the server removes per-Observer capability state. The gate-parity
+script keeps Client GameTest entrypoints, three-JVM bridges, workflow marker assertions and
+production screenshot counts in lockstep.
 
 ## Remaining work
 
 Framebuffer removal and screen-family negotiation are no longer migration tasks. Future Observer work should extend the structured protocol instead of adding image fallback. Priorities include:
 
-- add semantic adapters for more vanilla screen families such as crafting, anvil, enchanting, merchant, beacon, book and sign flows where their state cannot be represented faithfully by `container_slots` alone;
 - define opt-in adapter IDs/capabilities for supported modded screen families without treating arbitrary modded Screen classes as trusted semantic layouts;
+- keep an explicit classification for vanilla screens without a dedicated adapter, adding a family only when generic container or metadata reconstruction is insufficient;
 - add more structured player/equipment/effect/event state where visual fidelity requires it;
 - prefer deltas for high-frequency state where practical;
 - harden reconnect, dimension-change, multi-Observer capability-union changes and unusual screen-transition cases;
@@ -95,6 +121,9 @@ Framebuffer removal and screen-family negotiation are no longer migration tasks.
 
 ## Success criterion
 
-The original architectural success criterion has been reached for the current supported Observer surface: an Observer can reconstruct the tested world/HUD/container/furnace/screen experience **without receiving full-screen image frames from the Target client**.
+The original architectural success criterion has been reached for the current supported Observer
+surface: an Observer can reconstruct the tested world/HUD, all 24 negotiated semantic families and
+metadata-only screen experience **without receiving full-screen image frames from the Target
+client**.
 
 Feature-completeness for every possible vanilla/modded GUI is a separate ongoing compatibility goal; unsupported or unnegotiated screens must continue to degrade to structured metadata rather than framebuffer transport.
