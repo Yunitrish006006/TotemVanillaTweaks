@@ -22,10 +22,15 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Brewing Stand screen. */
 public final class ObserverBrewingScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    private static final int HEADER_GAP = 8;
+    static final int HEADER_TEXT_Y = 6;
+    static final int HEADER_TEXT_HEIGHT = 9;
+    static final int BREWING_SLOT_BORDER_TOP = 16;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -40,6 +45,87 @@ public final class ObserverBrewingScreenClient {
     private static long extractedFrames;
 
     private ObserverBrewingScreenClient() {}
+
+    /** Keeps the brewing title and fuel state on one collision-free vanilla-style header row. */
+    static BrewingHeaderLayout brewingHeaderLayout(
+            String title,
+            int fuel,
+            int contentWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String safeTitle = title == null ? "" : title;
+        int safeFuel = clamp(fuel, 0, ObserverBrewingScreenPayloads.MAX_FUEL);
+        String fullFuel = "Fuel " + safeFuel + "/" + ObserverBrewingScreenPayloads.MAX_FUEL;
+        String compactFuel = safeFuel + "/" + ObserverBrewingScreenPayloads.MAX_FUEL;
+        int availableWidth = Math.max(0, contentWidth);
+        int ellipsisWidth = widthOf.applyAsInt("…");
+        int minimumTitleWidth = safeTitle.isEmpty() ? 0 : ellipsisWidth;
+
+        String fuelLabel = fullFuel;
+        if (widthOf.applyAsInt(fullFuel) + minimumTitleWidth
+                + (safeTitle.isEmpty() ? 0 : HEADER_GAP) > availableWidth) {
+            fuelLabel = compactFuel;
+        }
+
+        int minimumFuelWidth = fuelLabel.isEmpty() ? 0 : ellipsisWidth;
+        int gap = !safeTitle.isEmpty() && !fuelLabel.isEmpty()
+                && availableWidth >= minimumTitleWidth + HEADER_GAP + minimumFuelWidth
+                ? HEADER_GAP
+                : 0;
+        int fuelBudget = Math.max(0, availableWidth - minimumTitleWidth - gap);
+        String fittedFuel = fitHeaderText(fuelLabel, fuelBudget, widthOf);
+        int fuelWidth = widthOf.applyAsInt(fittedFuel);
+        int titleBudget = Math.max(0, availableWidth - fuelWidth - gap);
+        String fittedTitle = fitHeaderText(safeTitle, titleBudget, widthOf);
+        int titleWidth = widthOf.applyAsInt(fittedTitle);
+        int actualGap = fittedTitle.isEmpty() || fittedFuel.isEmpty() ? 0 : gap;
+        int fuelX = availableWidth - fuelWidth;
+        return new BrewingHeaderLayout(fittedTitle, titleWidth, fittedFuel,
+                fuelX, fuelWidth, actualGap, availableWidth);
+    }
+
+    private static String fitHeaderText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (widthOf.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
+            return "";
+        }
+
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record BrewingHeaderLayout(
+            String title,
+            int titleWidth,
+            String fuel,
+            int fuelX,
+            int fuelWidth,
+            int gap,
+            int availableWidth
+    ) {
+        boolean fits() {
+            return titleWidth <= fuelX - gap
+                    && fuelX >= 0
+                    && fuelX + fuelWidth <= availableWidth;
+        }
+    }
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(ObserverBrewingScreenPayloads.BrewingRelay.TYPE,
@@ -211,8 +297,15 @@ public final class ObserverBrewingScreenClient {
             int top = (height - panelHeight) / 2;
             graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xFFE8E8E8);
             graphics.fill(left + 3, top + 3, left + panelWidth - 3, top + panelHeight - 3, 0xFFC6C6C6);
-            graphics.text(font, remoteTitle.isBlank() ? "Brewing Stand" : remoteTitle,
-                    left + 8, top + 6, 0xFF404040, false);
+            BrewingHeaderLayout header = brewingHeaderLayout(
+                    remoteTitle.isBlank() ? "Brewing Stand" : remoteTitle,
+                    remoteFuel,
+                    panelWidth - 16,
+                    font::width
+            );
+            graphics.text(font, header.title(), left + 8, top + HEADER_TEXT_Y, 0xFF404040, false);
+            graphics.text(font, header.fuel(), left + 8 + header.fuelX(),
+                    top + HEADER_TEXT_Y, 0xFF404040, false);
 
             int brewDone = ObserverBrewingScreenPayloads.MAX_BREW_TICKS - remoteBrewingTicks;
             int brewWidth = clamp((brewDone * 48) / ObserverBrewingScreenPayloads.MAX_BREW_TICKS, 0, 48);
@@ -222,7 +315,6 @@ public final class ObserverBrewingScreenClient {
             graphics.fill(left + 60, top + 16, left + 80, top + 22, 0xFF505050);
             graphics.fill(left + 61, top + 17, left + 61 + fuelWidth, top + 21, 0xFFE0A020);
             graphics.text(font, "Brew " + remoteBrewingTicks + "t", left + 116, top + 34, 0xFF404040, false);
-            graphics.text(font, "Fuel " + remoteFuel + "/20", left + 84, top + 16, 0xFF404040, false);
 
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x();
