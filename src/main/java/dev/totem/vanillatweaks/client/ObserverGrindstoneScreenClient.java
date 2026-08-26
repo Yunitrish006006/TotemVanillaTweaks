@@ -20,10 +20,16 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Grindstone screen. */
 public final class ObserverGrindstoneScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    private static final int HORIZONTAL_MARGIN = 8;
+    static final int TEXT_HEIGHT = 9;
+    static final int MACHINE_SLOT_BORDER_BOTTOM = 57;
+    static final int STATUS_Y = 64;
+    static final int INVENTORY_SLOT_BORDER_TOP = 83;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -40,6 +46,74 @@ public final class ObserverGrindstoneScreenClient {
     private static long extractedFrames;
 
     private ObserverGrindstoneScreenClient() {}
+
+    /** Keeps the Grindstone state readable inside a dedicated row below its machine slots. */
+    static GrindstoneStatusLayout grindstoneStatusLayout(
+            boolean primaryInputPresent,
+            boolean secondaryInputPresent,
+            boolean resultAvailable,
+            boolean invalidCombination,
+            int availableWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String fullStatus;
+        String compactStatus;
+        if (invalidCombination) {
+            fullStatus = "Incompatible inputs";
+            compactStatus = "Invalid";
+        } else if (resultAvailable) {
+            fullStatus = "Result ready";
+            compactStatus = "Ready";
+        } else if (primaryInputPresent || secondaryInputPresent) {
+            fullStatus = "Processing input";
+            compactStatus = "Working";
+        } else {
+            fullStatus = "Insert item";
+            compactStatus = "Insert";
+        }
+
+        int safeWidth = Math.max(0, availableWidth);
+        String status = widthOf.applyAsInt(fullStatus) <= safeWidth
+                ? fullStatus
+                : widthOf.applyAsInt(compactStatus) <= safeWidth
+                        ? compactStatus
+                        : fitStatusText(compactStatus, safeWidth, widthOf);
+        int textWidth = widthOf.applyAsInt(status);
+        int statusX = Math.max(0, (safeWidth - textWidth) / 2);
+        return new GrindstoneStatusLayout(status, statusX, textWidth, safeWidth);
+    }
+
+    static String fitStatusText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text == null || text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (widthOf.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
+            return "";
+        }
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record GrindstoneStatusLayout(String status, int statusX, int textWidth, int availableWidth) {
+        boolean fits() {
+            return statusX >= 0 && statusX + textWidth <= availableWidth;
+        }
+    }
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(ObserverGrindstoneScreenPayloads.GrindstoneRelay.TYPE,
@@ -174,10 +248,12 @@ public final class ObserverGrindstoneScreenClient {
             graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
             graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
             graphics.text(font, remoteTitle.isBlank() ? "Grindstone" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
-            graphics.text(font, remoteInvalidCombination ? "Incompatible inputs"
-                    : remoteResultAvailable ? "Result ready"
-                    : (remotePrimaryInputPresent || remoteSecondaryInputPresent) ? "Processing input" : "Insert item",
-                    left + 63, top + 43, remoteInvalidCombination ? 0xFFAA0000 : 0xFF555555, false);
+            GrindstoneStatusLayout status = grindstoneStatusLayout(
+                    remotePrimaryInputPresent, remoteSecondaryInputPresent,
+                    remoteResultAvailable, remoteInvalidCombination,
+                    pw - HORIZONTAL_MARGIN * 2, font::width);
+            graphics.text(font, status.status(), left + HORIZONTAL_MARGIN + status.statusX(), top + STATUS_Y,
+                    remoteInvalidCombination ? 0xFFAA0000 : 0xFF555555, false);
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x(), sy = top + slot.y();
                 graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
