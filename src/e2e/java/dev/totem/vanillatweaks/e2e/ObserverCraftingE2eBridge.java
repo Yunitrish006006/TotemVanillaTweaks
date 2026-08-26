@@ -56,6 +56,10 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
                 "target-native-container-state-sent.txt",
                 "Target sent player_2x2 crafting semantic state for real InventoryScreen; generic container sender stayed closed.\n"
         );
+        ObserverE2eCommon.marker(
+                "target-native-crafting-sender-priority-suppressed.txt",
+                "Crafting sender won priority and suppressed the generic container sender.\n"
+        );
     }
 
     private static void tickObserver(Minecraft minecraft) {
@@ -86,6 +90,10 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
         ObserverE2eCommon.marker(
                 "observer-native-container-ok.txt",
                 "Observer rendered player_2x2 Inventory crafting semantics locally with no competing generic container mirror.\n"
+        );
+        ObserverE2eCommon.marker(
+                "observer-native-crafting-mirror-priority-suppressed.txt",
+                "Crafting mirror won priority and suppressed the generic container mirror.\n"
         );
     }
 

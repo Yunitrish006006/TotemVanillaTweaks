@@ -25,13 +25,15 @@ import java.util.UUID;
 public final class ObserverE2eCommon implements ModInitializer {
     private static final String TARGET_NAME = "Target";
     private static final String OBSERVER_NAME = "Observer";
-    private static final int FIRST_CLIENT_TIMEOUT_TICKS = 20 * 90;
-    private static final int SECOND_CLIENT_TIMEOUT_TICKS = 20 * 90;
+    private static final int CLIENT_JOIN_TIMEOUT_TICKS = 20 * 90;
+    private static final int PAYLOAD_ADVERTISEMENT_TIMEOUT_TICKS = 20 * 90;
 
     private static boolean started;
     private static boolean cleanedUp;
     private static int ticks;
     private static int firstClientSeenTick = -1;
+    private static int bothConnectAttemptsStartedTick = -1;
+    private static int bothClientsSeenTick = -1;
     private static UUID targetId;
     private static UUID observerId;
 
@@ -54,6 +56,12 @@ public final class ObserverE2eCommon implements ModInitializer {
                 ServerPlayer observer = findPlayer(server, OBSERVER_NAME);
                 boolean oneClientPresent = target != null || observer != null;
 
+                if (bothConnectAttemptsStartedTick < 0
+                        && markerExists("target-connect-started.txt")
+                        && markerExists("observer-connect-started.txt")) {
+                    bothConnectAttemptsStartedTick = ticks;
+                }
+
                 if (oneClientPresent && firstClientSeenTick < 0) {
                     firstClientSeenTick = ticks;
                     marker(
@@ -64,10 +72,7 @@ public final class ObserverE2eCommon implements ModInitializer {
                 }
 
                 if (target == null || observer == null) {
-                    int timeoutTick = firstClientSeenTick < 0
-                            ? FIRST_CLIENT_TIMEOUT_TICKS
-                            : firstClientSeenTick + SECOND_CLIENT_TIMEOUT_TICKS;
-                    if (ticks > timeoutTick) {
+                    if (deadlineExpired(ticks, bothConnectAttemptsStartedTick, CLIENT_JOIN_TIMEOUT_TICKS)) {
                         fail(
                                 "server",
                                 "Timed out waiting for Target and Observer clients to join; targetPresent="
@@ -78,11 +83,16 @@ public final class ObserverE2eCommon implements ModInitializer {
                     return;
                 }
 
+                if (bothClientsSeenTick < 0) {
+                    bothClientsSeenTick = ticks;
+                }
+
                 if (!supportsObserverPayloads(target, observer)) {
-                    int payloadDeadline = firstClientSeenTick < 0
-                            ? ticks + SECOND_CLIENT_TIMEOUT_TICKS
-                            : firstClientSeenTick + SECOND_CLIENT_TIMEOUT_TICKS;
-                    if (ticks > payloadDeadline) {
+                    if (deadlineExpired(
+                            ticks,
+                            bothClientsSeenTick,
+                            PAYLOAD_ADVERTISEMENT_TIMEOUT_TICKS
+                    )) {
                         fail("server", "Connected clients never advertised all protocol-native Observer payloads");
                         cleanedUp = true;
                     }
@@ -118,6 +128,14 @@ public final class ObserverE2eCommon implements ModInitializer {
             fail("server", error.toString());
             cleanedUp = true;
         }
+    }
+
+    private static boolean markerExists(String fileName) {
+        return Files.isRegularFile(resultsDir().resolve(fileName));
+    }
+
+    private static boolean deadlineExpired(int currentTick, int startedTick, int timeoutTicks) {
+        return startedTick >= 0 && currentTick > startedTick + timeoutTicks;
     }
 
     private static boolean supportsObserverPayloads(ServerPlayer target, ServerPlayer observer) {
