@@ -21,12 +21,14 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Target adapter and Observer-side reconstruction for player/crafting-table crafting screens. */
 public final class ObserverNativeCraftingScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
+    private static final int HEADER_GAP = 8;
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
@@ -74,6 +76,87 @@ public final class ObserverNativeCraftingScreenClient {
 
     static long extractedFrames() {
         return extractedFrames;
+    }
+
+    /** Fits the remote title and crafting mode onto one vanilla-style header row. */
+    static CraftingHeaderLayout craftingHeaderLayout(
+            String title,
+            String mode,
+            int contentWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String safeTitle = title == null ? "" : title;
+        String safeMode = mode == null ? "" : mode;
+        int availableWidth = Math.max(0, contentWidth);
+        int titleWidth = widthOf.applyAsInt(safeTitle);
+        int modeWidth = widthOf.applyAsInt(safeMode);
+
+        if (titleWidth + HEADER_GAP + modeWidth <= availableWidth) {
+            return new CraftingHeaderLayout(safeTitle, titleWidth, safeMode,
+                    availableWidth - modeWidth, modeWidth, HEADER_GAP, availableWidth);
+        }
+
+        int ellipsisWidth = widthOf.applyAsInt("…");
+        int gap = availableWidth >= ellipsisWidth * 2 + HEADER_GAP ? HEADER_GAP : 0;
+        int textWidth = Math.max(0, availableWidth - gap);
+        int titleBudget = textWidth / 2;
+        int modeBudget = textWidth - titleBudget;
+        if (titleWidth < titleBudget) {
+            modeBudget += titleBudget - titleWidth;
+            titleBudget = titleWidth;
+        } else if (modeWidth < modeBudget) {
+            titleBudget += modeBudget - modeWidth;
+            modeBudget = modeWidth;
+        }
+
+        String fittedTitle = fitHeaderText(safeTitle, titleBudget, widthOf);
+        String fittedMode = fitHeaderText(safeMode, modeBudget, widthOf);
+        int fittedTitleWidth = widthOf.applyAsInt(fittedTitle);
+        int fittedModeWidth = widthOf.applyAsInt(fittedMode);
+        int modeX = availableWidth - fittedModeWidth;
+        return new CraftingHeaderLayout(fittedTitle, fittedTitleWidth, fittedMode,
+                modeX, fittedModeWidth, gap, availableWidth);
+    }
+
+    private static String fitHeaderText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (widthOf.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
+            return "";
+        }
+
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record CraftingHeaderLayout(
+            String title,
+            int titleWidth,
+            String mode,
+            int modeX,
+            int modeWidth,
+            int gap,
+            int availableWidth
+    ) {
+        boolean fits() {
+            return titleWidth <= modeX - gap && modeX >= 0 && modeX + modeWidth <= availableWidth;
+        }
     }
 
     private static void tick(Minecraft minecraft) {
@@ -334,10 +417,12 @@ public final class ObserverNativeCraftingScreenClient {
             graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
 
             String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
-            graphics.text(this.minecraft.font, title, left, top - 14, 0xFFFFFFFF, true);
             String mode = "Crafting " + remoteGridWidth + "x" + remoteGridHeight + " / " + remoteVariant;
-            graphics.text(this.minecraft.font, mode,
-                    left + contentWidth - this.minecraft.font.width(mode), top - 14, 0xFF9E9E9E, false);
+            CraftingHeaderLayout header = craftingHeaderLayout(
+                    title, mode, contentWidth, this.minecraft.font::width);
+            graphics.text(this.minecraft.font, header.title(), left, top - 14, 0xFFFFFFFF, true);
+            graphics.text(this.minecraft.font, header.mode(),
+                    left + header.modeX(), top - 14, 0xFF9E9E9E, false);
 
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int slotX = left + slot.x();
