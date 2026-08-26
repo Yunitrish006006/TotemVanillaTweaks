@@ -23,10 +23,35 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Beacon screen. */
 public final class ObserverBeaconScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    static final int PANEL_WIDTH = 230;
+    static final int PANEL_HEIGHT = 219;
+    static final int SAFE_SCREEN_MARGIN = 8;
+    static final int CONTENT_X = 8;
+    static final int CONTENT_RIGHT = 222;
+    static final int CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_X;
+    static final int TEXT_HEIGHT = 9;
+    static final int TITLE_Y = 7;
+    static final int TIER_Y = 22;
+    static final int PRIMARY_Y = 38;
+    static final int SECONDARY_Y = 51;
+    static final int PAYMENT_Y = 64;
+    static final int CONFIRM_Y = 77;
+    static final int EFFECT_1_Y = 90;
+    static final int EFFECT_2_Y = 101;
+    static final int EFFECT_3_Y = 112;
+    static final int EFFECT_4_Y = 123;
+    static final int PAYMENT_SLOT_BORDER_LEFT = 135;
+    static final int PAYMENT_SLOT_BORDER_TOP = 109;
+    static final int PAYMENT_SLOT_BORDER_BOTTOM = 127;
+    static final int EFFECT_SLOT_GUTTER = 7;
+    static final int EFFECT_TEXT_MAX_WIDTH = PAYMENT_SLOT_BORDER_LEFT - EFFECT_SLOT_GUTTER - CONTENT_X;
+    static final int INVENTORY_SLOT_BORDER_TOP = 136;
+    static final int HOTBAR_SLOT_BORDER_BOTTOM = 213;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -186,6 +211,96 @@ public final class ObserverBeaconScreenClient {
         return value.replace('_', ' ');
     }
 
+    /** Binds every semantic label to its own row and its available vanilla pixel budget. */
+    static BeaconTextLayout beaconTextLayout(
+            String title,
+            int levels,
+            String primaryEffect,
+            String secondaryEffect,
+            boolean paymentPresent,
+            boolean canConfirm,
+            ToIntFunction<String> widthOf
+    ) {
+        String safeTitle = title == null || title.isBlank() ? "Beacon" : title;
+        BoundedLabel effect1 = chooseLabel(EFFECT_TEXT_MAX_WIDTH, widthOf,
+                "L1 Speed / Haste", "L1 Speed/Haste");
+        BoundedLabel effect2 = chooseLabel(EFFECT_TEXT_MAX_WIDTH, widthOf,
+                "L2 Resistance / Jump", "L2 Resist / Jump", "L2 Resist/Jump");
+        BoundedLabel effect3 = chooseLabel(EFFECT_TEXT_MAX_WIDTH, widthOf,
+                "L3 Strength");
+        BoundedLabel effect4 = chooseLabel(EFFECT_TEXT_MAX_WIDTH, widthOf,
+                "L4 Regeneration / Upgrade", "L4 Regen / Upgrade", "L4 Regen/Upgrade");
+        return new BeaconTextLayout(
+                boundedLabel(safeTitle, CONTENT_WIDTH, widthOf),
+                boundedLabel("Tier: " + levels + "/4", CONTENT_WIDTH, widthOf),
+                boundedLabel("Primary: " + shortEffect(primaryEffect), CONTENT_WIDTH, widthOf),
+                boundedLabel("Secondary: " + shortEffect(secondaryEffect), CONTENT_WIDTH, widthOf),
+                boundedLabel(paymentPresent ? "Payment ready" : "Payment required", CONTENT_WIDTH, widthOf),
+                boundedLabel(canConfirm ? "Confirm available" : "Confirm unavailable", CONTENT_WIDTH, widthOf),
+                effect1, effect2, effect3, effect4);
+    }
+
+    private static BoundedLabel chooseLabel(
+            int maxWidth,
+            ToIntFunction<String> widthOf,
+            String... candidates
+    ) {
+        for (String candidate : candidates) {
+            if (widthOf.applyAsInt(candidate) <= maxWidth) {
+                return new BoundedLabel(candidate, widthOf.applyAsInt(candidate), maxWidth);
+            }
+        }
+        return boundedLabel(candidates[candidates.length - 1], maxWidth, widthOf);
+    }
+
+    private static BoundedLabel boundedLabel(
+            String text,
+            int maxWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String fitted = fitText(text, Math.max(0, maxWidth), widthOf);
+        return new BoundedLabel(fitted, widthOf.applyAsInt(fitted), Math.max(0, maxWidth));
+    }
+
+    private static String fitText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) return "";
+        if (widthOf.applyAsInt(text) <= maxWidth) return text;
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) return "";
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) low = middle;
+            else high = middle - 1;
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record BoundedLabel(String text, int textWidth, int maxWidth) {
+        boolean fits() { return textWidth <= maxWidth; }
+    }
+
+    static record BeaconTextLayout(
+            BoundedLabel title,
+            BoundedLabel tier,
+            BoundedLabel primary,
+            BoundedLabel secondary,
+            BoundedLabel payment,
+            BoundedLabel confirm,
+            BoundedLabel effect1,
+            BoundedLabel effect2,
+            BoundedLabel effect3,
+            BoundedLabel effect4
+    ) {
+        boolean fits() {
+            return title.fits() && tier.fits() && primary.fits() && secondary.fits()
+                    && payment.fits() && confirm.fits() && effect1.fits() && effect2.fits()
+                    && effect3.fits() && effect4.fits();
+        }
+    }
+
     private static final class NativeBeaconMirrorScreen extends Screen {
         private NativeBeaconMirrorScreen() { super(Component.literal("Observer Beacon")); }
         @Override public boolean isPauseScreen() { return false; }
@@ -195,21 +310,25 @@ public final class ObserverBeaconScreenClient {
         }
         @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = 230, ph = 180, left = (width - pw) / 2, top = (height - ph) / 2;
+            int pw = PANEL_WIDTH, ph = PANEL_HEIGHT, left = (width - pw) / 2, top = (height - ph) / 2;
             graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
             graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
-            graphics.text(font, remoteTitle.isBlank() ? "Beacon" : remoteTitle, left + 8, top + 7, 0xFF404040, false);
-            graphics.text(font, "Tier: " + remoteLevels + "/4", left + 8, top + 24, remoteLevels > 0 ? 0xFF206020 : 0xFF804040, false);
-            graphics.text(font, "Primary: " + shortEffect(remotePrimaryEffectId), left + 8, top + 43, 0xFF404040, false);
-            graphics.text(font, "Secondary: " + shortEffect(remoteSecondaryEffectId), left + 8, top + 57, 0xFF404040, false);
-            graphics.text(font, remotePaymentPresent ? "Payment ready" : "Payment required", left + 135, top + 43,
+            BeaconTextLayout labels = beaconTextLayout(remoteTitle, remoteLevels,
+                    remotePrimaryEffectId, remoteSecondaryEffectId,
+                    remotePaymentPresent, remoteCanConfirm, font::width);
+            graphics.text(font, labels.title().text(), left + CONTENT_X, top + TITLE_Y, 0xFF404040, false);
+            graphics.text(font, labels.tier().text(), left + CONTENT_X, top + TIER_Y,
+                    remoteLevels > 0 ? 0xFF206020 : 0xFF804040, false);
+            graphics.text(font, labels.primary().text(), left + CONTENT_X, top + PRIMARY_Y, 0xFF404040, false);
+            graphics.text(font, labels.secondary().text(), left + CONTENT_X, top + SECONDARY_Y, 0xFF404040, false);
+            graphics.text(font, labels.payment().text(), left + CONTENT_X, top + PAYMENT_Y,
                     remotePaymentPresent ? 0xFF206020 : 0xFF804040, false);
-            graphics.text(font, remoteCanConfirm ? "Confirm available" : "Confirm unavailable", left + 135, top + 57,
+            graphics.text(font, labels.confirm().text(), left + CONTENT_X, top + CONFIRM_Y,
                     remoteCanConfirm ? 0xFF206020 : 0xFF555555, false);
-            graphics.text(font, "L1 Speed / Haste", left + 8, top + 78, 0xFF555555, false);
-            graphics.text(font, "L2 Resistance / Jump", left + 8, top + 91, 0xFF555555, false);
-            graphics.text(font, "L3 Strength", left + 8, top + 104, 0xFF555555, false);
-            graphics.text(font, "L4 Regeneration / Upgrade", left + 8, top + 117, 0xFF555555, false);
+            graphics.text(font, labels.effect1().text(), left + CONTENT_X, top + EFFECT_1_Y, 0xFF555555, false);
+            graphics.text(font, labels.effect2().text(), left + CONTENT_X, top + EFFECT_2_Y, 0xFF555555, false);
+            graphics.text(font, labels.effect3().text(), left + CONTENT_X, top + EFFECT_3_Y, 0xFF555555, false);
+            graphics.text(font, labels.effect4().text(), left + CONTENT_X, top + EFFECT_4_Y, 0xFF555555, false);
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x(), sy = top + slot.y();
                 graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
