@@ -21,10 +21,24 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Loom screen. */
 public final class ObserverLoomScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    static final int PATTERN_COLUMNS = 4;
+    static final int PATTERN_ROWS = 4;
+    static final int PATTERN_CELL_SIZE = 14;
+    static final int PATTERN_GRID_X = 60;
+    static final int PATTERN_GRID_Y = 13;
+    static final int PATTERN_GRID_BOTTOM = PATTERN_GRID_Y + PATTERN_ROWS * PATTERN_CELL_SIZE;
+    static final int STATUS_X = PATTERN_GRID_X;
+    static final int STATUS_Y = 72;
+    static final int TEXT_HEIGHT = 9;
+    static final int INVENTORY_SLOT_BORDER_TOP = 83;
+    static final int RESULT_SLOT_BORDER_LEFT = 142;
+    static final int STATUS_RIGHT_GUTTER = 4;
+    static final int STATUS_MAX_WIDTH = RESULT_SLOT_BORDER_LEFT - STATUS_RIGHT_GUTTER - STATUS_X;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -43,6 +57,86 @@ public final class ObserverLoomScreenClient {
     private static long extractedFrames;
 
     private ObserverLoomScreenClient() {}
+
+    /** Mirrors vanilla's bounded four-by-four Loom viewport. */
+    static LoomPatternViewport loomPatternViewport(int startRow, int patternCount) {
+        int total = Math.max(0, patternCount);
+        long requestedFirst = (long) Math.max(0, startRow) * PATTERN_COLUMNS;
+        int first = (int) Math.min(total, requestedFirst);
+        int lastExclusive = Math.min(total, first + PATTERN_COLUMNS * PATTERN_ROWS);
+        return new LoomPatternViewport(first, lastExclusive);
+    }
+
+    /** Keeps selection, total count, and result state inside the narrow vanilla Loom status row. */
+    static LoomStatusLayout loomStatusLayout(
+            int selectedPatternIndex,
+            int patternCount,
+            boolean hasMaxPatterns,
+            boolean resultAvailable,
+            int maxWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        int total = Math.max(0, patternCount);
+        String selection = selectedPatternIndex >= 0 && selectedPatternIndex < total
+                ? Integer.toString(selectedPatternIndex + 1)
+                : "-";
+        String position = selection + "/" + total;
+        String fullState;
+        String compactState;
+        String minimumState;
+        if (hasMaxPatterns) {
+            fullState = "Pattern limit";
+            compactState = "Limit";
+            minimumState = "Max";
+        } else if (resultAvailable) {
+            fullState = "Result ready";
+            compactState = "Ready";
+            minimumState = "OK";
+        } else {
+            fullState = "Select pattern";
+            compactState = "Select";
+            minimumState = "Pick";
+        }
+
+        int availableWidth = Math.max(0, maxWidth);
+        String[] candidates = {
+                position + " · " + fullState,
+                position + " " + compactState,
+                position + " " + minimumState
+        };
+        for (String candidate : candidates) {
+            int textWidth = widthOf.applyAsInt(candidate);
+            if (textWidth <= availableWidth) {
+                return new LoomStatusLayout(candidate, textWidth, availableWidth);
+            }
+        }
+        String fallback = fitText(candidates[candidates.length - 1], availableWidth, widthOf);
+        return new LoomStatusLayout(fallback, widthOf.applyAsInt(fallback), availableWidth);
+    }
+
+    private static String fitText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) return "";
+        if (widthOf.applyAsInt(text) <= maxWidth) return text;
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) return "";
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) low = middle;
+            else high = middle - 1;
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record LoomPatternViewport(int first, int lastExclusive) {
+        int visibleCount() { return lastExclusive - first; }
+    }
+
+    static record LoomStatusLayout(String text, int textWidth, int maxWidth) {
+        boolean fits() { return textWidth <= maxWidth; }
+    }
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(ObserverLoomScreenPayloads.LoomRelay.TYPE,
@@ -187,18 +281,21 @@ public final class ObserverLoomScreenClient {
             graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
             graphics.text(font, remoteTitle.isBlank() ? "Loom" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
             if (remoteDisplayPatterns) {
-                int first = Math.max(0, remoteStartRow * 4);
-                int max = Math.min(remotePatternIds.size(), first + 16);
-                for (int i = first; i < max; i++) {
-                    int local = i - first, col = local % 4, row = local / 4;
-                    int x = left + 60 + col * 18, y = top + 14 + row * 18;
-                    graphics.fill(x, y, x + 16, y + 16, i == remoteSelectedPatternIndex ? 0xFFFFFFFF : 0xFF777777);
-                    graphics.fill(x + 2, y + 2, x + 14, y + 14, 0xFF303030);
-                    graphics.centeredText(font, Integer.toString(i + 1), x + 8, y + 4, 0xFFFFFFFF);
+                LoomPatternViewport viewport = loomPatternViewport(remoteStartRow, remotePatternIds.size());
+                for (int i = viewport.first(); i < viewport.lastExclusive(); i++) {
+                    int local = i - viewport.first(), col = local % PATTERN_COLUMNS, row = local / PATTERN_COLUMNS;
+                    int x = left + PATTERN_GRID_X + col * PATTERN_CELL_SIZE;
+                    int y = top + PATTERN_GRID_Y + row * PATTERN_CELL_SIZE;
+                    graphics.fill(x, y, x + PATTERN_CELL_SIZE, y + PATTERN_CELL_SIZE,
+                            i == remoteSelectedPatternIndex ? 0xFFFFFFFF : 0xFF777777);
+                    graphics.fill(x + 2, y + 2, x + PATTERN_CELL_SIZE - 2, y + PATTERN_CELL_SIZE - 2, 0xFF303030);
+                    graphics.centeredText(font, Integer.toString(i + 1), x + PATTERN_CELL_SIZE / 2, y + 3, 0xFFFFFFFF);
                 }
             }
-            if (remoteHasMaxPatterns) graphics.text(font, "Pattern limit reached", left + 58, top + 73, 0xFFAA0000, false);
-            else graphics.text(font, remoteResultAvailable ? "Result ready" : "Select a pattern", left + 58, top + 73, 0xFF555555, false);
+            LoomStatusLayout status = loomStatusLayout(remoteSelectedPatternIndex, remotePatternIds.size(),
+                    remoteHasMaxPatterns, remoteResultAvailable, STATUS_MAX_WIDTH, font::width);
+            graphics.text(font, status.text(), left + STATUS_X, top + STATUS_Y,
+                    remoteHasMaxPatterns ? 0xFFAA0000 : 0xFF555555, false);
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x(), sy = top + slot.y();
                 graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);

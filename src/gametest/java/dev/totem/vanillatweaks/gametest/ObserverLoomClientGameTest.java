@@ -66,7 +66,7 @@ public final class ObserverLoomClientGameTest implements FabricClientGameTest {
         result.add(new ObserverNativeScreenPayloads.SlotState(0, 13, 26, "minecraft:white_banner", 1, 0));
         result.add(new ObserverNativeScreenPayloads.SlotState(1, 33, 26, "minecraft:red_dye", 1, 0));
         result.add(new ObserverNativeScreenPayloads.SlotState(2, 23, 45, "", 0, 0));
-        result.add(new ObserverNativeScreenPayloads.SlotState(3, 143, 58, "minecraft:white_banner", 1, 0));
+        result.add(new ObserverNativeScreenPayloads.SlotState(3, 143, 57, "minecraft:white_banner", 1, 0));
         int index = 4;
         for (int row = 0; row < 3; row++) for (int col = 0; col < 9; col++)
             result.add(new ObserverNativeScreenPayloads.SlotState(index++, 8 + col * 18, 84 + row * 18, "", 0, 0));
