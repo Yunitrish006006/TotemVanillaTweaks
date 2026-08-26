@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /**
  * Protocol-native screen transport. Negotiated semantic families use structured snapshots;
@@ -31,6 +32,8 @@ public final class ObserverNativeScreenClient {
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
     private static final int GENERIC_SCREEN_DELAY_TICKS = 3;
+    private static final int FURNACE_HEADER_GAP = 8;
+    private static final String FURNACE_MODE_LABEL = "Protocol-native furnace";
     private static final String REMNANT_BACKPACK_SCREEN_CLASS =
             "dev.totem.remnant.client.screen.BackpackScreen";
 
@@ -135,6 +138,90 @@ public final class ObserverNativeScreenClient {
 
     static long lastRemoteSequence() {
         return lastRemoteSequence;
+    }
+
+    /**
+     * Fits the primary furnace title and secondary mode label onto one vanilla-style header row.
+     * Both labels receive space on narrow panels; unused space is handed to the longer label.
+     */
+    static FurnaceHeaderLayout furnaceHeaderLayout(
+            String title,
+            int contentWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String safeTitle = title == null ? "" : title;
+        int availableWidth = Math.max(0, contentWidth);
+        int titleWidth = widthOf.applyAsInt(safeTitle);
+        int modeWidth = widthOf.applyAsInt(FURNACE_MODE_LABEL);
+
+        if (titleWidth + FURNACE_HEADER_GAP + modeWidth <= availableWidth) {
+            return new FurnaceHeaderLayout(safeTitle, titleWidth, FURNACE_MODE_LABEL,
+                    availableWidth - modeWidth, modeWidth, FURNACE_HEADER_GAP, availableWidth);
+        }
+
+        int ellipsisWidth = widthOf.applyAsInt("…");
+        int gap = availableWidth >= ellipsisWidth * 2 + FURNACE_HEADER_GAP
+                ? FURNACE_HEADER_GAP
+                : 0;
+        int textWidth = Math.max(0, availableWidth - gap);
+        int titleBudget = textWidth / 2;
+        int modeBudget = textWidth - titleBudget;
+        if (titleWidth < titleBudget) {
+            modeBudget += titleBudget - titleWidth;
+            titleBudget = titleWidth;
+        } else if (modeWidth < modeBudget) {
+            titleBudget += modeBudget - modeWidth;
+            modeBudget = modeWidth;
+        }
+
+        String fittedTitle = fitHeaderText(safeTitle, titleBudget, widthOf);
+        String fittedMode = fitHeaderText(FURNACE_MODE_LABEL, modeBudget, widthOf);
+        int fittedTitleWidth = widthOf.applyAsInt(fittedTitle);
+        int fittedModeWidth = widthOf.applyAsInt(fittedMode);
+        int modeX = availableWidth - fittedModeWidth;
+        return new FurnaceHeaderLayout(fittedTitle, fittedTitleWidth, fittedMode,
+                modeX, fittedModeWidth, gap, availableWidth);
+    }
+
+    private static String fitHeaderText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (widthOf.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
+            return "";
+        }
+
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static record FurnaceHeaderLayout(
+            String title,
+            int titleWidth,
+            String mode,
+            int modeX,
+            int modeWidth,
+            int gap,
+            int availableWidth
+    ) {
+        boolean fits() {
+            return titleWidth <= modeX - gap && modeX >= 0 && modeX + modeWidth <= availableWidth;
+        }
     }
 
     static void applyGenericScreenState(boolean open, String screenClass, String title) {
@@ -679,12 +766,19 @@ public final class ObserverNativeScreenClient {
             graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
 
             String title = remoteFurnaceTitle.isBlank() ? remoteFurnaceClass : remoteFurnaceTitle;
-            graphics.text(this.minecraft.font, title, left, top - 14, 0xFFFFFFFF, true);
-            String mode = "Protocol-native furnace";
+            FurnaceHeaderLayout header = furnaceHeaderLayout(title, contentWidth, this.minecraft.font::width);
             graphics.text(
                     this.minecraft.font,
-                    mode,
-                    left + contentWidth - this.minecraft.font.width(mode),
+                    header.title(),
+                    left,
+                    top - 14,
+                    0xFFFFFFFF,
+                    true
+            );
+            graphics.text(
+                    this.minecraft.font,
+                    header.mode(),
+                    left + header.modeX(),
                     top - 14,
                     0xFF9E9E9E,
                     false
