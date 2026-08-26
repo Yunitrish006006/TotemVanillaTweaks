@@ -35,6 +35,9 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
     private static boolean registrationSeen;
     private static volatile boolean registrationSaved;
     private static boolean observerClosed;
+    private static RenderBarrier mapRenderBarrier;
+    private static RenderBarrier friendsRenderBarrier;
+    private static RenderBarrier registrationRenderBarrier;
     private static int targetStage;
     private static long targetSequence;
 
@@ -60,7 +63,11 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                     "Target may send Nexus map semantic state through the dedicated server.\n");
         }
 
-        if (observerRequested && !mapSeen && mirrorVisible(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP)) {
+        if (observerRequested && !mapSeen) {
+            mapRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier);
+        }
+        if (observerRequested && !mapSeen
+                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier)) {
             if (getListSize("remoteMapEntries") != 2 || !DESTINATION.equals(getObject(NEXUS, "remoteSelectedId"))) {
                 fail("Nexus map E2E entries/selection mismatch");
                 return;
@@ -72,7 +79,12 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             saveScreenshot(minecraft, "observer-native-nexus-map.png", "observer-native-nexus-map-saved.txt", 1);
         }
 
-        if (mapSaved && !friendsSeen && mirrorVisible(minecraft, ObserverNexusScreenPayloads.VARIANT_FRIENDS)) {
+        if (mapSaved && !friendsSeen) {
+            friendsRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_FRIENDS, friendsRenderBarrier);
+        }
+        if (mapSaved && !friendsSeen
+                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
+                        friendsRenderBarrier)) {
             if (getListSize("remoteFriendEntries") != 2 || !FRIEND.equals(getObject(NEXUS, "remoteSelectedId"))) {
                 fail("Nexus friends E2E entries/selection mismatch");
                 return;
@@ -84,7 +96,15 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             saveScreenshot(minecraft, "observer-native-nexus-friends.png", "observer-native-nexus-friends-saved.txt", 2);
         }
 
-        if (friendsSaved && !registrationSeen && mirrorVisible(minecraft, ObserverNexusScreenPayloads.VARIANT_REGISTRATION)) {
+        if (friendsSaved && !registrationSeen) {
+            registrationRenderBarrier = observeVariant(
+                    ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
+                    registrationRenderBarrier
+            );
+        }
+        if (friendsSaved && !registrationSeen
+                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
+                        registrationRenderBarrier)) {
             if (getInt(NEXUS, "remoteRegistrationTier") != 3
                     || getInt(NEXUS, "remoteResonancePercent") != 84
                     || getInt(NEXUS, "remoteCompletenessPercent") != 92
@@ -176,13 +196,30 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 List.of(), 0, List.of(), "minecraft:overworld", 120, 72, -40, 3, 84, 92, 7, 20);
     }
 
-    private static boolean mirrorVisible(Minecraft minecraft, String variant) {
-        return minecraft.gui.screen() != null
+    private static RenderBarrier observeVariant(String variant, RenderBarrier current) {
+        if (!getBoolean(NEXUS, "remoteOpen")
+                || !variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))) {
+            return current;
+        }
+        long sequence = getLong(NEXUS, "lastRemoteSequence");
+        if (sequence <= 0L || (current != null && current.sequence() == sequence)) {
+            return current;
+        }
+        return new RenderBarrier(sequence, getLong(NEXUS, "extractedFrames"));
+    }
+
+    private static boolean mirrorVisibleAfterRender(
+            Minecraft minecraft,
+            String variant,
+            RenderBarrier barrier
+    ) {
+        return barrier != null
+                && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeNexusMirrorScreen")
                 && getBoolean(NEXUS, "remoteOpen")
                 && variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))
-                && getLong(NEXUS, "lastRemoteSequence") > 0L
-                && getLong(NEXUS, "extractedFrames") > 0L;
+                && getLong(NEXUS, "lastRemoteSequence") == barrier.sequence()
+                && getLong(NEXUS, "extractedFrames") > barrier.frameBaseline();
     }
 
     private static void ensureNoGenericFallback(String variant) {
@@ -250,4 +287,6 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
         try { field(owner, name).setBoolean(null, value); }
         catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
+
+    private record RenderBarrier(long sequence, long frameBaseline) {}
 }

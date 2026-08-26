@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.17.12'
+    id 'net.fabricmc.fabric-loom' version '1.17.12'
     id 'maven-publish'
 }
 
@@ -79,16 +79,13 @@ fabricApi {
 
 repositories {
     mavenCentral()
-    maven { url = 'https://repo.codemc.io/repository/relativitymc/' }
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "org.relativitymc:modern-yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    compileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    runtimeOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation files(totemCoreJar)
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation files(totemCoreJar)
 
     // Production namespace regression tests must load the same runtime mods that
     // users install. The project JAR itself is supplied by Loom's production task.
@@ -100,90 +97,6 @@ dependencies {
 }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
-
-tasks.register("normalizeFabricApiTweakersForNamedDevRuntime") {
-    group = "fabric"
-    description = "Normalizes Fabric API tweaker namespaces for the named development runtime."
-
-    doLast {
-        def jarFiles = new LinkedHashSet<File>()
-        jarFiles.addAll(configurations.runtimeClasspath.resolve().findAll { file ->
-            file.name.endsWith(".jar") && file.absolutePath.contains("${File.separator}net.fabricmc.fabric-api${File.separator}")
-        })
-
-        [gradle.gradleUserHomeDir, new File(System.getProperty("user.home"), ".gradle")].each { File cacheRoot ->
-            File fabricApiCache = new File(cacheRoot, "caches/modules-2/files-2.1/net.fabricmc.fabric-api")
-            if (fabricApiCache.isDirectory()) {
-                jarFiles.addAll(fileTree(dir: fabricApiCache, include: "**/*.jar").files.findAll { file ->
-                    !file.name.endsWith("-sources.jar")
-                })
-            }
-        }
-
-        int patchedFiles = 0
-        int patchedEntries = 0
-
-        jarFiles.each { File jarFile ->
-            File tempFile = new File(buildDir, "tmp/tweaker-normalized/${jarFile.name}.tmp")
-            tempFile.parentFile.mkdirs()
-            boolean fileChanged = false
-
-            def zipFile = new java.util.zip.ZipFile(jarFile)
-            def zipOut = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(tempFile)))
-
-            try {
-                def entries = zipFile.entries()
-                while (entries.hasMoreElements()) {
-                    def entry = entries.nextElement()
-                    def outEntry = new java.util.zip.ZipEntry(entry.name)
-                    zipOut.putNextEntry(outEntry)
-
-                    byte[] bytes = entry.isDirectory() ? new byte[0] : zipFile.getInputStream(entry).bytes
-                    if (!entry.isDirectory() && (entry.name.endsWith(".classtweaker") || entry.name.endsWith(".accesswidener"))) {
-                        String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-                        String normalized = text
-                                .replaceFirst(/(?m)^(classTweaker\s+v\d+\s+)official(\s*)$/, '$1named$2')
-                                .replaceFirst(/(?m)^(accessWidener\s+v\d+\s+)official(\s*)$/, '$1named$2')
-
-                        if (normalized != text) {
-                            bytes = normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-                            fileChanged = true
-                            patchedEntries++
-                        }
-                    }
-
-                    zipOut.write(bytes)
-                    zipOut.closeEntry()
-                }
-            } finally {
-                zipOut.close()
-                zipFile.close()
-            }
-
-            if (fileChanged) {
-                java.nio.file.Files.move(
-                        tempFile.toPath(),
-                        jarFile.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                )
-                patchedFiles++
-            } else {
-                tempFile.delete()
-            }
-        }
-
-        logger.lifecycle("Normalized ${patchedEntries} Fabric API tweaker entries in ${patchedFiles} jars for named dev runtime.")
-    }
-}
-
-tasks.matching { task ->
-    task.name in [
-            "runClient", "runServer", "runDatagen", "runGameTest", "runClientGametest",
-            "runE2eServer", "runE2eTarget", "runE2eObserver"
-    ]
-}.configureEach {
-    dependsOn("normalizeFabricApiTweakersForNamedDevRuntime")
-}
 
 // Build the separate GameTest source set as a real test-only Fabric mod. Loom's
 // generic production run task loads the main project JAR automatically, but it
@@ -212,6 +125,85 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
 tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
     dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
     classpath(sourceSets.e2e.output)
+}
+
+// Produce immutable direct-launch inputs from the current run-task classpaths.
+// configureClientLaunch only creates launch.cfg; Loom writes each classpath
+// argfile as a side effect of executing that run task, which is too late for
+// starting the two clients concurrently and can otherwise reuse stale files.
+def e2eLaunchInputsDir = providers.gradleProperty('e2eLaunchInputsDir')
+        .map { path -> file(path) }
+        .orElse(layout.buildDirectory.dir('e2e/launch').map { it.asFile })
+def e2eClientRunTasks = ["runE2eTarget", "runE2eObserver"].collect { taskName ->
+    tasks.named(taskName, net.fabricmc.loom.task.RunGameTask)
+}
+
+tasks.register('prepareE2eClientLaunchInputs') {
+    group = 'verification'
+    description = 'Writes fresh official-namespace E2E client launch.cfg and classpath argfiles.'
+    dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName, 'configureClientLaunch')
+    outputs.files(e2eLaunchInputsDir.map { outputDir ->
+        [
+                new File(outputDir, 'launch.cfg'),
+                new File(outputDir, 'runE2eTarget.args'),
+                new File(outputDir, 'runE2eObserver.args')
+        ]
+    })
+    // These files are a launch-time handoff, not a reusable build artifact.
+    // Always rewrite them from the tasks configured by this Gradle invocation.
+    outputs.upToDateWhen { false }
+
+    doLast {
+        File outputDir = e2eLaunchInputsDir.get()
+        outputDir.mkdirs()
+
+        File projectCacheDir = gradle.startParameter.projectCacheDir ?: file('.gradle')
+        File generatedLaunchConfig = new File(projectCacheDir, 'loom-cache/launch.cfg')
+        if (!generatedLaunchConfig.isFile()) {
+            throw new GradleException("configureClientLaunch did not create ${generatedLaunchConfig}")
+        }
+
+        String launchConfig = generatedLaunchConfig.getText('UTF-8')
+        if (!launchConfig.contains('fabric.defaultModDistributionNamespace=official')
+                || launchConfig.contains('fabric.defaultModDistributionNamespace=named')) {
+            throw new GradleException('E2E launch.cfg must use the official distribution namespace')
+        }
+        java.nio.file.Files.copy(
+                generatedLaunchConfig.toPath(),
+                new File(outputDir, 'launch.cfg').toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+
+        String expectedClasspath = null
+        e2eClientRunTasks.each { runTaskProvider ->
+            def runTask = runTaskProvider.get()
+            String classpath = runTask.classpath.files
+                    .collect { classpathEntry -> classpathEntry.absolutePath }
+                    .join(File.pathSeparator)
+            String lowerClasspath = classpath.toLowerCase(Locale.ROOT)
+            if (classpath.isBlank()) {
+                throw new GradleException("${runTask.name} resolved an empty classpath")
+            }
+            if (lowerClasspath.contains('org.relativitymc') || lowerClasspath.contains('modern-yarn')) {
+                throw new GradleException("${runTask.name} resolved a stale mapped classpath")
+            }
+            if (!classpath.contains(sourceSets.main.output.classesDirs.singleFile.absolutePath)
+                    || !classpath.contains(sourceSets.e2e.output.classesDirs.singleFile.absolutePath)
+                    || !classpath.contains(totemCoreJar.absolutePath)) {
+                throw new GradleException("${runTask.name} is missing main, E2E, or pinned TotemCore classpath entries")
+            }
+            if (expectedClasspath != null && expectedClasspath != classpath) {
+                throw new GradleException('Target and Observer direct-launch classpaths must be identical')
+            }
+            expectedClasspath = classpath
+
+            String escapedClasspath = classpath
+                    .replace('\\', '\\\\')
+                    .replace('"', '\\"')
+            new File(outputDir, "${runTask.name}.args")
+                    .setText("-classpath\n\"${escapedClasspath}\"\n", 'UTF-8')
+        }
+    }
 }
 
 // Keep E2E clients deterministic on fresh CI machines: suppress Minecraft's

@@ -52,6 +52,10 @@ jobs:
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
+      - name: Verify Observer test gate parity
+        shell: bash
+        run: bash .github/scripts/check-observer-test-gate-parity.sh
+
       - name: Assert Observer production source is framebuffer-free
         shell: bash
         run: |
@@ -76,7 +80,7 @@ jobs:
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
+          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
 
       - name: Run dedicated-server two-client Observer E2E
         shell: bash
@@ -99,6 +103,51 @@ jobs:
           max-players=4
           motd=Totem Observer E2E
           EOF
+
+          # Resolve/compile once before the server join deadline exists. Two
+          # concurrent Gradle runs contend for Loom's global cache and write the
+          # same build/classes tree, so prepare immutable launch inputs first
+          # and then start the Minecraft client JVMs directly in parallel.
+          client_launch_cache="${GITHUB_WORKSPACE}/build/e2e/gradle-clients"
+          launch_dir="${GITHUB_WORKSPACE}/build/e2e/launch"
+          mkdir -p "$launch_dir"
+          find "$launch_dir" -maxdepth 1 -type f \
+            \( -name 'launch.cfg' -o -name 'runE2eTarget.args' -o -name 'runE2eObserver.args' \) \
+            -delete
+          ./gradlew -PtotemCoreJar="$core_jar" \
+            -Pe2eLaunchInputsDir="$launch_dir" \
+            --project-cache-dir "$client_launch_cache" \
+            prepareE2eClientLaunchInputs \
+            --no-daemon --stacktrace
+
+          launch_cfg="$launch_dir/launch.cfg"
+          target_args="$launch_dir/runE2eTarget.args"
+          observer_args="$launch_dir/runE2eObserver.args"
+          java_bin="${JAVA_HOME}/bin/java"
+          for required in "$launch_cfg" "$target_args" "$observer_args" "$java_bin"; do
+            if [[ ! -s "$required" ]]; then
+              echo "Missing prepared E2E launch input: $required" >&2
+              exit 1
+            fi
+          done
+          if ! grep -Fq 'fabric.defaultModDistributionNamespace=official' "$launch_cfg"; then
+            echo 'Prepared E2E launch.cfg is not in the official namespace.' >&2
+            exit 1
+          fi
+          if grep -Eqi 'org\.relativitymc|modern-yarn' "$launch_cfg" "$target_args" "$observer_args"; then
+            echo 'Prepared E2E launch inputs contain stale mapped dependencies.' >&2
+            exit 1
+          fi
+          if ! cmp -s "$target_args" "$observer_args"; then
+            echo 'Target and Observer E2E classpath argfiles differ.' >&2
+            exit 1
+          fi
+          for client_dir in build/e2e/target build/e2e/observer; do
+            printf '%s\n' \
+              'onboardAccessibility:false' \
+              'skipMultiplayerWarning:true' \
+              'tutorialStep:none' > "$client_dir/options.txt"
+          done
 
           server_pid=''
           target_pid=''
@@ -142,10 +191,39 @@ jobs:
             exit 1
           fi
 
-          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
-            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-target" \
-            runE2eTarget --no-daemon --stacktrace > build/e2e/target.log 2>&1 &
+          (
+            cd build/e2e/target
+            exec xvfb-run -a "$java_bin" @"$target_args" \
+              -Dfabric.dli.config="$launch_cfg" \
+              -Dfabric.dli.env=client \
+              -Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient \
+              -Dtotem.observer.e2e.enabled=true \
+              -Dtotem.observer.e2e.results="$results" \
+              -Dtotem.observer.e2e.role=target \
+              --sun-misc-unsafe-memory-access=allow \
+              --enable-native-access=ALL-UNNAMED \
+              -Dfile.encoding=UTF-8 \
+              net.fabricmc.devlaunchinjector.Main --username Target
+          ) > build/e2e/target.log 2>&1 &
           target_pid=$!
+
+          # Start both clients from the same server-ready edge; all expensive
+          # Gradle/Loom preparation completed before the first client can join.
+          (
+            cd build/e2e/observer
+            exec xvfb-run -a "$java_bin" @"$observer_args" \
+              -Dfabric.dli.config="$launch_cfg" \
+              -Dfabric.dli.env=client \
+              -Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient \
+              -Dtotem.observer.e2e.enabled=true \
+              -Dtotem.observer.e2e.results="$results" \
+              -Dtotem.observer.e2e.role=observer \
+              --sun-misc-unsafe-memory-access=allow \
+              --enable-native-access=ALL-UNNAMED \
+              -Dfile.encoding=UTF-8 \
+              net.fabricmc.devlaunchinjector.Main --username Observer
+          ) > build/e2e/observer.log 2>&1 &
+          observer_pid=$!
 
           target_ready=false
           for _ in $(seq 1 180); do
@@ -157,23 +235,23 @@ jobs:
               target_ready=true
               break
             fi
-            if ! kill -0 "$target_pid" 2>/dev/null; then
-              echo 'E2E Target exited before stabilizing in gameplay view.' >&2
-              tail -n 200 build/e2e/target.log >&2 || true
-              exit 1
-            fi
+            for spec in "$target_pid:target" "$observer_pid:observer"; do
+              pid="${spec%%:*}"
+              name="${spec##*:}"
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "E2E ${name} exited before Target stabilized in gameplay view." >&2
+                tail -n 200 "build/e2e/${name}.log" >&2 || true
+                exit 1
+              fi
+            done
             sleep 1
           done
           if [[ "$target_ready" != true ]]; then
             echo 'Timed out waiting for E2E Target gameplay view to stabilize.' >&2
             tail -n 200 build/e2e/target.log >&2 || true
+            tail -n 200 build/e2e/observer.log >&2 || true
             exit 1
           fi
-
-          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" \
-            --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-observer" \
-            runE2eObserver --no-daemon --stacktrace > build/e2e/observer.log 2>&1 &
-          observer_pid=$!
 
           complete=false
           for _ in $(seq 1 360); do
@@ -183,6 +261,7 @@ jobs:
               exit 1
             fi
 
+            # Includes 105 explicit late-family assertions: 15 semantic families x 7 lifecycle files.
             if [[ -f "$results/server-session-started.txt" \
                && -f "$results/target-world-ready.txt" \
                && -f "$results/target-native-state-enabled.txt" \
@@ -201,6 +280,8 @@ jobs:
                && -f "$results/observer-native-container-saved.txt" \
                && -f "$results/observer-native-container.png" \
                && -f "$results/target-native-container-closed.txt" \
+               && -f "$results/target-native-crafting-sender-priority-suppressed.txt" \
+               && -f "$results/observer-native-crafting-mirror-priority-suppressed.txt" \
                && -f "$results/observer-ready-for-generic-screen.txt" \
                && -f "$results/target-native-generic-opened.txt" \
                && -f "$results/target-native-generic-no-frame.txt" \
@@ -258,6 +339,111 @@ jobs:
                && -f "$results/observer-native-nexus-registration.png" \
                && -f "$results/target-native-nexus-close-sent.txt" \
                && -f "$results/observer-native-nexus-closed.txt" \
+               && -f "$results/observer-ready-for-villagers-woodcutter.txt" \
+               && -f "$results/target-native-villagers-woodcutter-state-sent.txt" \
+               && -f "$results/observer-native-villagers-woodcutter-ok.txt" \
+               && -f "$results/observer-native-villagers-woodcutter-saved.txt" \
+               && -f "$results/observer-native-villagers-woodcutter.png" \
+               && -f "$results/target-native-villagers-woodcutter-close-sent.txt" \
+               && -f "$results/observer-native-villagers-woodcutter-closed.txt" \
+               && -f "$results/observer-ready-for-brewing.txt" \
+               && -f "$results/target-native-brewing-state-sent.txt" \
+               && -f "$results/observer-native-brewing-ok.txt" \
+               && -f "$results/observer-native-brewing-saved.txt" \
+               && -f "$results/observer-native-brewing.png" \
+               && -f "$results/target-native-brewing-close-sent.txt" \
+               && -f "$results/observer-native-brewing-closed.txt" \
+               && -f "$results/observer-ready-for-smithing.txt" \
+               && -f "$results/target-native-smithing-state-sent.txt" \
+               && -f "$results/observer-native-smithing-ok.txt" \
+               && -f "$results/observer-native-smithing-saved.txt" \
+               && -f "$results/observer-native-smithing.png" \
+               && -f "$results/target-native-smithing-close-sent.txt" \
+               && -f "$results/observer-native-smithing-closed.txt" \
+               && -f "$results/observer-ready-for-stonecutter.txt" \
+               && -f "$results/target-native-stonecutter-state-sent.txt" \
+               && -f "$results/observer-native-stonecutter-ok.txt" \
+               && -f "$results/observer-native-stonecutter-saved.txt" \
+               && -f "$results/observer-native-stonecutter.png" \
+               && -f "$results/target-native-stonecutter-close-sent.txt" \
+               && -f "$results/observer-native-stonecutter-closed.txt" \
+               && -f "$results/observer-ready-for-grindstone.txt" \
+               && -f "$results/target-native-grindstone-state-sent.txt" \
+               && -f "$results/observer-native-grindstone-ok.txt" \
+               && -f "$results/observer-native-grindstone-saved.txt" \
+               && -f "$results/observer-native-grindstone.png" \
+               && -f "$results/target-native-grindstone-close-sent.txt" \
+               && -f "$results/observer-native-grindstone-closed.txt" \
+               && -f "$results/observer-ready-for-loom.txt" \
+               && -f "$results/target-native-loom-state-sent.txt" \
+               && -f "$results/observer-native-loom-ok.txt" \
+               && -f "$results/observer-native-loom-saved.txt" \
+               && -f "$results/observer-native-loom.png" \
+               && -f "$results/target-native-loom-close-sent.txt" \
+               && -f "$results/observer-native-loom-closed.txt" \
+               && -f "$results/observer-ready-for-cartography.txt" \
+               && -f "$results/target-native-cartography-state-sent.txt" \
+               && -f "$results/observer-native-cartography-ok.txt" \
+               && -f "$results/observer-native-cartography-saved.txt" \
+               && -f "$results/observer-native-cartography.png" \
+               && -f "$results/target-native-cartography-close-sent.txt" \
+               && -f "$results/observer-native-cartography-closed.txt" \
+               && -f "$results/observer-ready-for-beacon.txt" \
+               && -f "$results/target-native-beacon-state-sent.txt" \
+               && -f "$results/observer-native-beacon-ok.txt" \
+               && -f "$results/observer-native-beacon-saved.txt" \
+               && -f "$results/observer-native-beacon.png" \
+               && -f "$results/target-native-beacon-close-sent.txt" \
+               && -f "$results/observer-native-beacon-closed.txt" \
+               && -f "$results/observer-ready-for-sign.txt" \
+               && -f "$results/target-native-sign-state-sent.txt" \
+               && -f "$results/observer-native-sign-ok.txt" \
+               && -f "$results/observer-native-sign-saved.txt" \
+               && -f "$results/observer-native-sign.png" \
+               && -f "$results/target-native-sign-close-sent.txt" \
+               && -f "$results/observer-native-sign-closed.txt" \
+               && -f "$results/observer-ready-for-crafter.txt" \
+               && -f "$results/target-native-crafter-state-sent.txt" \
+               && -f "$results/observer-native-crafter-ok.txt" \
+               && -f "$results/observer-native-crafter-saved.txt" \
+               && -f "$results/observer-native-crafter.png" \
+               && -f "$results/target-native-crafter-close-sent.txt" \
+               && -f "$results/observer-native-crafter-closed.txt" \
+               && -f "$results/observer-ready-for-nexus-death-node-admin.txt" \
+               && -f "$results/target-native-nexus-death-node-admin-state-sent.txt" \
+               && -f "$results/observer-native-nexus-death-node-admin-ok.txt" \
+               && -f "$results/observer-native-nexus-death-node-admin-saved.txt" \
+               && -f "$results/observer-native-nexus-death-node-admin.png" \
+               && -f "$results/target-native-nexus-death-node-admin-close-sent.txt" \
+               && -f "$results/observer-native-nexus-death-node-admin-closed.txt" \
+               && -f "$results/observer-ready-for-locksmith-management.txt" \
+               && -f "$results/target-native-locksmith-management-state-sent.txt" \
+               && -f "$results/observer-native-locksmith-management-ok.txt" \
+               && -f "$results/observer-native-locksmith-management-saved.txt" \
+               && -f "$results/observer-native-locksmith-management.png" \
+               && -f "$results/target-native-locksmith-management-close-sent.txt" \
+               && -f "$results/observer-native-locksmith-management-closed.txt" \
+               && -f "$results/observer-ready-for-pause-screen.txt" \
+               && -f "$results/target-native-pause-screen-state-sent.txt" \
+               && -f "$results/observer-native-pause-screen-ok.txt" \
+               && -f "$results/observer-native-pause-screen-saved.txt" \
+               && -f "$results/observer-native-pause-screen.png" \
+               && -f "$results/target-native-pause-screen-close-sent.txt" \
+               && -f "$results/observer-native-pause-screen-closed.txt" \
+               && -f "$results/observer-ready-for-advancements.txt" \
+               && -f "$results/target-native-advancements-state-sent.txt" \
+               && -f "$results/observer-native-advancements-ok.txt" \
+               && -f "$results/observer-native-advancements-saved.txt" \
+               && -f "$results/observer-native-advancements.png" \
+               && -f "$results/target-native-advancements-close-sent.txt" \
+               && -f "$results/observer-native-advancements-closed.txt" \
+               && -f "$results/observer-ready-for-stats.txt" \
+               && -f "$results/target-native-stats-state-sent.txt" \
+               && -f "$results/observer-native-stats-ok.txt" \
+               && -f "$results/observer-native-stats-saved.txt" \
+               && -f "$results/observer-native-stats.png" \
+               && -f "$results/target-native-stats-close-sent.txt" \
+               && -f "$results/observer-native-stats-closed.txt" \
                && -f "$results/observer-complete.txt" \
                && -f "$results/target-complete.txt" \
                && -f "$results/server-cleanup-ok.txt" ]]; then
@@ -297,7 +483,26 @@ jobs:
 
           printf '%s\n' \
             'Dedicated server + Target JVM + Observer JVM framebuffer-free Observer E2E passed.' \
-            'Verified world/HUD, crafting, unsupported metadata fallback, merchant, anvil, enchanting, Remnant backpack, Automata Copper Golem, Nexus map/friends/registration semantics, Stop, and server cleanup.'
+            'Verified world/HUD, crafting, unsupported metadata fallback, every registered semantic bridge through Statistics, Stop, and server cleanup.'
+
+      - name: Run production Client GameTests
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
+          production_screenshots="${GITHUB_WORKSPACE}/build/client-gametest-screenshots"
+          mkdir -p "$production_screenshots"
+          find "$production_screenshots" -maxdepth 1 -type f -name '*.png' -delete
+
+          ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace
+
+          production_screenshot_count="$(find "$production_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
+          if [[ "$production_screenshot_count" != 29 ]]; then
+            echo "Production Client GameTests must persist exactly 29 screenshots; found $production_screenshot_count." >&2
+            find "$production_screenshots" -maxdepth 1 -type f -name '*.png' -print >&2
+            exit 1
+          fi
 
       - name: Upload client GameTest screenshots
         if: always()
