@@ -31,10 +31,33 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Framebuffer-free semantic adapter and local reconstruction for vanilla Statistics. */
 public final class ObserverStatsScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    static final int SAFE_SCREEN_MARGIN = 12;
+    static final int MAX_PANEL_WIDTH = 620;
+    static final int MAX_PANEL_HEIGHT = 390;
+    static final int PANEL_CONTENT_MARGIN = 10;
+    static final int BODY_MARGIN = 8;
+    static final int BODY_INNER_PADDING = 8;
+    static final int BODY_TOP = 48;
+    static final int BODY_BOTTOM_MARGIN = 10;
+    static final int TITLE_Y = 8;
+    static final int TEXT_HEIGHT = 9;
+    static final int TITLE_SORT_GAP = 8;
+    static final int MAX_SORT_WIDTH = 150;
+    static final int TAB_Y = 25;
+    static final int TAB_HEIGHT = 19;
+    static final int TAB_GAP = 8;
+    static final int MAX_TAB_WIDTH = 84;
+    static final int GENERAL_ROW_HEIGHT = 16;
+    static final int TABLE_HEADER_HEIGHT = 20;
+    static final int TABLE_ROW_HEIGHT = 20;
+    static final int TABLE_BOTTOM_PADDING = 4;
+    static final int ITEM_ICON_TEXT_GAP = 4;
+    static final int COLUMN_GAP = 6;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -294,6 +317,170 @@ public final class ObserverStatsScreenClient {
         }
     }
 
+    /** Resolves the Statistics panel and every table column from the available vanilla GUI viewport. */
+    static StatsLayout statsLayout(int screenWidth, int screenHeight) {
+        int panelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(1, screenWidth - SAFE_SCREEN_MARGIN * 2));
+        int panelHeight = Math.min(MAX_PANEL_HEIGHT, Math.max(1, screenHeight - SAFE_SCREEN_MARGIN * 2));
+        int left = (screenWidth - panelWidth) / 2;
+        int top = (screenHeight - panelHeight) / 2;
+
+        int contentLeft = PANEL_CONTENT_MARGIN;
+        int contentRight = Math.max(contentLeft, panelWidth - PANEL_CONTENT_MARGIN);
+        int contentWidth = Math.max(0, contentRight - contentLeft);
+        int sortWidth = Math.min(MAX_SORT_WIDTH, Math.max(0, (contentWidth - TITLE_SORT_GAP) / 2));
+        int sortX = contentRight - sortWidth;
+        int titleWidth = Math.max(0, sortX - TITLE_SORT_GAP - contentLeft);
+
+        int tabWidth = Math.min(MAX_TAB_WIDTH, Math.max(1, (contentWidth - TAB_GAP * 2) / 3));
+        int bodyX = BODY_MARGIN;
+        int bodyY = BODY_TOP;
+        int bodyWidth = Math.max(0, panelWidth - BODY_MARGIN * 2);
+        int bodyHeight = Math.max(0, panelHeight - BODY_TOP - BODY_BOTTOM_MARGIN);
+        int bodyInnerLeft = bodyX + BODY_INNER_PADDING;
+        int bodyInnerRight = Math.max(bodyInnerLeft, bodyX + bodyWidth - BODY_INNER_PADDING);
+        int bodyInnerWidth = Math.max(0, bodyInnerRight - bodyInnerLeft);
+
+        int itemStatWidth = Math.min(48, Math.max(1, bodyInnerWidth / 9));
+        int itemStatsWidth = Math.min(bodyInnerWidth, itemStatWidth * 6);
+        int itemFirstStatX = bodyInnerRight - itemStatsWidth;
+        int itemLabelX = Math.min(itemFirstStatX, bodyInnerLeft + 20);
+        int itemLabelWidth = Math.max(0, itemFirstStatX - ITEM_ICON_TEXT_GAP - itemLabelX);
+
+        int generalValueWidth = Math.min(160, Math.max(1, bodyInnerWidth / 3));
+        int generalValueX = bodyInnerRight - generalValueWidth;
+        int generalLabelWidth = Math.max(0, generalValueX - COLUMN_GAP - bodyInnerLeft);
+
+        int mobStatWidth = Math.min(100, Math.max(1, bodyInnerWidth / 5));
+        int mobStatsAndGaps = Math.min(bodyInnerWidth, mobStatWidth * 2 + COLUMN_GAP * 2);
+        int mobNameWidth = Math.max(0, bodyInnerWidth - mobStatsAndGaps);
+        int mobKilledX = bodyInnerLeft + mobNameWidth + COLUMN_GAP;
+        int mobKilledByX = Math.min(bodyInnerRight, mobKilledX + mobStatWidth + COLUMN_GAP);
+
+        int generalRowCapacity = Math.max(0, (bodyHeight - 8) / GENERAL_ROW_HEIGHT);
+        int tableRowCapacity = Math.max(0,
+                (bodyHeight - TABLE_HEADER_HEIGHT - TABLE_BOTTOM_PADDING) / TABLE_ROW_HEIGHT);
+        return new StatsLayout(
+                left, top, panelWidth, panelHeight, screenWidth, screenHeight,
+                contentLeft, contentRight, titleWidth, sortX, sortWidth, tabWidth,
+                bodyX, bodyY, bodyWidth, bodyHeight, bodyInnerLeft, bodyInnerRight,
+                itemLabelX, itemLabelWidth, itemFirstStatX, itemStatWidth,
+                generalLabelWidth, generalValueX, generalValueWidth,
+                mobNameWidth, mobKilledX, mobKilledByX, mobStatWidth,
+                generalRowCapacity, tableRowCapacity);
+    }
+
+    /** Clamps a pixel scroll offset to a complete page, never producing a partial final row. */
+    static RowWindow rowWindow(int rowCount, double scrollAmount, int rowHeight, int rowCapacity) {
+        int safeCount = Math.max(0, rowCount);
+        int safeCapacity = Math.max(0, rowCapacity);
+        int visibleRows = Math.min(safeCount, safeCapacity);
+        int requestedStart;
+        if (!Double.isFinite(scrollAmount) || scrollAmount <= 0.0D || rowHeight <= 0) {
+            requestedStart = scrollAmount > 0.0D ? Integer.MAX_VALUE : 0;
+        } else {
+            requestedStart = (int) Math.min(Integer.MAX_VALUE, Math.floor(scrollAmount / rowHeight));
+        }
+        int maxStart = Math.max(0, safeCount - visibleRows);
+        int firstRow = Math.min(Math.max(0, requestedStart), maxStart);
+        return new RowWindow(firstRow, visibleRows, safeCapacity);
+    }
+
+    /** Fits semantic text to the measured Minecraft font width without splitting a Unicode code point. */
+    static BoundedLabel boundedLabel(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        String safeText = text == null ? "" : text;
+        int safeMaxWidth = Math.max(0, maxWidth);
+        if (safeText.isEmpty() || safeMaxWidth == 0) return new BoundedLabel("", 0, safeMaxWidth);
+        int fullWidth = widthOf.applyAsInt(safeText);
+        if (fullWidth <= safeMaxWidth) return new BoundedLabel(safeText, fullWidth, safeMaxWidth);
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > safeMaxWidth) return new BoundedLabel("", 0, safeMaxWidth);
+        int low = 0;
+        int high = safeText.codePointCount(0, safeText.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = safeText.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(safeText.substring(0, end) + ellipsis) <= safeMaxWidth) low = middle;
+            else high = middle - 1;
+        }
+        String fitted = safeText.substring(0, safeText.offsetByCodePoints(0, low)) + ellipsis;
+        return new BoundedLabel(fitted, widthOf.applyAsInt(fitted), safeMaxWidth);
+    }
+
+    static record BoundedLabel(String text, int textWidth, int maxWidth) {
+        boolean fits() { return textWidth <= maxWidth; }
+    }
+
+    static record RowWindow(int firstRow, int visibleRows, int rowCapacity) {
+        int lastExclusive() { return firstRow + visibleRows; }
+    }
+
+    static record StatsLayout(
+            int left,
+            int top,
+            int panelWidth,
+            int panelHeight,
+            int screenWidth,
+            int screenHeight,
+            int contentLeft,
+            int contentRight,
+            int titleWidth,
+            int sortX,
+            int sortWidth,
+            int tabWidth,
+            int bodyX,
+            int bodyY,
+            int bodyWidth,
+            int bodyHeight,
+            int bodyInnerLeft,
+            int bodyInnerRight,
+            int itemLabelX,
+            int itemLabelWidth,
+            int itemFirstStatX,
+            int itemStatWidth,
+            int generalLabelWidth,
+            int generalValueX,
+            int generalValueWidth,
+            int mobNameWidth,
+            int mobKilledX,
+            int mobKilledByX,
+            int mobStatWidth,
+            int generalRowCapacity,
+            int tableRowCapacity
+    ) {
+        int right() { return left + panelWidth; }
+        int bottom() { return top + panelHeight; }
+        int bodyRight() { return bodyX + bodyWidth; }
+        int bodyBottom() { return bodyY + bodyHeight; }
+        int tabX(int index) { return contentLeft + index * (tabWidth + TAB_GAP); }
+        int tabRight(int index) { return tabX(index) + tabWidth; }
+        int itemStatX(int index) { return itemFirstStatX + index * itemStatWidth; }
+        int itemStatRight(int index) { return itemStatX(index) + itemStatWidth; }
+        int generalLabelRight() { return bodyInnerLeft + generalLabelWidth; }
+        int generalValueRight() { return generalValueX + generalValueWidth; }
+        int mobNameRight() { return bodyInnerLeft + mobNameWidth; }
+        int mobKilledRight() { return mobKilledX + mobStatWidth; }
+        int mobKilledByRight() { return mobKilledByX + mobStatWidth; }
+        boolean fits() {
+            return left >= SAFE_SCREEN_MARGIN
+                    && top >= SAFE_SCREEN_MARGIN
+                    && screenWidth - right() >= SAFE_SCREEN_MARGIN
+                    && screenHeight - bottom() >= SAFE_SCREEN_MARGIN
+                    && contentLeft + titleWidth + TITLE_SORT_GAP <= sortX
+                    && sortX + sortWidth <= contentRight
+                    && tabRight(2) <= contentRight
+                    && TAB_Y + TAB_HEIGHT <= bodyY
+                    && bodyRight() <= panelWidth - BODY_MARGIN
+                    && bodyBottom() <= panelHeight - BODY_BOTTOM_MARGIN
+                    && itemLabelX + itemLabelWidth + ITEM_ICON_TEXT_GAP <= itemFirstStatX
+                    && itemStatRight(5) <= bodyInnerRight
+                    && generalLabelRight() + COLUMN_GAP <= generalValueX
+                    && generalValueRight() <= bodyInnerRight
+                    && mobNameRight() + COLUMN_GAP <= mobKilledX
+                    && mobKilledRight() + COLUMN_GAP <= mobKilledByX
+                    && mobKilledByRight() <= bodyInnerRight;
+        }
+    }
+
     private static final class NativeStatsMirrorScreen extends Screen {
         private NativeStatsMirrorScreen() { super(Component.literal("Observer Statistics")); }
         @Override public boolean isPauseScreen() { return false; }
@@ -304,100 +491,155 @@ public final class ObserverStatsScreenClient {
 
         @Override public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             g.fill(0, 0, width, height, 0xA0000000);
-            int pw = Math.min(620, Math.max(340, width - 28));
-            int ph = Math.min(390, Math.max(240, height - 28));
-            int left = (width - pw) / 2;
-            int top = (height - ph) / 2;
+            StatsLayout layout = statsLayout(width, height);
+            int pw = layout.panelWidth();
+            int ph = layout.panelHeight();
+            int left = layout.left();
+            int top = layout.top();
             g.fill(left, top, left + pw, top + ph, 0xFFC6C6C6);
             g.outline(left, top, pw, ph, 0xFF303030);
-            g.text(font, remoteTitle.isBlank() ? "Statistics" : remoteTitle, left + 10, top + 9, 0xFF303030, false);
-            drawTabs(g, left, top, pw);
-            int bodyTop = top + 48;
-            int bodyBottom = top + ph - 12;
-            g.fill(left + 8, bodyTop, left + pw - 8, bodyBottom, 0xFFF0F0F0);
-            g.outline(left + 8, bodyTop, pw - 16, bodyBottom - bodyTop, 0xFF808080);
+            BoundedLabel title = boundedLabel(remoteTitle.isBlank() ? "Statistics" : remoteTitle,
+                    layout.titleWidth(), font::width);
+            g.text(font, title.text(), left + layout.contentLeft(), top + TITLE_Y, 0xFF303030, false);
+            drawSort(g, layout, left, top);
+            drawTabs(g, layout, left, top);
+            int bodyLeft = left + layout.bodyX();
+            int bodyTop = top + layout.bodyY();
+            int bodyBottom = bodyTop + layout.bodyHeight();
+            g.fill(bodyLeft, bodyTop, bodyLeft + layout.bodyWidth(), bodyBottom, 0xFFF0F0F0);
+            g.outline(bodyLeft, bodyTop, layout.bodyWidth(), layout.bodyHeight(), 0xFF808080);
             if (remoteLoading) {
-                g.text(font, "Loading statistics…", left + 20, bodyTop + 16, 0xFF555555, false);
+                BoundedLabel loading = boundedLabel("Loading statistics…",
+                        layout.bodyInnerRight() - layout.bodyInnerLeft(), font::width);
+                g.text(font, loading.text(), left + layout.bodyInnerLeft(), bodyTop + 16, 0xFF555555, false);
             } else {
                 switch (remoteActiveTab) {
-                    case "items" -> drawItems(g, left + 8, bodyTop, pw - 16, bodyBottom - bodyTop);
-                    case "mobs" -> drawMobs(g, left + 8, bodyTop, pw - 16, bodyBottom - bodyTop);
-                    default -> drawGeneral(g, left + 8, bodyTop, pw - 16, bodyBottom - bodyTop);
+                    case "items" -> drawItems(g, layout, left, top);
+                    case "mobs" -> drawMobs(g, layout, left, top);
+                    default -> drawGeneral(g, layout, left, top);
                 }
             }
             extractedFrames++;
         }
 
-        private void drawTabs(GuiGraphicsExtractor g, int left, int top, int pw) {
+        private void drawSort(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
+            if (!"items".equals(remoteActiveTab) || remoteItemSortColumn.isEmpty()) return;
+            String arrow = remoteItemSortOrder < 0 ? "↓" : remoteItemSortOrder > 0 ? "↑" : "";
+            String column = remoteItemSortColumn.replace('_', ' ');
+            BoundedLabel sort = boundedLabel("Sort: " + column + (arrow.isEmpty() ? "" : " " + arrow),
+                    layout.sortWidth(), font::width);
+            g.text(font, sort.text(), left + layout.sortX() + layout.sortWidth() - sort.textWidth(),
+                    top + TITLE_Y, 0xFF555555, false);
+        }
+
+        private void drawTabs(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
             String[] tabs = {"general", "items", "mobs"};
             for (int i = 0; i < tabs.length; i++) {
-                int x = left + 10 + i * 92;
+                int x = left + layout.tabX(i);
                 boolean selected = tabs[i].equals(remoteActiveTab);
-                g.fill(x, top + 25, x + 84, top + 44, selected ? 0xFF8C8C8C : 0xFFE0E0E0);
-                g.outline(x, top + 25, 84, 19, 0xFF707070);
-                g.text(font, switch (tabs[i]) { case "items" -> "Items"; case "mobs" -> "Mobs"; default -> "General"; },
-                        x + 8, top + 31, selected ? 0xFFFFFFFF : 0xFF404040, false);
-            }
-            if ("items".equals(remoteActiveTab) && !remoteItemSortColumn.isEmpty()) {
-                String arrow = remoteItemSortOrder < 0 ? "↓" : remoteItemSortOrder > 0 ? "↑" : "";
-                g.text(font, "Sort: " + remoteItemSortColumn + " " + arrow, left + pw - 150, top + 31, 0xFF555555, false);
+                g.fill(x, top + TAB_Y, x + layout.tabWidth(), top + TAB_Y + TAB_HEIGHT,
+                        selected ? 0xFF8C8C8C : 0xFFE0E0E0);
+                g.outline(x, top + TAB_Y, layout.tabWidth(), TAB_HEIGHT, 0xFF707070);
+                String rawLabel = switch (tabs[i]) {
+                    case "items" -> "Items";
+                    case "mobs" -> "Mobs";
+                    default -> "General";
+                };
+                BoundedLabel label = boundedLabel(rawLabel, Math.max(0, layout.tabWidth() - 8), font::width);
+                int labelX = x + (layout.tabWidth() - label.textWidth()) / 2;
+                g.text(font, label.text(), labelX, top + TAB_Y + 6,
+                        selected ? 0xFFFFFFFF : 0xFF404040, false);
             }
         }
 
-        private void drawGeneral(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-            int rowHeight = 16;
-            int start = Math.max(0, Math.min(remoteGeneralRows.size(), (int) (remoteScrollAmount / rowHeight)));
-            int visible = Math.max(1, (h - 8) / rowHeight);
-            int rowY = y + 5;
-            for (int i = start; i < remoteGeneralRows.size() && i < start + visible; i++) {
+        private void drawGeneral(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
+            RowWindow window = rowWindow(remoteGeneralRows.size(), remoteScrollAmount,
+                    GENERAL_ROW_HEIGHT, layout.generalRowCapacity());
+            int rowY = top + layout.bodyY() + 4;
+            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
                 var row = remoteGeneralRows.get(i);
-                if ((i & 1) == 0) g.fill(x + 2, rowY - 2, x + w - 2, rowY + rowHeight - 2, 0xFFE5E5E5);
-                g.text(font, row.label(), x + 8, rowY + 2, 0xFF333333, false);
-                int valueWidth = font.width(row.formattedValue());
-                g.text(font, row.formattedValue(), x + w - 10 - valueWidth, rowY + 2, 0xFF555555, false);
-                rowY += rowHeight;
+                if ((i & 1) == 0) {
+                    g.fill(left + layout.bodyX() + 2, rowY,
+                            left + layout.bodyRight() - 2, rowY + GENERAL_ROW_HEIGHT, 0xFFE5E5E5);
+                }
+                BoundedLabel label = boundedLabel(row.label(), layout.generalLabelWidth(), font::width);
+                BoundedLabel value = boundedLabel(row.formattedValue(), layout.generalValueWidth(), font::width);
+                g.text(font, label.text(), left + layout.bodyInnerLeft(), rowY + 3, 0xFF333333, false);
+                g.text(font, value.text(), left + layout.generalValueX() + layout.generalValueWidth() - value.textWidth(),
+                        rowY + 3, 0xFF555555, false);
+                rowY += GENERAL_ROW_HEIGHT;
             }
         }
 
-        private void drawItems(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-            int rowHeight = 20;
-            int start = Math.max(0, Math.min(remoteItemRows.size(), (int) (remoteScrollAmount / rowHeight)));
-            int visible = Math.max(1, (h - 22) / rowHeight);
+        private void drawItems(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
+            int headerY = top + layout.bodyY() + 5;
+            BoundedLabel itemHeader = boundedLabel("Item",
+                    layout.itemFirstStatX() - layout.bodyInnerLeft() - ITEM_ICON_TEXT_GAP, font::width);
+            g.text(font, itemHeader.text(), left + layout.bodyInnerLeft(), headerY, 0xFF555555, false);
             String[] headers = {"Mine", "Break", "Craft", "Use", "Pick", "Drop"};
-            int firstColumn = x + Math.max(130, w - 300);
-            for (int i = 0; i < headers.length; i++) g.text(font, headers[i], firstColumn + i * 48, y + 5, 0xFF555555, false);
-            int rowY = y + 20;
-            for (int i = start; i < remoteItemRows.size() && i < start + visible; i++) {
+            for (int i = 0; i < headers.length; i++) {
+                BoundedLabel header = boundedLabel(headers[i], Math.max(0, layout.itemStatWidth() - 4), font::width);
+                g.text(font, header.text(), left + layout.itemStatX(i)
+                                + (layout.itemStatWidth() - header.textWidth()) / 2,
+                        headerY, 0xFF555555, false);
+            }
+            RowWindow window = rowWindow(remoteItemRows.size(), remoteScrollAmount,
+                    TABLE_ROW_HEIGHT, layout.tableRowCapacity());
+            int rowY = top + layout.bodyY() + TABLE_HEADER_HEIGHT;
+            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
                 var row = remoteItemRows.get(i);
-                if ((i & 1) == 0) g.fill(x + 2, rowY - 2, x + w - 2, rowY + rowHeight - 2, 0xFFE5E5E5);
+                if ((i & 1) == 0) {
+                    g.fill(left + layout.bodyX() + 2, rowY,
+                            left + layout.bodyRight() - 2, rowY + TABLE_ROW_HEIGHT, 0xFFE5E5E5);
+                }
                 ItemStack stack = itemStack(row.itemId());
-                if (!stack.isEmpty()) g.item(stack, x + 6, rowY);
+                if (!stack.isEmpty()) g.item(stack, left + layout.bodyInnerLeft(), rowY + 2);
                 String shortId = row.itemId().startsWith("minecraft:") ? row.itemId().substring(10) : row.itemId();
-                g.text(font, shortId, x + 26, rowY + 5, 0xFF333333, false);
+                BoundedLabel itemName = boundedLabel(shortId, layout.itemLabelWidth(), font::width);
+                g.text(font, itemName.text(), left + layout.itemLabelX(), rowY + 6, 0xFF333333, false);
                 int[] values = {row.mined(), row.broken(), row.crafted(), row.used(), row.pickedUp(), row.dropped()};
                 for (int c = 0; c < values.length; c++) {
-                    String text = Integer.toString(values[c]);
-                    g.text(font, text, firstColumn + c * 48, rowY + 5, 0xFF555555, false);
+                    BoundedLabel value = boundedLabel(Integer.toString(values[c]),
+                            Math.max(0, layout.itemStatWidth() - 4), font::width);
+                    g.text(font, value.text(), left + layout.itemStatRight(c) - 2 - value.textWidth(),
+                            rowY + 6, 0xFF555555, false);
                 }
-                rowY += rowHeight;
+                rowY += TABLE_ROW_HEIGHT;
             }
         }
 
-        private void drawMobs(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-            int rowHeight = 20;
-            int start = Math.max(0, Math.min(remoteMobRows.size(), (int) (remoteScrollAmount / rowHeight)));
-            int visible = Math.max(1, (h - 22) / rowHeight);
-            g.text(font, "Mob", x + 8, y + 5, 0xFF555555, false);
-            g.text(font, "Killed", x + w - 150, y + 5, 0xFF555555, false);
-            g.text(font, "Killed by", x + w - 80, y + 5, 0xFF555555, false);
-            int rowY = y + 20;
-            for (int i = start; i < remoteMobRows.size() && i < start + visible; i++) {
+        private void drawMobs(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
+            int headerY = top + layout.bodyY() + 5;
+            BoundedLabel mobHeader = boundedLabel("Mob", layout.mobNameWidth(), font::width);
+            BoundedLabel killedHeader = boundedLabel("Killed", layout.mobStatWidth(), font::width);
+            BoundedLabel killedByHeader = boundedLabel("Killed by", layout.mobStatWidth(), font::width);
+            g.text(font, mobHeader.text(), left + layout.bodyInnerLeft(), headerY, 0xFF555555, false);
+            g.text(font, killedHeader.text(), left + layout.mobKilledX()
+                            + (layout.mobStatWidth() - killedHeader.textWidth()) / 2,
+                    headerY, 0xFF555555, false);
+            g.text(font, killedByHeader.text(), left + layout.mobKilledByX()
+                            + (layout.mobStatWidth() - killedByHeader.textWidth()) / 2,
+                    headerY, 0xFF555555, false);
+            RowWindow window = rowWindow(remoteMobRows.size(), remoteScrollAmount,
+                    TABLE_ROW_HEIGHT, layout.tableRowCapacity());
+            int rowY = top + layout.bodyY() + TABLE_HEADER_HEIGHT;
+            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
                 var row = remoteMobRows.get(i);
-                if ((i & 1) == 0) g.fill(x + 2, rowY - 2, x + w - 2, rowY + rowHeight - 2, 0xFFE5E5E5);
-                g.text(font, row.name(), x + 8, rowY + 5, 0xFF333333, false);
-                g.text(font, Integer.toString(row.killed()), x + w - 150, rowY + 5, 0xFF555555, false);
-                g.text(font, Integer.toString(row.killedBy()), x + w - 80, rowY + 5, 0xFF555555, false);
-                rowY += rowHeight;
+                if ((i & 1) == 0) {
+                    g.fill(left + layout.bodyX() + 2, rowY,
+                            left + layout.bodyRight() - 2, rowY + TABLE_ROW_HEIGHT, 0xFFE5E5E5);
+                }
+                BoundedLabel name = boundedLabel(row.name(), layout.mobNameWidth(), font::width);
+                BoundedLabel killed = boundedLabel(Integer.toString(row.killed()),
+                        Math.max(0, layout.mobStatWidth() - 4), font::width);
+                BoundedLabel killedBy = boundedLabel(Integer.toString(row.killedBy()),
+                        Math.max(0, layout.mobStatWidth() - 4), font::width);
+                g.text(font, name.text(), left + layout.bodyInnerLeft(), rowY + 6, 0xFF333333, false);
+                g.text(font, killed.text(), left + layout.mobKilledRight() - 2 - killed.textWidth(),
+                        rowY + 6, 0xFF555555, false);
+                g.text(font, killedBy.text(), left + layout.mobKilledByRight() - 2 - killedBy.textWidth(),
+                        rowY + 6, 0xFF555555, false);
+                rowY += TABLE_ROW_HEIGHT;
             }
         }
     }
