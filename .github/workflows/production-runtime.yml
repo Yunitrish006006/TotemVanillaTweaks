@@ -26,10 +26,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          # The normal development CI intentionally rewrites Fabric API tweaker
-          # namespaces in its Gradle cache for the named dev runtime. A production
-          # namespace gate must never restore that mutated cache; it needs pristine
-          # distribution dependencies exactly as a player downloads them.
+          # A pre-non-remap build rewrote Fabric API access wideners inside the
+          # shared Gradle dependency cache. A production namespace gate must
+          # resolve pristine distribution artifacts exactly as a player does.
           cache-disabled: true
 
       - name: Check out pinned TotemCore

@@ -9,6 +9,8 @@ e2e_package="dev.totem.vanillatweaks.e2e"
 e2e_source_dir="$repo_root/src/e2e/java/dev/totem/vanillatweaks/e2e"
 e2e_manifest="$repo_root/src/e2e/resources/fabric.mod.json"
 workflow="$repo_root/.github/workflows/build.yml"
+production_workflow="$repo_root/.github/workflows/production-runtime.yml"
+publish_workflow="$repo_root/.github/workflows/publish-modrinth.yml"
 build_script="$repo_root/build.gradle"
 
 failures=0
@@ -160,6 +162,13 @@ fi
 if grep -Fq 'normalizeFabricApiTweakersForNamedDevRuntime' "$build_script" "$workflow"; then
   fail 'build/CI must not mutate Fabric API dependency jars or Gradle shared caches'
 fi
+for gradle_workflow in "$workflow" "$production_workflow" "$publish_workflow"; do
+  setup_gradle_count="$(grep -Fc 'uses: gradle/actions/setup-gradle@v4' "$gradle_workflow" || true)"
+  cache_disabled_count="$(grep -Ec '^[[:space:]]+cache-disabled: true$' "$gradle_workflow" || true)"
+  if [[ "$setup_gradle_count" == 0 || "$cache_disabled_count" != "$setup_gradle_count" ]]; then
+    fail "$(basename "$gradle_workflow") must disable every setup-gradle cache restore/write; found $cache_disabled_count/$setup_gradle_count"
+  fi
+done
 if ! grep -Fq 'productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"' "$build_script" \
     || ! grep -Fq 'productionRuntimeMods files(totemCoreJar)' "$build_script"; then
   fail 'Production Runtime must load the official Fabric API and pinned TotemCore jars'

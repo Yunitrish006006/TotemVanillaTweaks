@@ -25,6 +25,11 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # A pre-non-remap build rewrote Fabric API access wideners inside the
+          # shared Gradle dependency cache. Never restore or persist those
+          # historical jars; hosted runners resolve pristine official artifacts.
+          cache-disabled: true
 
       - name: Check out pinned TotemCore
         uses: actions/checkout@v4
