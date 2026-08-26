@@ -22,10 +22,22 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Smithing Table screen. */
 public final class ObserverSmithingScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    private static final String FULL_INPUT_LEGEND = "T Template  B Base  A Addition";
+    private static final String COMPACT_INPUT_LEGEND = "Tpl  Base  Add";
+    private static final String MINIMUM_INPUT_LEGEND = "T  B  A";
+    static final int TEXT_HEIGHT = 9;
+    static final int INPUT_MARKER_Y = 35;
+    static final int MACHINE_SLOT_BORDER_TOP = 47;
+    static final int MACHINE_SLOT_BORDER_BOTTOM = 65;
+    static final int INPUT_LEGEND_Y = 68;
+    static final int INVENTORY_SLOT_BORDER_TOP = 83;
+    static final int[] INPUT_SLOT_CENTERS = {16, 34, 52};
+    private static final String[] INPUT_MARKERS = {"T", "B", "A"};
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -39,6 +51,103 @@ public final class ObserverSmithingScreenClient {
     private static long extractedFrames;
 
     private ObserverSmithingScreenClient() {}
+
+    /** Chooses readable semantic labels without allowing either row to leave its pixel budget. */
+    static SmithingLabelLayout smithingLabelLayout(
+            boolean recipeError,
+            boolean resultAvailable,
+            int statusWidth,
+            int legendWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        String fullStatus;
+        String compactStatus;
+        if (recipeError) {
+            fullStatus = "Invalid recipe";
+            compactStatus = "Invalid";
+        } else if (resultAvailable) {
+            fullStatus = "Result ready";
+            compactStatus = "Ready";
+        } else {
+            fullStatus = "Result waiting";
+            compactStatus = "Waiting";
+        }
+
+        int safeStatusWidth = Math.max(0, statusWidth);
+        int safeLegendWidth = Math.max(0, legendWidth);
+        String status = chooseLabel(fullStatus, compactStatus, safeStatusWidth, widthOf);
+        String legend;
+        if (widthOf.applyAsInt(FULL_INPUT_LEGEND) <= safeLegendWidth) {
+            legend = FULL_INPUT_LEGEND;
+        } else if (widthOf.applyAsInt(COMPACT_INPUT_LEGEND) <= safeLegendWidth) {
+            legend = COMPACT_INPUT_LEGEND;
+        } else {
+            // Keep all three semantic roles visible before falling back to ellipsis.
+            legend = fitText(MINIMUM_INPUT_LEGEND, safeLegendWidth, widthOf);
+        }
+        return new SmithingLabelLayout(status, widthOf.applyAsInt(status), safeStatusWidth,
+                legend, widthOf.applyAsInt(legend), safeLegendWidth);
+    }
+
+    private static String chooseLabel(
+            String full,
+            String compact,
+            int maxWidth,
+            ToIntFunction<String> widthOf
+    ) {
+        if (widthOf.applyAsInt(full) <= maxWidth) {
+            return full;
+        }
+        if (widthOf.applyAsInt(compact) <= maxWidth) {
+            return compact;
+        }
+        return fitText(compact, maxWidth, widthOf);
+    }
+
+    private static String fitText(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (widthOf.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
+            return "";
+        }
+        int low = 0;
+        int high = text.codePointCount(0, text.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = text.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+    }
+
+    static int centeredInputMarkerX(int input, int markerWidth) {
+        if (input < 0 || input >= INPUT_SLOT_CENTERS.length) {
+            throw new IllegalArgumentException("input must identify one of the three smithing inputs");
+        }
+        return INPUT_SLOT_CENTERS[input] - markerWidth / 2;
+    }
+
+    static record SmithingLabelLayout(
+            String status,
+            int statusTextWidth,
+            int statusWidth,
+            String legend,
+            int legendTextWidth,
+            int legendWidth
+    ) {
+        boolean fits() {
+            return statusTextWidth <= statusWidth && legendTextWidth <= legendWidth;
+        }
+    }
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(ObserverSmithingScreenPayloads.SmithingRelay.TYPE,
@@ -178,11 +287,17 @@ public final class ObserverSmithingScreenClient {
             graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
             graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
             graphics.text(font, remoteTitle.isBlank() ? "Smithing Table" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
-            graphics.text(font, "Template", left + 8, top + 26, 0xFF555555, false);
-            graphics.text(font, "Base", left + 50, top + 26, 0xFF555555, false);
-            graphics.text(font, "Addition", left + 82, top + 26, 0xFF555555, false);
-            graphics.text(font, remoteRecipeError ? "Invalid recipe" : (remoteResultAvailable ? "Result ready" : "Waiting"),
-                    left + 120, top + 26, remoteRecipeError ? 0xFFB00020 : 0xFF404040, false);
+            SmithingLabelLayout labels = smithingLabelLayout(
+                    remoteRecipeError, remoteResultAvailable, pw - 98 - 8, pw - 16, font::width);
+            graphics.text(font, labels.status(), left + 98, top + 26,
+                    remoteRecipeError ? 0xFFB00020 : 0xFF404040, false);
+            for (int input = 0; input < INPUT_MARKERS.length; input++) {
+                String marker = INPUT_MARKERS[input];
+                graphics.text(font, marker,
+                        left + centeredInputMarkerX(input, font.width(marker)),
+                        top + INPUT_MARKER_Y, 0xFF555555, false);
+            }
+            graphics.text(font, labels.legend(), left + 8, top + INPUT_LEGEND_Y, 0xFF555555, false);
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x(), sy = top + slot.y();
                 graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
