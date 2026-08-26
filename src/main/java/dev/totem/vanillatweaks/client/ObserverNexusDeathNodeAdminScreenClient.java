@@ -17,10 +17,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 /** Optional semantic adapter for TotemNexus death-node administration. */
 public final class ObserverNexusDeathNodeAdminScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
+    static final int SAFE_SCREEN_MARGIN = 12;
+    static final int MAX_PANEL_WIDTH = 620;
+    static final int MAX_PANEL_HEIGHT = 380;
+    static final int CONTENT_MARGIN = 12;
+    static final int COLUMN_GAP = 8;
+    static final int TEXT_HEIGHT = 9;
+    static final int TITLE_Y = 8;
+    static final int OWNER_Y = 22;
+    static final int DIMENSION_Y = 34;
+    static final int FILTER_Y = 46;
+    static final int LIST_Y = 60;
+    static final int LIST_PADDING = 4;
+    static final int ROW_HEIGHT = 24;
+    static final int ROW_PITCH = 28;
+    static final int MAX_VISIBLE_ROWS = 8;
+    static final int DETAIL_HEIGHT = 60;
+    static final int DETAIL_GAP = 8;
+    static final int DETAIL_TEXT_X = 8;
+    static final int CONFIRM_Y_FROM_BOTTOM = 18;
+    static final int CONFIRM_DETAIL_GAP = 6;
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -216,6 +237,111 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
         return null;
     }
 
+    /** Resolves a responsive administration panel while preserving complete list rows and the detail footer. */
+    static DeathNodeAdminLayout deathNodeAdminLayout(
+            int screenWidth,
+            int screenHeight,
+            int entryCount,
+            int requestedScroll
+    ) {
+        int panelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(1, screenWidth - SAFE_SCREEN_MARGIN * 2));
+        int panelHeight = Math.min(MAX_PANEL_HEIGHT, Math.max(1, screenHeight - SAFE_SCREEN_MARGIN * 2));
+        int left = (screenWidth - panelWidth) / 2;
+        int top = (screenHeight - panelHeight) / 2;
+        int contentWidth = Math.max(0, panelWidth - CONTENT_MARGIN * 2);
+
+        int pageWidth = Math.min(140, Math.max(0, contentWidth / 3));
+        int titleWidth = Math.max(0, contentWidth - pageWidth - COLUMN_GAP);
+        int threeColumnWidth = Math.max(0, (contentWidth - COLUMN_GAP * 2) / 3);
+        int thirdColumnWidth = Math.max(0, contentWidth - threeColumnWidth * 2 - COLUMN_GAP * 2);
+
+        int confirmationY = panelHeight - CONFIRM_Y_FROM_BOTTOM;
+        int detailBottom = confirmationY - CONFIRM_DETAIL_GAP;
+        int detailTop = detailBottom - DETAIL_HEIGHT;
+        int listBottom = detailTop - DETAIL_GAP;
+        int rowStart = LIST_Y + LIST_PADDING;
+        int lastAllowedRowBottom = listBottom - LIST_PADDING;
+        int rowCapacity = lastAllowedRowBottom - rowStart < ROW_HEIGHT
+                ? 0
+                : 1 + (lastAllowedRowBottom - rowStart - ROW_HEIGHT) / ROW_PITCH;
+        rowCapacity = Math.min(MAX_VISIBLE_ROWS, Math.max(0, rowCapacity));
+
+        int safeEntryCount = Math.max(0, entryCount);
+        int visibleRows = Math.min(safeEntryCount, rowCapacity);
+        int maxStart = Math.max(0, safeEntryCount - visibleRows);
+        int firstRow = Math.min(Math.max(0, requestedScroll), maxStart);
+        return new DeathNodeAdminLayout(
+                left, top, panelWidth, panelHeight, contentWidth,
+                titleWidth, pageWidth, threeColumnWidth, thirdColumnWidth,
+                listBottom, detailTop, detailBottom, confirmationY,
+                rowCapacity, firstRow, visibleRows, screenWidth, screenHeight);
+    }
+
+    /** Fits semantic text to a measured font width without splitting a Unicode code point. */
+    static BoundedLabel boundedLabel(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        String safeText = text == null ? "" : text;
+        int safeMaxWidth = Math.max(0, maxWidth);
+        if (safeText.isEmpty() || safeMaxWidth == 0) return new BoundedLabel("", 0, safeMaxWidth);
+        int fullWidth = widthOf.applyAsInt(safeText);
+        if (fullWidth <= safeMaxWidth) return new BoundedLabel(safeText, fullWidth, safeMaxWidth);
+        String ellipsis = "…";
+        if (widthOf.applyAsInt(ellipsis) > safeMaxWidth) return new BoundedLabel("", 0, safeMaxWidth);
+        int low = 0;
+        int high = safeText.codePointCount(0, safeText.length());
+        while (low < high) {
+            int middle = (low + high + 1) / 2;
+            int end = safeText.offsetByCodePoints(0, middle);
+            if (widthOf.applyAsInt(safeText.substring(0, end) + ellipsis) <= safeMaxWidth) low = middle;
+            else high = middle - 1;
+        }
+        String fitted = safeText.substring(0, safeText.offsetByCodePoints(0, low)) + ellipsis;
+        return new BoundedLabel(fitted, widthOf.applyAsInt(fitted), safeMaxWidth);
+    }
+
+    static record BoundedLabel(String text, int textWidth, int maxWidth) {
+        boolean fits() { return textWidth <= maxWidth; }
+    }
+
+    static record DeathNodeAdminLayout(
+            int left,
+            int top,
+            int panelWidth,
+            int panelHeight,
+            int contentWidth,
+            int titleWidth,
+            int pageWidth,
+            int threeColumnWidth,
+            int thirdColumnWidth,
+            int listBottom,
+            int detailTop,
+            int detailBottom,
+            int confirmationY,
+            int rowCapacity,
+            int firstRow,
+            int visibleRows,
+            int screenWidth,
+            int screenHeight
+    ) {
+        int right() { return left + panelWidth; }
+        int bottom() { return top + panelHeight; }
+        int lastRowBottom() {
+            return visibleRows == 0
+                    ? LIST_Y
+                    : LIST_Y + LIST_PADDING + (visibleRows - 1) * ROW_PITCH + ROW_HEIGHT;
+        }
+        boolean fits() {
+            return left >= SAFE_SCREEN_MARGIN
+                    && top >= SAFE_SCREEN_MARGIN
+                    && screenWidth - right() >= SAFE_SCREEN_MARGIN
+                    && screenHeight - bottom() >= SAFE_SCREEN_MARGIN
+                    && FILTER_Y + TEXT_HEIGHT <= LIST_Y
+                    && lastRowBottom() <= listBottom - LIST_PADDING
+                    && detailTop >= listBottom + DETAIL_GAP
+                    && detailTop + 42 + TEXT_HEIGHT <= detailBottom
+                    && confirmationY + TEXT_HEIGHT < panelHeight;
+        }
+    }
+
     private static final class NativeDeathNodeAdminMirrorScreen extends Screen {
         private NativeDeathNodeAdminMirrorScreen() { super(Component.literal("Observer Death Node Admin")); }
         @Override public boolean isPauseScreen() { return false; }
@@ -225,55 +351,116 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
         }
         @Override public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             g.fill(0, 0, width, height, 0xA0000000);
-            int pw = Math.min(620, Math.max(360, width - 24));
-            int ph = Math.min(380, Math.max(260, height - 24));
-            int left = (width - pw) / 2;
-            int top = (height - ph) / 2;
+            DeathNodeAdminLayout layout = deathNodeAdminLayout(
+                    width, height, remoteEntries.size(), remoteScrollIndex);
+            int pw = layout.panelWidth();
+            int ph = layout.panelHeight();
+            int left = layout.left();
+            int top = layout.top();
+            int contentX = left + CONTENT_MARGIN;
+            int contentRight = left + pw - CONTENT_MARGIN;
             g.fill(left, top, left + pw, top + ph, 0xF016191D);
             g.outline(left, top, pw, ph, 0xFF657383);
-            g.text(font, remoteTitle.isBlank() ? "Death Node Administration" : remoteTitle, left + 12, top + 10, 0xFFFFFFFF, false);
-            g.text(font, "Page " + (remotePage + 1) + "  Total " + remoteTotalEntries + (remoteTruncated ? " +" : ""),
-                    left + pw - 180, top + 10, 0xFFB8C0C8, false);
-            g.text(font, "Owner: " + (remoteOwnerQuery.isBlank() ? "*" : remoteOwnerQuery), left + 12, top + 30, 0xFFD2D8E0, false);
-            g.text(font, "Dimension: " + (remoteDimensionQuery.isBlank() ? "*" : remoteDimensionQuery), left + 180, top + 30, 0xFFD2D8E0, false);
-            g.text(font, "Status: " + remoteStatusFilter + "  Time: " + remoteTimeFilter, left + 12, top + 44, 0xFFB8C0C8, false);
-            g.text(font, remoteAdministratorView ? "Administrator view" : "Owner view", left + pw - 150, top + 44, 0xFFFFC857, false);
 
-            int listTop = top + 64;
-            int detailHeight = 72;
-            int listBottom = top + ph - detailHeight - 40;
+            BoundedLabel title = boundedLabel(
+                    remoteTitle.isBlank() ? "Death Node Administration" : remoteTitle,
+                    layout.titleWidth(), font::width);
+            String pageText = "Page " + (remotePage + 1) + "  Total " + remoteTotalEntries
+                    + (remoteTruncated ? " +" : "");
+            BoundedLabel page = boundedLabel(pageText, layout.pageWidth(), font::width);
+            g.text(font, title.text(), contentX, top + TITLE_Y, 0xFFFFFFFF, false);
+            g.text(font, page.text(), contentRight - page.textWidth(), top + TITLE_Y, 0xFFB8C0C8, false);
+
+            g.text(font, boundedLabel("Owner: " + (remoteOwnerQuery.isBlank() ? "*" : remoteOwnerQuery),
+                    layout.contentWidth(), font::width).text(), contentX, top + OWNER_Y, 0xFFD2D8E0, false);
+            g.text(font, boundedLabel("Dimension: " + (remoteDimensionQuery.isBlank() ? "*" : remoteDimensionQuery),
+                    layout.contentWidth(), font::width).text(), contentX, top + DIMENSION_Y, 0xFFD2D8E0, false);
+
+            int firstFilterX = contentX;
+            int secondFilterX = firstFilterX + layout.threeColumnWidth() + COLUMN_GAP;
+            int thirdFilterX = secondFilterX + layout.threeColumnWidth() + COLUMN_GAP;
+            g.text(font, boundedLabel("Status: " + remoteStatusFilter,
+                    layout.threeColumnWidth(), font::width).text(), firstFilterX, top + FILTER_Y, 0xFFB8C0C8, false);
+            g.text(font, boundedLabel("Time: " + remoteTimeFilter,
+                    layout.threeColumnWidth(), font::width).text(), secondFilterX, top + FILTER_Y, 0xFFB8C0C8, false);
+            g.text(font, boundedLabel(remoteAdministratorView ? "Administrator view" : "Owner view",
+                    layout.thirdColumnWidth(), font::width).text(), thirdFilterX, top + FILTER_Y, 0xFFFFC857, false);
+
+            int listTop = top + LIST_Y;
+            int listBottom = top + layout.listBottom();
             g.fill(left + 10, listTop, left + pw - 10, listBottom, 0x80101010);
-            g.outline(left + 10, listTop, pw - 20, listBottom - listTop, 0xFF3F4A56);
-            int visibleRows = Math.max(1, (listBottom - listTop - 8) / 28);
-            int start = Math.min(remoteScrollIndex, Math.max(0, remoteEntries.size() - visibleRows));
-            int rowY = listTop + 4;
-            for (int i = start; i < remoteEntries.size() && i < start + visibleRows; i++) {
+            g.outline(left + 10, listTop, pw - 20, layout.listBottom() - LIST_Y, 0xFF3F4A56);
+            int rowY = listTop + LIST_PADDING;
+            int lastExclusive = layout.firstRow() + layout.visibleRows();
+            for (int i = layout.firstRow(); i < lastExclusive; i++) {
                 var entry = remoteEntries.get(i);
                 boolean selected = entry.id().equals(remoteSelectedNodeId);
                 g.fill(left + 14, rowY, left + pw - 14, rowY + 24, selected ? 0xFF2D3F54 : 0x9020252B);
                 g.fill(left + 20, rowY + 7, left + 27, rowY + 14, "active".equals(entry.status()) ? 0xFF6AD98F : 0xFF9CA3AF);
-                g.text(font, entry.name(), left + 32, rowY + 4, 0xFFFFFFFF, false);
-                if (remoteAdministratorView) g.text(font, entry.ownerName(), left + pw - 220, rowY + 4, 0xFFD2D8E0, false);
-                g.text(font, entry.status(), left + pw - 105, rowY + 4, 0xFFB8C0C8, false);
-                g.text(font, entry.dimension() + "  " + entry.x() + ", " + entry.y() + ", " + entry.z(),
-                        left + 32, rowY + 14, 0xFF9CA3AF, false);
-                rowY += 28;
+
+                int rowTextX = left + 32;
+                int rowTextRight = left + pw - 14;
+                int rowTextWidth = Math.max(0, rowTextRight - rowTextX);
+                int statusWidth = Math.min(72, Math.max(0, rowTextWidth / 5));
+                int ownerWidth = remoteAdministratorView
+                        ? Math.min(96, Math.max(0, rowTextWidth / 4))
+                        : 0;
+                int nameWidth = Math.max(0, rowTextWidth - statusWidth - ownerWidth
+                        - (remoteAdministratorView ? COLUMN_GAP * 2 : COLUMN_GAP));
+                int ownerX = rowTextX + nameWidth + COLUMN_GAP;
+                int statusX = ownerX + ownerWidth + (remoteAdministratorView ? COLUMN_GAP : 0);
+                g.text(font, boundedLabel(entry.name(), nameWidth, font::width).text(),
+                        rowTextX, rowY + 3, 0xFFFFFFFF, false);
+                if (remoteAdministratorView) {
+                    g.text(font, boundedLabel(entry.ownerName(), ownerWidth, font::width).text(),
+                            ownerX, rowY + 3, 0xFFD2D8E0, false);
+                }
+                g.text(font, boundedLabel(entry.status(), statusWidth, font::width).text(),
+                        statusX, rowY + 3, 0xFFB8C0C8, false);
+
+                String coordinates = entry.x() + ", " + entry.y() + ", " + entry.z();
+                int coordinateWidth = Math.min(108, Math.max(0, rowTextWidth / 3));
+                int dimensionWidth = Math.max(0, rowTextWidth - coordinateWidth - COLUMN_GAP);
+                BoundedLabel coordinateLabel = boundedLabel(coordinates, coordinateWidth, font::width);
+                g.text(font, boundedLabel(entry.dimension(), dimensionWidth, font::width).text(),
+                        rowTextX, rowY + 14, 0xFF9CA3AF, false);
+                g.text(font, coordinateLabel.text(), rowTextRight - coordinateLabel.textWidth(),
+                        rowY + 14, 0xFF9CA3AF, false);
+                rowY += ROW_PITCH;
             }
 
-            int detailTop = listBottom + 8;
-            g.fill(left + 10, detailTop, left + pw - 10, top + ph - 32, 0x8020252B);
+            int detailTop = top + layout.detailTop();
+            int detailBottom = top + layout.detailBottom();
+            g.fill(left + 10, detailTop, left + pw - 10, detailBottom, 0x8020252B);
             var selected = selectedEntry();
+            int detailX = left + 10 + DETAIL_TEXT_X;
+            int detailWidth = Math.max(0, pw - 20 - DETAIL_TEXT_X * 2);
             if (selected == null) {
-                g.text(font, "No node selected", left + 18, detailTop + 8, 0xFFB8C0C8, false);
+                g.text(font, boundedLabel("No node selected", detailWidth, font::width).text(),
+                        detailX, detailTop + 6, 0xFFB8C0C8, false);
             } else {
-                g.text(font, selected.name() + " — " + selected.status(), left + 18, detailTop + 6, 0xFFFFFFFF, false);
-                g.text(font, "Owner: " + selected.ownerName(), left + 18, detailTop + 20, 0xFFD2D8E0, false);
-                g.text(font, "Updated: " + selected.updatedGameTime(), left + 18, detailTop + 34, 0xFFB8C0C8, false);
-                if (!selected.diagnosticFlags().isEmpty()) g.text(font, "Diagnostics: " + String.join(", ", selected.diagnosticFlags()),
-                        left + pw / 2, detailTop + 34, 0xFFFFC857, false);
+                int selectedStatusWidth = Math.min(100, Math.max(0, detailWidth / 3));
+                int selectedNameWidth = Math.max(0, detailWidth - selectedStatusWidth - COLUMN_GAP);
+                BoundedLabel selectedStatus = boundedLabel(selected.status(), selectedStatusWidth, font::width);
+                g.text(font, boundedLabel(selected.name(), selectedNameWidth, font::width).text(),
+                        detailX, detailTop + 6, 0xFFFFFFFF, false);
+                g.text(font, selectedStatus.text(), detailX + detailWidth - selectedStatus.textWidth(),
+                        detailTop + 6, 0xFFFFFFFF, false);
+                g.text(font, boundedLabel("Owner: " + selected.ownerName(), detailWidth, font::width).text(),
+                        detailX, detailTop + 18, 0xFFD2D8E0, false);
+                g.text(font, boundedLabel("Updated: " + selected.updatedGameTime(), detailWidth, font::width).text(),
+                        detailX, detailTop + 30, 0xFFB8C0C8, false);
+                String diagnostics = selected.diagnosticFlags().isEmpty()
+                        ? "Diagnostics: none"
+                        : "Diagnostics: " + String.join(", ", selected.diagnosticFlags());
+                g.text(font, boundedLabel(diagnostics, detailWidth, font::width).text(),
+                        detailX, detailTop + 42, 0xFFFFC857, false);
             }
-            if (remoteConfirmationActive) g.text(font, "Confirmation pending: " + remoteConfirmationAction,
-                    left + 12, top + ph - 20, 0xFFFF8080, false);
+            if (remoteConfirmationActive) {
+                g.text(font, boundedLabel("Confirmation pending: " + remoteConfirmationAction,
+                        layout.contentWidth(), font::width).text(),
+                        contentX, top + layout.confirmationY(), 0xFFFF8080, false);
+            }
             extractedFrames++;
         }
     }
