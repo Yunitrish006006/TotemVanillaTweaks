@@ -225,7 +225,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
                         "Unsupported Screen stayed open while production client had no framebuffer transport surface.\n"
                 );
             }
-            if (markerExists("observer-native-generic-screen-saved.txt")) {
+            if (markerExists("observer-native-generic-screen-saved.txt")
+                    && markerExists("target-native-generic-no-frame.txt")) {
                 minecraft.setScreenAndShow(null);
                 targetGenericClosed = true;
                 ObserverE2eCommon.marker("target-native-generic-closed.txt", "Target closed unsupported Screen.\n");

@@ -448,6 +448,10 @@ fi
 # rest of this seven-file lifecycle.
 crafting_source="$e2e_source_dir/ObserverCraftingE2eBridge.java"
 driver_source="$e2e_source_dir/ObserverE2eClient.java"
+if ! grep -Fq 'if (markerExists("observer-native-generic-screen-saved.txt")' "$driver_source" \
+    || ! grep -Fq '&& markerExists("target-native-generic-no-frame.txt")) {' "$driver_source"; then
+  fail 'ObserverE2eClient must keep generic Screen open until screenshot and framebuffer-free evidence exist'
+fi
 crafting_evidence=(
   'observer-ready-for-container.txt'
   'target-native-container-opened.txt'
