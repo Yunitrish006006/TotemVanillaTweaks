@@ -829,7 +829,9 @@ public final class ObserverNativeScreenClient {
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0xD0101010);
             int panelWidth = Math.min(360, Math.max(220, width - 80));
-            int panelHeight = 92;
+            ObserverMetadataScreenPolicy.Presentation presentation =
+                    ObserverMetadataScreenPolicy.classify(remoteGenericClass);
+            int panelHeight = presentation.detailLine().isBlank() ? 108 : 124;
             int left = (width - panelWidth) / 2;
             int top = (height - panelHeight) / 2;
             graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xEE242424);
@@ -840,7 +842,7 @@ public final class ObserverNativeScreenClient {
             graphics.text(this.minecraft.font, remoteGenericClass, left + 10, top + 28, 0xFFB0B0B0, false);
             graphics.text(
                     this.minecraft.font,
-                    "No framebuffer transmitted; semantic adapter pending.",
+                    "No framebuffer transmitted.",
                     left + 10,
                     top + 50,
                     0xFF80CBC4,
@@ -848,9 +850,29 @@ public final class ObserverNativeScreenClient {
             );
             graphics.text(
                     this.minecraft.font,
-                    "Press Esc to stop observing.",
+                    presentation.statusLine(),
                     left + 10,
                     top + 66,
+                    0xFF80CBC4,
+                    false
+            );
+            int instructionY = top + 82;
+            if (!presentation.detailLine().isBlank()) {
+                graphics.text(
+                        this.minecraft.font,
+                        presentation.detailLine(),
+                        left + 10,
+                        top + 82,
+                        0xFFB0B0B0,
+                        false
+                );
+                instructionY = top + 98;
+            }
+            graphics.text(
+                    this.minecraft.font,
+                    "Press Esc to stop observing.",
+                    left + 10,
+                    instructionY,
                     0xFF9E9E9E,
                     false
             );

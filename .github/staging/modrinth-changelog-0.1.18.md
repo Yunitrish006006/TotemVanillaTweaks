@@ -1,0 +1,22 @@
+## TotemVanillaTweaks 0.1.18 Beta
+
+### Observer families
+
+- Expanded Observer v4 / screen protocol v2 from the initial container and furnace support to 24 negotiated semantic family capabilities.
+- Added vanilla semantic reconstruction for books, crafting, merchants, anvils, enchanting, brewing, smithing, stonecutting, grindstones, looms, cartography tables, beacons, signs, crafters, advancements and statistics.
+- Added optional semantic integrations for TotemRemnant backpacks, TotemAutomata Copper Golems, TotemNexus map/friends/registration and death-node administration, TotemLocksmith management, and TotemVillagers woodcutters.
+- Added PauseScreen reconstruction from structured metadata while retaining metadata-only fallback for screens without a negotiated family.
+
+### Privacy and rendering
+
+- Observer transport remains framebuffer-free: no screenshots, framebuffer data or video frames are sent by production code.
+- Unsent chat/command text and Automata editor credentials are excluded from Observer transport.
+- Corrected native-scale layout bounds and label overlap across furnace, crafting, brewing, smithing, grindstone, loom, beacon, Nexus map, Nexus death administration and statistics mirrors.
+
+### Release gates
+
+- Expanded capability, relay, loopback and three-JVM coverage for every registered semantic family.
+- Added exhaustive gate-parity checks tying Client GameTests, E2E bridges, workflow markers and the expected native-scale PNG artifact count together.
+- Kept Server GameTests, Client GameTests, three-JVM E2E, production-runtime validation and framebuffer-free source checks as release blockers.
+
+Minecraft 26.2 · Fabric · Java 25 · requires Fabric API and TotemCore `>=0.7.0 <0.8.0`.

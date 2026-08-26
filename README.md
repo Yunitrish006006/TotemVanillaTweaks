@@ -4,13 +4,13 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
 管理員用的 Spectator Observer View。
 
-目前候選版本為 **0.1.17 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
+目前候選版本為 **0.1.18 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
 目前建議搭配已發布的 TotemCore **0.7.11**。
 
-> **0.1.17 Observer 更新：** Observer View 已改為 protocol-native v4。
-> production 路徑不再傳送 framebuffer／PNG；世界使用 Minecraft 原生 spectator camera
-> 渲染，HUD 與支援的 GUI family 由結構化資料在 Observer Client 本地重建。
-> 本版新增 negotiated `container_slots` 與 dedicated `furnace` semantic family。
+> **0.1.18 Observer 更新：** protocol-native v4／screen protocol v2 現在有
+> 24 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
+> 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
+> 以結構化資料本地重建。
 
 ## 安裝
 
@@ -18,7 +18,7 @@ Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
 2. TotemCore `0.7.x`（`>=0.7.0 <0.8.0`）
-3. TotemVanillaTweaks `0.1.17`
+3. TotemVanillaTweaks `0.1.18`
 
 | 項目 | 需求 |
 | --- | --- |
@@ -46,10 +46,21 @@ Observer View 使用 **protocol-native v4**；semantic screen transport 使用
 capability negotiation 與 cleanup；Target Client 只傳送版本化的結構化玩家、HUD、
 container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI 重建觀察畫面。
 
-screen protocol v2 使用 stable screen-family capability mask。目前已實作：
+screen protocol v2 使用 stable screen-family capability mask。目前 main 共定義 24 個
+negotiated semantic family capability：
 
-- `container_slots`：一般 `AbstractContainerScreen` 的槽位、物品與游標狀態。
-- `furnace`：熔爐 family 的槽位、cook progress、fuel progress 與 lit state；涵蓋對應的熔爐／煙燻爐／高爐式介面。
+- 基礎與原版：`container_slots`、`furnace`、`book`、`crafting`、`merchant`、
+  `anvil`、`enchanting`、`brewing`、`smithing`、`stonecutter`、`grindstone`、
+  `loom`、`cartography`、`beacon`、`sign`、`crafter`、`advancements`、`stats`。
+- Totem 整合：`remnant_backpack`、`automata_copper_golem`、`nexus`
+  （map／friends／registration variants）、`nexus_death_node_admin`、
+  `locksmith_management`、`villagers_woodcutter`。
+
+`container_slots` 仍負責可以由通用 `AbstractContainerScreen` 槽位資料充分表達的畫面；
+其餘 family 傳送各自需要的結構化狀態。這份支援表不把 Death、Horse／Mount、Sleep、
+Recipe Book、Chat 或 Social Interactions 宣稱為 dedicated semantic adapter；未列出的
+Screen 會依通用容器能力或 metadata-only 規則處理。Chat metadata 不包含玩家尚未送出的
+聊天或指令文字。
 
 Server 會為每個 Observer 記錄 negotiated capability，把同一 Target 所需 capability 的
 聯集下發給 Target，再按每個 Observer 的 mask 個別過濾 semantic relay。若某個 screen
@@ -62,8 +73,9 @@ production 路徑已完全移除整張 framebuffer／PNG 傳輸，不再存在 `
 `/observeui` 會拒絕建立 session，而不是退回截圖傳輸；個別 semantic screen family
 不支援時則只降級該 GUI 為 metadata-only。
 
-目前支援的觀察面包含正常世界／HUD、`container_slots`、`furnace`，以及 unsupported／
-unnegotiated Screen 的 metadata placeholder。完整架構與剩餘相容性工作見
+目前支援的觀察面包含正常世界／HUD、上述 24 個 negotiated family、PauseScreen 的
+metadata reconstruction，以及 unsupported／unnegotiated Screen 的 metadata placeholder。
+完整架構與剩餘相容性工作見
 [`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
 
 Observer 由 CI 驗證真正的三 JVM 路徑：
@@ -76,10 +88,11 @@ Target Minecraft Client JVM
 Observer Minecraft Client JVM
 ```
 
-三 JVM E2E 會驗證 protocol-native world/HUD、negotiated container、unsupported-screen
-metadata、Stop 與 server/client cleanup；Client GameTests 另外驗證 semantic capability
-negotiation、metadata-only fallback，以及本地 furnace reconstruction。另有 source-level
-gate，若 `src/main` 再出現舊的 framebuffer transport surface，CI 會直接失敗。
+三 JVM E2E 會逐一驗證已註冊 family 的 semantic relay、unsupported-screen metadata、
+Stop 與 server/client cleanup；Client GameTests 會驗證 capability negotiation、
+metadata-only fallback 與本地 semantic reconstruction，並保存 native-scale PNG 證據。
+另有 source-level gate，若 `src/main` 再出現舊的 framebuffer transport surface，CI
+會直接失敗。
 
 ## 容器整理
 
