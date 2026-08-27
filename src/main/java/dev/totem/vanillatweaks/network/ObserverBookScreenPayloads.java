@@ -115,6 +115,12 @@ public final class ObserverBookScreenPayloads {
         }
     }
 
+    public static BookState closed(long sequence) {
+        return new BookState(PROTOCOL_VERSION, sequence, false,
+                ObserverNativeScreenPayloads.FAMILY_BOOK, "", "", "",
+                0, 0, "", "", "");
+    }
+
     private static void writeState(FriendlyByteBuf buf, BookState value) {
         writeFields(
                 buf,

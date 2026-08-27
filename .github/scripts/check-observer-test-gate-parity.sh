@@ -5,6 +5,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 client_package="dev.totem.vanillatweaks.gametest"
 client_source_dir="$repo_root/src/gametest/java/dev/totem/vanillatweaks/gametest"
 client_manifest="$repo_root/src/gametest/resources/fabric.mod.json"
+production_extractor_manifest="$repo_root/src/gametest/resources/observer-production-extractor-evidence.txt"
+main_client_source_dir="$repo_root/src/main/java/dev/totem/vanillatweaks/client"
+integration_client_package="dev.totem.vanillatweaks.client"
+integration_client_source_dir="$repo_root/src/integrationGametest/java/dev/totem/vanillatweaks/client"
+integration_client_manifest="$repo_root/src/integrationGametest/resources/fabric.mod.json"
 e2e_package="dev.totem.vanillatweaks.e2e"
 e2e_source_dir="$repo_root/src/e2e/java/dev/totem/vanillatweaks/e2e"
 e2e_manifest="$repo_root/src/e2e/resources/fabric.mod.json"
@@ -12,6 +17,7 @@ workflow="$repo_root/.github/workflows/build.yml"
 production_workflow="$repo_root/.github/workflows/production-runtime.yml"
 publish_workflow="$repo_root/.github/workflows/publish-modrinth.yml"
 build_script="$repo_root/build.gradle"
+integration_build_script="$repo_root/.github/scripts/build-observer-integration-jars.sh"
 
 failures=0
 
@@ -245,8 +251,8 @@ if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest 
 fi
 if ! grep -Fq 'production_screenshot_count="$(find "$production_screenshots" -maxdepth 1 -type f -name '\''*.png'\'' | wc -l)"' \
     <<< "$production_step" \
-    || ! grep -Fq 'if [[ "$production_screenshot_count" != 29 ]]; then' <<< "$production_step"; then
-  fail 'Production Client GameTest CI step must require exactly 29 persisted screenshots'
+    || ! grep -Fq 'if [[ "$production_screenshot_count" != 30 ]]; then' <<< "$production_step"; then
+  fail 'Production Client GameTest CI step must require exactly 30 persisted screenshots'
 fi
 if grep -Eq 'continue-on-error|runProductionClientGameTest[^\n]*(\|\|[[:space:]]*true|--exclude-task|[[:space:]]-x[[:space:]])' \
     <<< "$production_step"; then
@@ -339,8 +345,127 @@ while IFS= read -r entrypoint; do
   add_unique 'fabric-client-gametest manifest' client_entrypoints "$entrypoint"
 done < <(jq -r '.entrypoints["fabric-client-gametest"][]' "$client_manifest")
 assert_same_set 'fabric-client-gametest manifest' client_sources client_entrypoints
-if (( ${#client_sources[@]} != 24 )); then
-  fail "Observer Client GameTest baseline must remain 24 tests; found ${#client_sources[@]}"
+if (( ${#client_sources[@]} != 25 )); then
+  fail "Observer Client GameTest baseline must remain 25 tests; found ${#client_sources[@]}"
+fi
+
+# Production extractor evidence is stronger than a relay screenshot: each row
+# names a real Screen/Menu Client GameTest method and the exact production
+# capture helper shared with tickTarget. Keep this explicit list in lockstep so
+# a newly synthetic-only vanilla family cannot silently satisfy the release gate.
+production_extractor_families=(
+  container_slots furnace crafting anvil enchanting merchant brewing smithing
+  stonecutter grindstone loom cartography beacon crafter book sign advancements stats
+  remnant_backpack automata_copper_golem nexus villagers_woodcutter
+  nexus_death_node_admin locksmith_management
+)
+declare -A expected_production_extractors=()
+declare -A actual_production_extractors=()
+for family in "${production_extractor_families[@]}"; do
+  expected_production_extractors["$family"]=1
+done
+declare -A integration_client_entrypoints=()
+while IFS= read -r entrypoint; do
+  add_unique 'integration fabric-client-gametest manifest' integration_client_entrypoints "$entrypoint"
+done < <(jq -r '.entrypoints["fabric-client-gametest"][]' "$integration_client_manifest")
+if (( ${#integration_client_entrypoints[@]} != 1 )); then
+  fail "cross-module integration manifest must contain exactly one Client GameTest; found ${#integration_client_entrypoints[@]}"
+fi
+
+while IFS='|' read -r family test_class verification_method capture_helper runtime_task trailing; do
+  [[ -z "$family" || "$family" == \#* ]] && continue
+  if [[ -n "${trailing:-}" || -z "$test_class" || -z "$verification_method" || -z "$capture_helper" || -z "$runtime_task" ]]; then
+    fail "invalid production extractor manifest row for $family"
+    continue
+  fi
+  add_unique 'production extractor manifest' actual_production_extractors "$family"
+  case "$runtime_task" in
+    runClientGametest)
+      source="$client_source_dir/$test_class.java"
+      registered="${client_sources[$client_package.$test_class]:-}"
+      ;;
+    runIntegrationClientGametest)
+      source="$integration_client_source_dir/$test_class.java"
+      registered="${integration_client_entrypoints[$integration_client_package.$test_class]:-}"
+      ;;
+    *)
+      fail "$family production extractor evidence names unsupported runtime task $runtime_task"
+      continue
+      ;;
+  esac
+  if [[ ! -f "$source" || -z "$registered" ]]; then
+      fail "$family production extractor evidence references unregistered $test_class in $runtime_task"
+      continue
+    fi
+  if ! grep -Eq "private static void[[:space:]]+$verification_method[[:space:]]*\(" "$source"; then
+    fail "$family production extractor evidence method $test_class.$verification_method is missing"
+  fi
+  if ! grep -Eq "(\"$capture_helper\"|\.$capture_helper[[:space:]]*\()" "$source"; then
+    fail "$family production extractor evidence does not invoke $capture_helper"
+  fi
+done < "$production_extractor_manifest"
+assert_same_set 'production extractor family manifest' expected_production_extractors actual_production_extractors
+
+if ! grep -Fq "tasks.named('runIntegrationClientGametest')" "$build_script"; then
+  fail 'cross-module production extractor evidence must have a Gradle runtime gate'
+fi
+for integration_workflow in "$workflow" "$production_workflow" "$publish_workflow"; do
+  integration_build_count="$(grep -Fc 'bash .github/scripts/build-observer-integration-jars.sh' \
+    "$integration_workflow" || true)"
+  integration_runtime_count="$(grep -Fc 'runIntegrationClientGametest --no-daemon --stacktrace' \
+    "$integration_workflow" || true)"
+  if [[ "$integration_build_count" != 1 || "$integration_runtime_count" != 1 ]]; then
+    fail "$(basename "$integration_workflow") must build pinned optional modules and run exactly one cross-module gate; found build=$integration_build_count runtime=$integration_runtime_count"
+  fi
+done
+for checkout in \
+  'TotemCore 82b21944b1e4865f5d34f13febc5049d936a636f 0.7.11' \
+  'TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8' \
+  'TotemRemnant a8eb55ae53f3c6488775467127bab4d972c52a49 0.2.15' \
+  'TotemAutomata 59b80206768466a4ac96f89e1343849abaa82dd3 0.1.16' \
+  'TotemNexus a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb 0.3.5' \
+  'TotemVillagers d0d287e2df831a44b4b2cab28bbc98e396368cda 0.1.32' \
+  'TotemLocksmith 9080ac2c37807b539c5d309fe833edb660834f3b 0.1.5'; do
+  if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then
+    fail "cross-module integration build script is missing exact checkout $checkout"
+  fi
+done
+
+# Every local semantic reconstruction uses one exact marker base. This prevents
+# an Observer that is itself a target from retransmitting a mirror into a nested
+# or multi-observer session, and prevents future families from reviving a
+# hand-maintained class exclusion list.
+ui_client="$main_client_source_dir/ObserverUiClient.java"
+mirror_base="$main_client_source_dir/ObserverMirrorScreen.java"
+if ! grep -Fq 'ObserverMirrorScreen.isMirror(screen)' "$ui_client"; then
+  fail 'ObserverUiClient metadata capture must centrally exclude ObserverMirrorScreen'
+fi
+if grep -Eq 'Observer[A-Za-z0-9]+ScreenClient\.isNativeMirrorScreen\(screen\)' "$ui_client"; then
+  fail 'ObserverUiClient must not use a hand-maintained mirror class exclusion list'
+fi
+if ! grep -Fq 'abstract class ObserverMirrorScreen extends Screen' "$mirror_base"; then
+  fail 'ObserverMirrorScreen must remain the exact base type for local mirrors'
+fi
+if ! grep -Fq 'class NativeObserverScreen extends ObserverMirrorScreen' \
+    "$main_client_source_dir/ObserverNativeScreenClient.java"; then
+  fail 'generic/container/furnace mirrors must inherit the central mirror base'
+fi
+mirror_count=0
+while IFS= read -r declaration; do
+  mirror_count=$((mirror_count + 1))
+  if [[ ! "$declaration" =~ extends[[:space:]]+(ObserverMirrorScreen|NativeObserverScreen) ]]; then
+    fail "Observer mirror does not inherit the central marker: $declaration"
+  fi
+done < <(grep -RhE 'class[[:space:]]+[A-Za-z0-9_]*MirrorScreen[[:space:]]+extends[[:space:]]+[A-Za-z0-9_]+' \
+  "$main_client_source_dir" | grep -vE 'abstract class ObserverMirrorScreen' | sort)
+if (( mirror_count != 26 )); then
+  fail "Observer mirror marker baseline must remain 26 concrete classes; found $mirror_count"
+fi
+if ! grep -Fq 'String unsent = "/login client-only-secret"' \
+    "$client_source_dir/ObserverVanillaProductionSenderClientGameTest.java" \
+    || ! grep -Fq 'captureScreenMetadata' \
+    "$client_source_dir/ObserverVanillaProductionSenderClientGameTest.java"; then
+  fail 'production Client GameTest must prove unsent ChatScreen text is excluded from metadata'
 fi
 
 # The E2E main initializer is the server coordinator. The client set is exactly
@@ -486,6 +611,10 @@ assert_workflow_evidence 'Crafting/container exception' "${crafting_evidence[@]}
 if [[ ! -v "client_sources[$client_package.ObserverUiClientGameTest]" ]]; then
   fail 'Crafting/container exception requires ObserverUiClientGameTest'
 fi
+if ! grep -Fq '"observer-ui-native-player-inventory-screen.png"' \
+    "$client_source_dir/ObserverUiClientGameTest.java"; then
+  fail 'ObserverUiClientGameTest must persist the native player-inventory semantic screenshot'
+fi
 
 # Nexus is one bridge with three sequential semantic variants and one shared
 # close. Its 15-file contract is deliberately separate from the 7-file family
@@ -545,7 +674,7 @@ for variant in map friends registration; do
   fi
 done
 if ! grep -Fq 'private record RenderBarrier(long sequence, long frameBaseline)' "$nexus_source" \
-    || ! grep -Fq 'getLong(NEXUS, "lastRemoteSequence") == barrier.sequence()' "$nexus_source" \
+    || ! grep -Fq 'ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS) == barrier.sequence()' "$nexus_source" \
     || ! grep -Fq 'getLong(NEXUS, "extractedFrames") > barrier.frameBaseline()' "$nexus_source"; then
   fail 'ObserverNexusE2eBridge screenshots must wait for a frame rendered after each received sequence'
 fi

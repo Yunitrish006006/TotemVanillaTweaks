@@ -62,7 +62,6 @@ public final class ObserverStatsScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static String remoteActiveTab = "general";
@@ -115,7 +114,7 @@ public final class ObserverStatsScreenClient {
     private static void tickTarget(StatsScreen screen) {
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        ObserverStatsScreenPayloads.StatsState state = capture(screen);
+        ObserverStatsScreenPayloads.StatsState state = captureTargetState(screen, ++nextTargetSequence);
         if (state == null) return;
         targetOpen = true;
         lastSnapshotNanos = now;
@@ -131,7 +130,7 @@ public final class ObserverStatsScreenClient {
         }
     }
 
-    private static ObserverStatsScreenPayloads.StatsState capture(StatsScreen screen) {
+    private static ObserverStatsScreenPayloads.StatsState captureTargetState(StatsScreen screen, long sequence) {
         StatsScreenAccessor accessor = (StatsScreenAccessor) (Object) screen;
         StatsCounter counter = accessor.totem$getStats();
         TabManager tabManager = accessor.totem$getTabManager();
@@ -167,7 +166,7 @@ public final class ObserverStatsScreenClient {
         }
 
         return new ObserverStatsScreenPayloads.StatsState(
-                ObserverStatsScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+                ObserverStatsScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverStatsScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(), activeTab, loading, scrollAmount,
                 sortColumn, sortOrder, general, items, mobs);
@@ -259,8 +258,8 @@ public final class ObserverStatsScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverStatsScreenPayloads.PROTOCOL_VERSION
                 || !ObserverStatsScreenPayloads.FAMILY_ID.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverStatsScreenPayloads.FAMILY_ID, p.targetId(), p.sequence())) return;
         if (!p.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -481,7 +480,7 @@ public final class ObserverStatsScreenClient {
         }
     }
 
-    private static final class NativeStatsMirrorScreen extends Screen {
+    private static final class NativeStatsMirrorScreen extends ObserverMirrorScreen {
         private NativeStatsMirrorScreen() { super(Component.literal("Observer Statistics")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

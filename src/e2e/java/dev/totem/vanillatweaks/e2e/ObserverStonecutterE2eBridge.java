@@ -53,6 +53,10 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
         if (observerRequested && !observerSeen && mirrorVisible(minecraft)) {
             if (getInt(STONECUTTER, "remoteSelectedRecipeIndex") != 2
                     || getInt(STONECUTTER, "remoteRecipeCount") != 5
+                    || getInt(STONECUTTER, "remoteStartIndex") != 0
+                    || getFloat(STONECUTTER, "remoteScrollOffset") != 0.0F
+                    || !getBoolean(STONECUTTER, "remoteDisplayRecipes")
+                    || getListSize(STONECUTTER, "remoteRecipes") != 5
                     || !getBoolean(STONECUTTER, "remoteHasInputItem")
                     || !getBoolean(STONECUTTER, "remoteResultAvailable")
                     || getListSize(STONECUTTER, "remoteSlots") != 38) {
@@ -95,7 +99,18 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
         return new ObserverStonecutterScreenPayloads.StonecutterState(
                 ObserverStonecutterScreenPayloads.PROTOCOL_VERSION, ++targetSequence, true,
                 ObserverStonecutterScreenPayloads.FAMILY_ID, ObserverStonecutterScreenPayloads.SCREEN_CLASS,
-                "Stonecutter", 2, 5, true, true, slots());
+                "Stonecutter", 2, 5, 0, 0.0F, true, true, true, recipes(), slots());
+    }
+
+    private static List<ObserverStonecutterScreenPayloads.RecipeState> recipes() {
+        return List.of(
+                recipe(0, "stone"), recipe(1, "stone_bricks"), recipe(2, "stone_stairs"),
+                recipe(3, "stone_slab"), recipe(4, "chiseled_stone_bricks"));
+    }
+
+    private static ObserverStonecutterScreenPayloads.RecipeState recipe(int index, String itemPath) {
+        return new ObserverStonecutterScreenPayloads.RecipeState(
+                index, "minecraft:" + itemPath, "minecraft:" + itemPath, 1, 0);
     }
 
     private static List<ObserverNativeScreenPayloads.SlotState> slots() {
@@ -113,7 +128,8 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeStonecutterMirrorScreen")
-                && getBoolean(STONECUTTER, "remoteOpen") && getLong(STONECUTTER, "lastRemoteSequence") > 0L
+                && getBoolean(STONECUTTER, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverStonecutterScreenPayloads.FAMILY_ID) > 0L
                 && getLong(STONECUTTER, "extractedFrames") > 0L;
     }
 
@@ -144,6 +160,10 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
     }
     private static long getLong(Class<?> owner, String name) {
         try { return field(owner, name).getLong(null); }
+        catch (IllegalAccessException error) { throw new RuntimeException(error); }
+    }
+    private static float getFloat(Class<?> owner, String name) {
+        try { return field(owner, name).getFloat(null); }
         catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
     private static int getListSize(Class<?> owner, String name) {

@@ -32,7 +32,6 @@ public final class ObserverNativeAnvilScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteScreenClass = "";
     private static String remoteTitle = "";
@@ -86,37 +85,44 @@ public final class ObserverNativeAnvilScreenClient {
     private static void tickTarget(Minecraft minecraft) {
         boolean supported = ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_ANVIL);
         Screen screen = minecraft.gui.screen();
-        if (!supported || !(screen instanceof AnvilScreen anvilScreen)
-                || !(minecraft.player.containerMenu instanceof AnvilMenu menu)) {
+        if (!supported || !(screen instanceof AnvilScreen anvilScreen)) {
             closeTarget(supported);
             return;
         }
-
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(minecraft, anvilScreen, ++nextTargetSequence));
+    }
+
+    static ObserverAnvilScreenPayloads.AnvilState captureTargetState(
+            Minecraft minecraft,
+            AnvilScreen anvilScreen,
+            long sequence
+    ) {
+        AnvilMenu menu = anvilScreen.getMenu();
         EditBox nameField = ((AnvilScreenAccessor) anvilScreen).totem$getNameField();
         String itemName = nameField == null ? "" : nameField.getValue();
         int levelCost = Math.max(0, menu.getCost());
         boolean resultAvailable = !menu.getSlot(AnvilMenu.RESULT_SLOT).getItem().isEmpty();
         boolean tooExpensive = resultAvailable && levelCost >= 40 && !minecraft.player.getAbilities().instabuild;
-        String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
+        String title = anvilScreen.getTitle() == null ? "" : anvilScreen.getTitle().getString();
 
-        ClientPlayNetworking.send(new ObserverAnvilScreenPayloads.AnvilState(
+        return new ObserverAnvilScreenPayloads.AnvilState(
                 ObserverAnvilScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_ANVIL,
-                screen.getClass().getName(),
+                anvilScreen.getClass().getName(),
                 title,
                 itemName,
                 levelCost,
                 tooExpensive,
                 resultAvailable,
                 captureSlots(menu)
-        ));
+        );
     }
 
     private static List<ObserverNativeScreenPayloads.SlotState> captureSlots(AnvilMenu menu) {
@@ -156,8 +162,9 @@ public final class ObserverNativeAnvilScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverAnvilScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_ANVIL.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_ANVIL,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -219,7 +226,7 @@ public final class ObserverNativeAnvilScreenClient {
         }
     }
 
-    private static final class NativeAnvilMirrorScreen extends Screen {
+    private static final class NativeAnvilMirrorScreen extends ObserverMirrorScreen {
         private NativeAnvilMirrorScreen() { super(Component.literal("Observer Anvil")); }
 
         @Override

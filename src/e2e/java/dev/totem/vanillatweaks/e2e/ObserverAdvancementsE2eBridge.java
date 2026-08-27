@@ -123,7 +123,7 @@ public final class ObserverAdvancementsE2eBridge implements ClientModInitializer
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeAdvancementsMirrorScreen")
                 && getBoolean(ADVANCEMENTS, "remoteOpen")
-                && getLong(ADVANCEMENTS, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(ObserverAdvancementsScreenPayloads.FAMILY_ID) > 0L
                 && getLong(ADVANCEMENTS, "extractedFrames") > 0L;
     }
 

@@ -30,7 +30,6 @@ public final class ObserverVillagersWoodcutterScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static int remoteSelectedRecipeIndex = -1;
@@ -79,27 +78,32 @@ public final class ObserverVillagersWoodcutterScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
-        AbstractContainerMenu menu = container.getMenu();
-        ClientPlayNetworking.send(new ObserverVillagersWoodcutterPayloads.WoodcutterState(
-                ObserverVillagersWoodcutterPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
-                true,
-                ObserverVillagersWoodcutterPayloads.FAMILY_ID,
-                screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                invokeInt(menu, "selectedRecipeIndex", -1),
-                invokeInt(menu, "recipeCount", 0),
-                invokeInt(menu, "requiredInputCount", 0),
-                invokeBoolean(menu, "hasInputItem"),
-                captureSlots(menu)
-        ));
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
     }
 
     private static void closeTarget(boolean canSend) {
         if (!targetOpen) return;
         targetOpen = false;
         lastSnapshotNanos = 0L;
-        if (canSend) ClientPlayNetworking.send(ObserverVillagersWoodcutterPayloads.closed(++nextTargetSequence));
+        if (canSend) ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
+    }
+
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverVillagersWoodcutterPayloads.WoodcutterState captureTargetState(Screen screen, long sequence) {
+        if (!isWoodcutterScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+            throw new IllegalArgumentException("Expected TotemVillagers WoodcutterScreen");
+        }
+        AbstractContainerMenu menu = container.getMenu();
+        return new ObserverVillagersWoodcutterPayloads.WoodcutterState(
+                ObserverVillagersWoodcutterPayloads.PROTOCOL_VERSION, sequence, true,
+                ObserverVillagersWoodcutterPayloads.FAMILY_ID, screen.getClass().getName(),
+                screen.getTitle() == null ? "" : screen.getTitle().getString(),
+                invokeInt(menu, "selectedRecipeIndex", -1), invokeInt(menu, "recipeCount", 0),
+                invokeInt(menu, "requiredInputCount", 0), invokeBoolean(menu, "hasInputItem"), captureSlots(menu));
+    }
+
+    public static ObserverVillagersWoodcutterPayloads.WoodcutterState closedTargetState(long sequence) {
+        return ObserverVillagersWoodcutterPayloads.closed(sequence);
     }
 
     private static List<ObserverNativeScreenPayloads.SlotState> captureSlots(AbstractContainerMenu menu) {
@@ -108,7 +112,7 @@ public final class ObserverVillagersWoodcutterScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -142,8 +146,9 @@ public final class ObserverVillagersWoodcutterScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverVillagersWoodcutterPayloads.PROTOCOL_VERSION
                 || !ObserverVillagersWoodcutterPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverVillagersWoodcutterPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -201,7 +206,7 @@ public final class ObserverVillagersWoodcutterScreenClient {
         }
     }
 
-    private static final class NativeVillagersWoodcutterMirrorScreen extends Screen {
+    private static final class NativeVillagersWoodcutterMirrorScreen extends ObserverMirrorScreen {
         private NativeVillagersWoodcutterMirrorScreen() {
             super(Component.literal("Observer Woodcutter"));
         }

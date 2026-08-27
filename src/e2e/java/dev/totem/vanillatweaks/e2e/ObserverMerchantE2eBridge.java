@@ -58,7 +58,8 @@ public final class ObserverMerchantE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeMerchantMirrorScreen")
                 && getBoolean(MERCHANT, "remoteOpen")
-                && getLong(MERCHANT, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_MERCHANT) > 0L
                 && getLong(MERCHANT, "extractedFrames") > 0L) {
             if (!"vanilla_merchant".equals(String.valueOf(getObject(MERCHANT, "remoteVariant")))) {
                 fail("Merchant E2E variant mismatch");

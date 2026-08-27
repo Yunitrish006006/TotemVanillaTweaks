@@ -39,7 +39,11 @@
     "ClientAdvancementsAccessor",
     "StatsScreenAccessor",
     "StatsScreenStatisticsTabAccessor",
-    "StatsScreenItemStatisticsListAccessor"
+    "StatsScreenItemStatisticsListAccessor",
+    "StonecutterScreenAccessor",
+    "AbstractRecipeBookScreenAccessor",
+    "RecipeBookComponentAccessor",
+    "RecipeBookPageAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

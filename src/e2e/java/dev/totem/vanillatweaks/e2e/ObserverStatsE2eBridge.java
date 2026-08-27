@@ -109,7 +109,7 @@ public final class ObserverStatsE2eBridge implements ClientModInitializer {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeStatsMirrorScreen")
                 && getBoolean(STATS, "remoteOpen")
-                && getLong(STATS, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(ObserverStatsScreenPayloads.FAMILY_ID) > 0L
                 && getLong(STATS, "extractedFrames") > 0L;
     }
 

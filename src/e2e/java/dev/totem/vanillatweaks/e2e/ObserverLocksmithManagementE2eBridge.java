@@ -152,7 +152,8 @@ public final class ObserverLocksmithManagementE2eBridge implements ClientModInit
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeLocksmithManagementMirrorScreen")
                 && getBoolean(LOCKSMITH, "remoteOpen")
-                && getLong(LOCKSMITH, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverLocksmithManagementPayloads.FAMILY_ID) > 0L
                 && getLong(LOCKSMITH, "extractedFrames") > 0L;
     }
 

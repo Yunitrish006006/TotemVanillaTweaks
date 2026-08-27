@@ -58,7 +58,7 @@ public final class ObserverAnvilE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeAnvilMirrorScreen")
                 && getBoolean(ANVIL, "remoteOpen")
-                && getLong(ANVIL, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_ANVIL) > 0L
                 && getLong(ANVIL, "extractedFrames") > 0L) {
             if (!"E2E Blade".equals(String.valueOf(getObject(ANVIL, "remoteItemName")))) {
                 fail("Anvil E2E rename mismatch");

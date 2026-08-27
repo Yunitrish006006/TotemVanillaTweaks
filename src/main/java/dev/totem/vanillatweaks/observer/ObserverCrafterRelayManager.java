@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /** Relay and validation for Crafter semantic state. */
 public final class ObserverCrafterRelayManager {
-    private static final int VANILLA_SLOT_COUNT = 45;
+    private static final int VANILLA_SLOT_COUNT = 46;
     private static final int GRID_MASK = 0x1FF;
     private static final Map<UUID, Long> LAST_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Field TARGET_BY_OBSERVER = staticField("TARGET_BY_OBSERVER");

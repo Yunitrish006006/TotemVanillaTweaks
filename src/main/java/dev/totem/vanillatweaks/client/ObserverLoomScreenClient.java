@@ -10,6 +10,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.LoomScreen;
+import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.object.banner.BannerFlagModel;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.Sheets;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -17,11 +23,14 @@ import net.minecraft.world.inventory.LoomMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.BannerItem;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.entity.BannerPattern;
+import net.minecraft.world.level.block.entity.BannerPatternLayers;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.ToIntFunction;
 
 /** Semantic adapter and local reconstruction for the vanilla Loom screen. */
 public final class ObserverLoomScreenClient {
@@ -32,26 +41,30 @@ public final class ObserverLoomScreenClient {
     static final int PATTERN_GRID_X = 60;
     static final int PATTERN_GRID_Y = 13;
     static final int PATTERN_GRID_BOTTOM = PATTERN_GRID_Y + PATTERN_ROWS * PATTERN_CELL_SIZE;
-    static final int STATUS_X = PATTERN_GRID_X;
-    static final int STATUS_Y = 72;
-    static final int TEXT_HEIGHT = 9;
     static final int INVENTORY_SLOT_BORDER_TOP = 83;
-    static final int RESULT_SLOT_BORDER_LEFT = 142;
-    static final int STATUS_RIGHT_GUTTER = 4;
-    static final int STATUS_MAX_WIDTH = RESULT_SLOT_BORDER_LEFT - STATUS_RIGHT_GUTTER - STATUS_X;
+    private static final Identifier BACKGROUND = Identifier.withDefaultNamespace("textures/gui/container/loom.png");
+    private static final Identifier SCROLLER = Identifier.withDefaultNamespace("container/loom/scroller");
+    private static final Identifier SCROLLER_DISABLED =
+            Identifier.withDefaultNamespace("container/loom/scroller_disabled");
+    private static final Identifier PATTERN = Identifier.withDefaultNamespace("container/loom/pattern");
+    private static final Identifier PATTERN_SELECTED =
+            Identifier.withDefaultNamespace("container/loom/pattern_selected");
+    private static final Identifier ERROR = Identifier.withDefaultNamespace("container/loom/error");
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static int remoteSelectedPatternIndex = -1;
     private static int remoteStartRow;
+    private static float remoteScrollOffset;
     private static boolean remoteDisplayPatterns;
     private static boolean remoteHasMaxPatterns;
     private static boolean remoteResultAvailable;
-    private static List<String> remotePatternIds = List.of();
+    private static int remoteResultBaseColorId = -1;
+    private static List<ObserverLoomScreenPayloads.PatternState> remotePatterns = List.of();
+    private static List<ObserverLoomScreenPayloads.BannerLayerState> remoteResultLayers = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
     private static boolean suppressMirrorStop;
     private static long extractedFrames;
@@ -67,75 +80,8 @@ public final class ObserverLoomScreenClient {
         return new LoomPatternViewport(first, lastExclusive);
     }
 
-    /** Keeps selection, total count, and result state inside the narrow vanilla Loom status row. */
-    static LoomStatusLayout loomStatusLayout(
-            int selectedPatternIndex,
-            int patternCount,
-            boolean hasMaxPatterns,
-            boolean resultAvailable,
-            int maxWidth,
-            ToIntFunction<String> widthOf
-    ) {
-        int total = Math.max(0, patternCount);
-        String selection = selectedPatternIndex >= 0 && selectedPatternIndex < total
-                ? Integer.toString(selectedPatternIndex + 1)
-                : "-";
-        String position = selection + "/" + total;
-        String fullState;
-        String compactState;
-        String minimumState;
-        if (hasMaxPatterns) {
-            fullState = "Pattern limit";
-            compactState = "Limit";
-            minimumState = "Max";
-        } else if (resultAvailable) {
-            fullState = "Result ready";
-            compactState = "Ready";
-            minimumState = "OK";
-        } else {
-            fullState = "Select pattern";
-            compactState = "Select";
-            minimumState = "Pick";
-        }
-
-        int availableWidth = Math.max(0, maxWidth);
-        String[] candidates = {
-                position + " · " + fullState,
-                position + " " + compactState,
-                position + " " + minimumState
-        };
-        for (String candidate : candidates) {
-            int textWidth = widthOf.applyAsInt(candidate);
-            if (textWidth <= availableWidth) {
-                return new LoomStatusLayout(candidate, textWidth, availableWidth);
-            }
-        }
-        String fallback = fitText(candidates[candidates.length - 1], availableWidth, widthOf);
-        return new LoomStatusLayout(fallback, widthOf.applyAsInt(fallback), availableWidth);
-    }
-
-    private static String fitText(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        if (text.isEmpty() || maxWidth <= 0) return "";
-        if (widthOf.applyAsInt(text) <= maxWidth) return text;
-        String ellipsis = "…";
-        if (widthOf.applyAsInt(ellipsis) > maxWidth) return "";
-        int low = 0;
-        int high = text.codePointCount(0, text.length());
-        while (low < high) {
-            int middle = (low + high + 1) / 2;
-            int end = text.offsetByCodePoints(0, middle);
-            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) low = middle;
-            else high = middle - 1;
-        }
-        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
-    }
-
     static record LoomPatternViewport(int first, int lastExclusive) {
         int visibleCount() { return lastExclusive - first; }
-    }
-
-    static record LoomStatusLayout(String text, int textWidth, int maxWidth) {
-        boolean fits() { return textWidth <= maxWidth; }
     }
 
     public static void register() {
@@ -167,20 +113,38 @@ public final class ObserverLoomScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
+    }
+
+    static ObserverLoomScreenPayloads.LoomState captureTargetState(LoomScreen screen, long sequence) {
         LoomMenu menu = screen.getMenu();
         LoomScreenAccessor accessor = (LoomScreenAccessor) screen;
-        List<String> patterns = menu.getSelectablePatterns().stream()
+        List<ObserverLoomScreenPayloads.PatternState> patternStates = menu.getSelectablePatterns().stream()
                 .limit(ObserverLoomScreenPayloads.MAX_PATTERNS)
-                .map(holder -> holder.unwrapKey().map(key -> key.identifier().toString()).orElse("inline"))
+                .map(ObserverLoomScreenClient::patternState)
                 .toList();
-        boolean resultAvailable = menu.slots.size() > 3 && !menu.slots.get(3).getItem().isEmpty();
-        ClientPlayNetworking.send(new ObserverLoomScreenPayloads.LoomState(
-                ObserverLoomScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+        ItemStack resultStack = menu.getResultSlot().getItem();
+        boolean resultAvailable = !resultStack.isEmpty();
+        int resultBaseColorId = resultStack.getItem() instanceof BannerItem bannerItem
+                ? bannerItem.getColor().getId() : -1;
+        List<ObserverLoomScreenPayloads.BannerLayerState> resultLayers = resultStack
+                .getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
+                .layers().stream().limit(ObserverLoomScreenPayloads.MAX_BANNER_LAYERS)
+                .map(layer -> new ObserverLoomScreenPayloads.BannerLayerState(
+                        layer.pattern().value().assetId().toString(), layer.color().getId()))
+                .toList();
+        return new ObserverLoomScreenPayloads.LoomState(
+                ObserverLoomScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverLoomScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                menu.getSelectedBannerPatternIndex(), accessor.totem$getStartRow(),
+                menu.getSelectedBannerPatternIndex(), accessor.totem$getStartRow(), accessor.totem$getScrollOffs(),
                 accessor.totem$getDisplayPatterns(), accessor.totem$getHasMaxPatterns(), resultAvailable,
-                patterns, captureSlots(menu)));
+                resultBaseColorId, patternStates, resultLayers, captureSlots(menu));
+    }
+
+    private static ObserverLoomScreenPayloads.PatternState patternState(Holder<BannerPattern> holder) {
+        String registryId = holder.unwrapKey().map(key -> key.identifier().toString()).orElse("");
+        return new ObserverLoomScreenPayloads.PatternState(registryId, holder.value().assetId().toString());
     }
 
     private static void closeTarget(boolean canSend) {
@@ -196,7 +160,7 @@ public final class ObserverLoomScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -210,18 +174,22 @@ public final class ObserverLoomScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverLoomScreenPayloads.PROTOCOL_VERSION
                 || !ObserverLoomScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverLoomScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
         remoteSelectedPatternIndex = payload.selectedPatternIndex();
         remoteStartRow = payload.startRow();
+        remoteScrollOffset = payload.scrollOffset();
         remoteDisplayPatterns = payload.displayPatterns();
         remoteHasMaxPatterns = payload.hasMaxPatterns();
         remoteResultAvailable = payload.resultAvailable();
-        remotePatternIds = List.copyOf(payload.patternIds());
+        remoteResultBaseColorId = payload.resultBaseColorId();
+        remotePatterns = List.copyOf(payload.patterns());
+        remoteResultLayers = List.copyOf(payload.resultLayers());
         remoteSlots = List.copyOf(payload.slots());
         ensureMirror();
     }
@@ -249,10 +217,13 @@ public final class ObserverLoomScreenClient {
         remoteTitle = "";
         remoteSelectedPatternIndex = -1;
         remoteStartRow = 0;
+        remoteScrollOffset = 0.0F;
         remoteDisplayPatterns = false;
         remoteHasMaxPatterns = false;
         remoteResultAvailable = false;
-        remotePatternIds = List.of();
+        remoteResultBaseColorId = -1;
+        remotePatterns = List.of();
+        remoteResultLayers = List.of();
         remoteSlots = List.of();
     }
 
@@ -267,8 +238,14 @@ public final class ObserverLoomScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeLoomMirrorScreen extends Screen {
+    private static final class NativeLoomMirrorScreen extends ObserverMirrorScreen {
+        private BannerFlagModel flag;
+
         private NativeLoomMirrorScreen() { super(Component.literal("Observer Loom")); }
+        @Override protected void init() {
+            super.init();
+            flag = new BannerFlagModel(minecraft.getEntityModels().bakeLayer(ModelLayers.STANDING_BANNER_FLAG));
+        }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {
             if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
@@ -277,33 +254,77 @@ public final class ObserverLoomScreenClient {
         @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0x90000000);
             int pw = 176, ph = 166, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
-            graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
-            graphics.text(font, remoteTitle.isBlank() ? "Loom" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, left, top, 0.0F, 0.0F,
+                    pw, ph, 256, 256);
+            Identifier scroller = remoteDisplayPatterns && remotePatterns.size() > PATTERN_COLUMNS * PATTERN_ROWS
+                    ? SCROLLER : SCROLLER_DISABLED;
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, scroller, left + 119,
+                    top + 13 + (int) (41.0F * remoteScrollOffset), 12, 15);
+
+            BannerPatternLayers resultLayers = bannerLayers(remoteResultLayers);
+            if (remoteResultAvailable && remoteResultBaseColorId >= 0 && flag != null) {
+                graphics.bannerPattern(flag, DyeColor.byId(remoteResultBaseColorId), resultLayers,
+                        left + 141, top + 8, left + 161, top + 48);
+            } else if (remoteHasMaxPatterns) {
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, ERROR, left + 138, top + 52, 26, 26);
+            }
+
             if (remoteDisplayPatterns) {
-                LoomPatternViewport viewport = loomPatternViewport(remoteStartRow, remotePatternIds.size());
+                LoomPatternViewport viewport = loomPatternViewport(remoteStartRow, remotePatterns.size());
                 for (int i = viewport.first(); i < viewport.lastExclusive(); i++) {
                     int local = i - viewport.first(), col = local % PATTERN_COLUMNS, row = local / PATTERN_COLUMNS;
                     int x = left + PATTERN_GRID_X + col * PATTERN_CELL_SIZE;
                     int y = top + PATTERN_GRID_Y + row * PATTERN_CELL_SIZE;
-                    graphics.fill(x, y, x + PATTERN_CELL_SIZE, y + PATTERN_CELL_SIZE,
-                            i == remoteSelectedPatternIndex ? 0xFFFFFFFF : 0xFF777777);
-                    graphics.fill(x + 2, y + 2, x + PATTERN_CELL_SIZE - 2, y + PATTERN_CELL_SIZE - 2, 0xFF303030);
-                    graphics.centeredText(font, Integer.toString(i + 1), x + PATTERN_CELL_SIZE / 2, y + 3, 0xFFFFFFFF);
+                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                            i == remoteSelectedPatternIndex ? PATTERN_SELECTED : PATTERN,
+                            x, y, PATTERN_CELL_SIZE, PATTERN_CELL_SIZE);
+                    extractPatternOnButton(graphics, x, y, remotePatterns.get(i));
                 }
             }
-            LoomStatusLayout status = loomStatusLayout(remoteSelectedPatternIndex, remotePatternIds.size(),
-                    remoteHasMaxPatterns, remoteResultAvailable, STATUS_MAX_WIDTH, font::width);
-            graphics.text(font, status.text(), left + STATUS_X, top + STATUS_Y,
-                    remoteHasMaxPatterns ? 0xFFAA0000 : 0xFF555555, false);
             for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
                 int sx = left + slot.x(), sy = top + slot.y();
-                graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
-                graphics.fill(sx, sy, sx + 16, sy + 16, 0xFF202020);
                 ItemStack stack = itemStack(slot);
                 if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
             }
             extractedFrames++;
+        }
+
+        private static void extractPatternOnButton(GuiGraphicsExtractor graphics, int x, int y,
+                                                   ObserverLoomScreenPayloads.PatternState pattern) {
+            Holder<BannerPattern> holder = patternHolder(pattern.assetId());
+            if (holder == null) return;
+            var sprite = graphics.getSprite(Sheets.getBannerSprite(holder));
+            float u0 = sprite.getU0();
+            float u1 = u0 + (sprite.getU1() - u0) * 21.0F / 64.0F;
+            float vRange = sprite.getV1() - sprite.getV0();
+            float v0 = sprite.getV0() + vRange / 64.0F;
+            float v1 = v0 + vRange * 40.0F / 64.0F;
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(x + 4.0F, y + 2.0F);
+            graphics.fill(0, 0, 5, 10, DyeColor.GRAY.getTextureDiffuseColor());
+            graphics.blit(sprite.atlasLocation(), 0, 0, 5, 10, u0, u1, v0, v1);
+            graphics.pose().popMatrix();
+        }
+
+        private static BannerPatternLayers bannerLayers(
+                List<ObserverLoomScreenPayloads.BannerLayerState> layers) {
+            List<BannerPatternLayers.Layer> resolved = new ArrayList<>();
+            for (ObserverLoomScreenPayloads.BannerLayerState layer : layers) {
+                Holder<BannerPattern> holder = patternHolder(layer.assetId());
+                if (holder != null) {
+                    resolved.add(new BannerPatternLayers.Layer(holder, DyeColor.byId(layer.dyeColorId())));
+                }
+            }
+            return new BannerPatternLayers(List.copyOf(resolved));
+        }
+
+        private static Holder<BannerPattern> patternHolder(String assetId) {
+            try {
+                Identifier id = Identifier.parse(assetId);
+                return Holder.direct(new BannerPattern(id, ""));
+            } catch (RuntimeException error) {
+                return null;
+            }
         }
     }
 }

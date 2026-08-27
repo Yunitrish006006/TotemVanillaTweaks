@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.SmithingScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -41,7 +41,6 @@ public final class ObserverSmithingScreenClient {
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static boolean remoteRecipeError;
@@ -169,7 +168,7 @@ public final class ObserverSmithingScreenClient {
     private static void tickTarget(Minecraft minecraft) {
         boolean supported = ObserverNativeClient.targetSupportsScreen(ObserverSmithingScreenPayloads.CAPABILITY);
         Screen screen = minecraft.gui.screen();
-        if (!supported || !isSmithingScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+        if (!supported || !(screen instanceof SmithingScreen smithingScreen)) {
             closeTarget(supported);
             return;
         }
@@ -177,14 +176,21 @@ public final class ObserverSmithingScreenClient {
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
         targetOpen = true;
         lastSnapshotNanos = now;
-        AbstractContainerMenu menu = container.getMenu();
+        ClientPlayNetworking.send(captureTargetState(smithingScreen, ++nextTargetSequence));
+    }
+
+    static ObserverSmithingScreenPayloads.SmithingState captureTargetState(
+            SmithingScreen smithingScreen,
+            long sequence
+    ) {
+        AbstractContainerMenu menu = smithingScreen.getMenu();
         boolean recipeError = invokeBoolean(menu, "hasRecipeError");
         boolean resultAvailable = menu.slots.size() > 3 && !menu.slots.get(3).getItem().isEmpty();
-        ClientPlayNetworking.send(new ObserverSmithingScreenPayloads.SmithingState(
-                ObserverSmithingScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
-                ObserverSmithingScreenPayloads.FAMILY_ID, screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(), recipeError, resultAvailable,
-                captureSlots(menu)));
+        return new ObserverSmithingScreenPayloads.SmithingState(
+                ObserverSmithingScreenPayloads.PROTOCOL_VERSION, sequence, true,
+                ObserverSmithingScreenPayloads.FAMILY_ID, smithingScreen.getClass().getName(),
+                smithingScreen.getTitle() == null ? "" : smithingScreen.getTitle().getString(),
+                recipeError, resultAvailable, captureSlots(menu));
     }
 
     private static void closeTarget(boolean canSend) {
@@ -200,7 +206,7 @@ public final class ObserverSmithingScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -225,8 +231,9 @@ public final class ObserverSmithingScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverSmithingScreenPayloads.PROTOCOL_VERSION
                 || !ObserverSmithingScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverSmithingScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -274,7 +281,7 @@ public final class ObserverSmithingScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeSmithingMirrorScreen extends Screen {
+    private static final class NativeSmithingMirrorScreen extends ObserverMirrorScreen {
         private NativeSmithingMirrorScreen() { super(Component.literal("Observer Smithing Table")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

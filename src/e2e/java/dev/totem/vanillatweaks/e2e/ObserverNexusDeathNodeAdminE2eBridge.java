@@ -132,7 +132,9 @@ public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInit
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeDeathNodeAdminMirrorScreen")
-                && getBoolean(ADMIN, "remoteOpen") && getLong(ADMIN, "lastRemoteSequence") > 0L
+                && getBoolean(ADMIN, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNexusDeathNodeAdminPayloads.FAMILY_ID) > 0L
                 && getLong(ADMIN, "extractedFrames") > 0L;
     }
 

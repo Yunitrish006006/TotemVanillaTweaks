@@ -49,7 +49,6 @@ public final class ObserverNexusScreenClient {
     private static boolean targetOpen;
     private static String targetVariant = "";
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteVariant = "";
     private static String remoteTitle = "";
@@ -129,8 +128,10 @@ public final class ObserverNexusScreenClient {
         long now = System.nanoTime();
         String variant = variantFor(screen);
         if (targetOpen && variant.equals(targetVariant) && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        ObserverNexusScreenPayloads.NexusState state = capture(screen, variant);
+        long sequence = nextTargetSequence + 1L;
+        ObserverNexusScreenPayloads.NexusState state = captureTargetState(screen, sequence);
         if (state == null) return;
+        nextTargetSequence = sequence;
         targetOpen = true;
         targetVariant = variant;
         lastSnapshotNanos = now;
@@ -143,16 +144,19 @@ public final class ObserverNexusScreenClient {
         targetVariant = "";
         lastSnapshotNanos = 0L;
         if (ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_NEXUS)) {
-            ClientPlayNetworking.send(ObserverNexusScreenPayloads.closed(++nextTargetSequence));
+            ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
         }
     }
 
-    private static ObserverNexusScreenPayloads.NexusState capture(Screen screen, String variant) {
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverNexusScreenPayloads.NexusState captureTargetState(Screen screen, long sequence) {
+        if (!isTargetScreen(screen)) throw new IllegalArgumentException("Expected a supported TotemNexus screen");
+        String variant = variantFor(screen);
         try {
             return switch (variant) {
-                case ObserverNexusScreenPayloads.VARIANT_MAP -> captureMap(screen);
-                case ObserverNexusScreenPayloads.VARIANT_FRIENDS -> captureFriends(screen);
-                case ObserverNexusScreenPayloads.VARIANT_REGISTRATION -> captureRegistration(screen);
+                case ObserverNexusScreenPayloads.VARIANT_MAP -> captureMap(screen, sequence);
+                case ObserverNexusScreenPayloads.VARIANT_FRIENDS -> captureFriends(screen, sequence);
+                case ObserverNexusScreenPayloads.VARIANT_REGISTRATION -> captureRegistration(screen, sequence);
                 default -> null;
             };
         } catch (RuntimeException error) {
@@ -161,7 +165,11 @@ public final class ObserverNexusScreenClient {
         }
     }
 
-    private static ObserverNexusScreenPayloads.NexusState captureMap(Screen screen) {
+    public static ObserverNexusScreenPayloads.NexusState closedTargetState(long sequence) {
+        return ObserverNexusScreenPayloads.closed(sequence);
+    }
+
+    private static ObserverNexusScreenPayloads.NexusState captureMap(Screen screen, long sequence) {
         Object payload = fieldValue(screen, "payload");
         if (payload == null) return null;
         UUID sourceId = uuid(invoke(payload, "sourceUnitId"));
@@ -177,30 +185,30 @@ public final class ObserverNexusScreenClient {
         String sortMode = modern ? enumText(fieldValueIfPresent(screen, "sortMode")) : "name";
         boolean showMaterials = modern && bool(fieldValueIfPresent(screen, "showMaterials"));
 
-        return baseState(screen, ObserverNexusScreenPayloads.VARIANT_MAP,
+        return baseState(screen, sequence, ObserverNexusScreenPayloads.VARIANT_MAP,
                 sourceId, text(invoke(payload, "sourceType")), text(invoke(payload, "sourceName")), sourceDimension,
                 integer(invoke(payload, "sourceX")), integer(invoke(payload, "sourceY")), integer(invoke(payload, "sourceZ")),
                 activeDimension, selected, scroll, zoom, search, typeFilter, friendFilter, sortMode, showMaterials,
                 mapEntries(invoke(payload, "entries")), 0, List.of(), "", 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    private static ObserverNexusScreenPayloads.NexusState captureFriends(Screen screen) {
+    private static ObserverNexusScreenPayloads.NexusState captureFriends(Screen screen, long sequence) {
         Object payload = fieldValue(screen, "payload");
         List<ObserverNexusScreenPayloads.FriendEntryState> entries = payload == null
                 ? List.of() : friendEntries(invoke(payload, "entries"));
         boolean modern = FRIENDS_MODERN.equals(screen.getClass().getName());
         UUID selected = uuid(fieldValueIfPresent(screen, modern ? "selectedPlayerId" : "selected"));
         int scroll = modern ? integer(fieldValueIfPresent(screen, "scrollIndex")) : 0;
-        return baseState(screen, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
+        return baseState(screen, sequence, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
                 null, "", "", "", 0, 0, 0, "", selected, 0, 1.0D,
                 "", "", "", "", false, List.of(), scroll, entries,
                 "", 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    private static ObserverNexusScreenPayloads.NexusState captureRegistration(Screen screen) {
+    private static ObserverNexusScreenPayloads.NexusState captureRegistration(Screen screen, long sequence) {
         Object payload = fieldValue(screen, "payload");
         if (payload == null) return null;
-        return baseState(screen, ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
+        return baseState(screen, sequence, ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
                 null, "", "", "", 0, 0, 0, "", null, 0, 1.0D,
                 "", "", "", "", false, List.of(), 0, List.of(),
                 text(invoke(payload, "dimension")), integer(invoke(payload, "x")), integer(invoke(payload, "y")),
@@ -210,7 +218,7 @@ public final class ObserverNexusScreenClient {
     }
 
     private static ObserverNexusScreenPayloads.NexusState baseState(
-            Screen screen, String variant,
+            Screen screen, long sequence, String variant,
             UUID sourceId, String sourceType, String sourceName, String sourceDimension,
             int sourceX, int sourceY, int sourceZ,
             String activeDimension, UUID selectedId, int listScrollIndex, double zoom,
@@ -220,7 +228,7 @@ public final class ObserverNexusScreenClient {
             String registrationDimension, int registrationX, int registrationY, int registrationZ,
             int registrationTier, int resonancePercent, int completenessPercent, int wearPercent, int confirmSeconds) {
         return new ObserverNexusScreenPayloads.NexusState(
-                ObserverNexusScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+                ObserverNexusScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverNativeScreenPayloads.FAMILY_NEXUS, variant, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(), sourceId, sourceType, sourceName,
                 sourceDimension, sourceX, sourceY, sourceZ, activeDimension, selectedId, listScrollIndex, zoom,
@@ -261,8 +269,8 @@ public final class ObserverNexusScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverNexusScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_NEXUS.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_NEXUS, p.targetId(), p.sequence())) return;
         if (!p.open()) {
             clearRemote();
             closeMirror();
@@ -448,7 +456,7 @@ public final class ObserverNexusScreenClient {
 
     private enum Missing { INSTANCE }
 
-    private static final class NativeNexusMirrorScreen extends Screen {
+    private static final class NativeNexusMirrorScreen extends ObserverMirrorScreen {
         private NativeNexusMirrorScreen() { super(Component.literal("Observer Nexus")); }
 
         @Override

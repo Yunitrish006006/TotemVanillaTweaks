@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -35,7 +35,6 @@ public final class ObserverBrewingScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static int remoteBrewingTicks;
@@ -154,7 +153,7 @@ public final class ObserverBrewingScreenClient {
     private static void tickTarget(Minecraft minecraft) {
         boolean supported = ObserverNativeClient.targetSupportsScreen(ObserverBrewingScreenPayloads.CAPABILITY);
         Screen screen = minecraft.gui.screen();
-        if (!supported || !isBrewingScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+        if (!supported || !(screen instanceof BrewingStandScreen brewingScreen)) {
             closeTarget(supported);
             return;
         }
@@ -163,20 +162,27 @@ public final class ObserverBrewingScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
-        AbstractContainerMenu menu = container.getMenu();
+        ClientPlayNetworking.send(captureTargetState(brewingScreen, ++nextTargetSequence));
+    }
+
+    static ObserverBrewingScreenPayloads.BrewingState captureTargetState(
+            BrewingStandScreen brewingScreen,
+            long sequence
+    ) {
+        AbstractContainerMenu menu = brewingScreen.getMenu();
         int brewingTicks = invokeInt(menu, "getBrewingTicks", 0);
         int fuel = invokeInt(menu, "getFuel", 0);
-        ClientPlayNetworking.send(new ObserverBrewingScreenPayloads.BrewingState(
+        return new ObserverBrewingScreenPayloads.BrewingState(
                 ObserverBrewingScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverBrewingScreenPayloads.FAMILY_ID,
-                screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(),
+                brewingScreen.getClass().getName(),
+                brewingScreen.getTitle() == null ? "" : brewingScreen.getTitle().getString(),
                 clamp(brewingTicks, 0, ObserverBrewingScreenPayloads.MAX_BREW_TICKS),
                 clamp(fuel, 0, ObserverBrewingScreenPayloads.MAX_FUEL),
                 captureSlots(menu)
-        ));
+        );
     }
 
     private static void closeTarget(boolean canSend) {
@@ -192,7 +198,7 @@ public final class ObserverBrewingScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -217,8 +223,9 @@ public final class ObserverBrewingScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverBrewingScreenPayloads.PROTOCOL_VERSION
                 || !ObserverBrewingScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverBrewingScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -276,7 +283,7 @@ public final class ObserverBrewingScreenClient {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static final class NativeBrewingMirrorScreen extends Screen {
+    private static final class NativeBrewingMirrorScreen extends ObserverMirrorScreen {
         private NativeBrewingMirrorScreen() { super(Component.literal("Observer Brewing Stand")); }
         @Override public boolean isPauseScreen() { return false; }
 

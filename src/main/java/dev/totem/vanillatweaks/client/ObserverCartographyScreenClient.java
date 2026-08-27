@@ -28,7 +28,6 @@ public final class ObserverCartographyScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static String remoteOperation = "none";
@@ -70,6 +69,13 @@ public final class ObserverCartographyScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
+    }
+
+    static ObserverCartographyScreenPayloads.CartographyState captureTargetState(
+            CartographyTableScreen screen,
+            long sequence
+    ) {
         CartographyTableMenu menu = screen.getMenu();
         List<ObserverNativeScreenPayloads.SlotState> slots = captureSlots(menu);
         String mapId = itemId(slots, 0);
@@ -77,11 +83,11 @@ public final class ObserverCartographyScreenClient {
         boolean mapPresent = "minecraft:filled_map".equals(mapId);
         boolean additionalPresent = !extraId.isBlank();
         boolean resultAvailable = slotPresent(slots, 2);
-        ClientPlayNetworking.send(new ObserverCartographyScreenPayloads.CartographyState(
-                ObserverCartographyScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+        return new ObserverCartographyScreenPayloads.CartographyState(
+                ObserverCartographyScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverCartographyScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                operation(mapPresent, extraId), mapPresent, additionalPresent, resultAvailable, slots));
+                operation(mapPresent, extraId), mapPresent, additionalPresent, resultAvailable, slots);
     }
 
     private static String operation(boolean mapPresent, String extraId) {
@@ -107,7 +113,7 @@ public final class ObserverCartographyScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -131,8 +137,9 @@ public final class ObserverCartographyScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverCartographyScreenPayloads.PROTOCOL_VERSION
                 || !ObserverCartographyScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverCartographyScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -193,7 +200,7 @@ public final class ObserverCartographyScreenClient {
         };
     }
 
-    private static final class NativeCartographyMirrorScreen extends Screen {
+    private static final class NativeCartographyMirrorScreen extends ObserverMirrorScreen {
         private NativeCartographyMirrorScreen() { super(Component.literal("Observer Cartography")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

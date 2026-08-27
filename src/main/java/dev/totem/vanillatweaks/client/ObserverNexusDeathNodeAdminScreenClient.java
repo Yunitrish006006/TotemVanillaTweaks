@@ -46,7 +46,6 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static String remoteOwnerQuery = "";
@@ -105,8 +104,10 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
     private static void tickTarget(Screen screen) {
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        ObserverNexusDeathNodeAdminPayloads.AdminState state = capture(screen);
+        long sequence = nextTargetSequence + 1L;
+        ObserverNexusDeathNodeAdminPayloads.AdminState state = captureTargetState(screen, sequence);
         if (state == null) return;
+        nextTargetSequence = sequence;
         targetOpen = true;
         lastSnapshotNanos = now;
         ClientPlayNetworking.send(state);
@@ -117,18 +118,20 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
         targetOpen = false;
         lastSnapshotNanos = 0L;
         if (ObserverNativeClient.targetSupportsScreen(ObserverNexusDeathNodeAdminPayloads.CAPABILITY)) {
-            ClientPlayNetworking.send(ObserverNexusDeathNodeAdminPayloads.closed(++nextTargetSequence));
+            ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
         }
     }
 
-    private static ObserverNexusDeathNodeAdminPayloads.AdminState capture(Screen screen) {
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverNexusDeathNodeAdminPayloads.AdminState captureTargetState(Screen screen, long sequence) {
+        if (!isTargetScreen(screen)) throw new IllegalArgumentException("Expected TotemNexus DeathNodeAdminScreen");
         try {
             Object payload = fieldValue(screen, "payload");
             if (payload == null) return null;
             UUID confirmationNode = uuid(invoke(payload, "confirmationNodeId"));
             long confirmationExpires = longValue(invoke(payload, "confirmationExpiresAtMillis"));
             return new ObserverNexusDeathNodeAdminPayloads.AdminState(
-                    ObserverNexusDeathNodeAdminPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+                    ObserverNexusDeathNodeAdminPayloads.PROTOCOL_VERSION, sequence, true,
                     ObserverNexusDeathNodeAdminPayloads.FAMILY_ID, screen.getClass().getName(),
                     screen.getTitle() == null ? "" : screen.getTitle().getString(),
                     text(fieldValueIfPresent(screen, "ownerQuery")), text(fieldValueIfPresent(screen, "dimensionId")),
@@ -143,6 +146,10 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
             TotemVanillaTweaks.LOGGER.debug("Unable to read TotemNexus death-node admin state", error);
             return null;
         }
+    }
+
+    public static ObserverNexusDeathNodeAdminPayloads.AdminState closedTargetState(long sequence) {
+        return ObserverNexusDeathNodeAdminPayloads.closed(sequence);
     }
 
     private static List<ObserverNexusDeathNodeAdminPayloads.EntryState> entries(Object value) {
@@ -171,8 +178,8 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverNexusDeathNodeAdminPayloads.PROTOCOL_VERSION
                 || !ObserverNexusDeathNodeAdminPayloads.FAMILY_ID.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNexusDeathNodeAdminPayloads.FAMILY_ID, p.targetId(), p.sequence())) return;
         if (!p.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -342,7 +349,7 @@ public final class ObserverNexusDeathNodeAdminScreenClient {
         }
     }
 
-    private static final class NativeDeathNodeAdminMirrorScreen extends Screen {
+    private static final class NativeDeathNodeAdminMirrorScreen extends ObserverMirrorScreen {
         private NativeDeathNodeAdminMirrorScreen() { super(Component.literal("Observer Death Node Admin")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

@@ -112,7 +112,8 @@ public final class ObserverSmithingE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeSmithingMirrorScreen")
-                && getBoolean(SMITHING, "remoteOpen") && getLong(SMITHING, "lastRemoteSequence") > 0L
+                && getBoolean(SMITHING, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverSmithingScreenPayloads.FAMILY_ID) > 0L
                 && getLong(SMITHING, "extractedFrames") > 0L;
     }
 

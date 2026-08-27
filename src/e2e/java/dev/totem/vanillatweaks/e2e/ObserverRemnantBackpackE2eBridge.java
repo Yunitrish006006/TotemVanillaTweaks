@@ -58,7 +58,8 @@ public final class ObserverRemnantBackpackE2eBridge implements ClientModInitiali
                 && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeRemnantBackpackMirrorScreen")
                 && getBoolean(BACKPACK, "remoteOpen")
-                && getLong(BACKPACK, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK) > 0L
                 && getLong(BACKPACK, "extractedFrames") > 0L) {
             if (getInt(BACKPACK, "remoteRowCount") != 8
                     || getInt(BACKPACK, "remoteVisibleRows") != 6

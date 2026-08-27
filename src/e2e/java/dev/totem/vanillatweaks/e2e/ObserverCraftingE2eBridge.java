@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.e2e;
 
 import dev.totem.vanillatweaks.client.ObserverNativeCraftingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
@@ -68,16 +69,19 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
             return;
         }
         if (!getBoolean(CRAFTING, "remoteOpen")
-                || getLong(CRAFTING, "lastRemoteSequence") <= 0L
+                || ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_CRAFTING) <= 0L
                 || getLong(CRAFTING, "extractedFrames") <= 0L) {
             return;
         }
         String variant = String.valueOf(getObject(CRAFTING, "remoteVariant"));
         int gridWidth = getInt(CRAFTING, "remoteGridWidth");
         int gridHeight = getInt(CRAFTING, "remoteGridHeight");
-        if (!"player_2x2".equals(variant) || gridWidth != 2 || gridHeight != 2) {
+        if (!"player_2x2".equals(variant) || gridWidth != 2 || gridHeight != 2
+                || getListSize(CRAFTING, "remoteSlots") != 46) {
             fail("Unexpected Inventory crafting semantic state: variant=" + variant
-                    + " grid=" + gridWidth + "x" + gridHeight);
+                    + " grid=" + gridWidth + "x" + gridHeight
+                    + " slots=" + getListSize(CRAFTING, "remoteSlots"));
             return;
         }
         if (getBoolean(GENERIC_CONTAINER, "remoteContainerOpen")) {
@@ -143,6 +147,11 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
         } catch (IllegalAccessException error) {
             throw new RuntimeException(error);
         }
+    }
+
+    private static int getListSize(Class<?> owner, String name) {
+        Object value = getObject(owner, name);
+        return value instanceof java.util.List<?> list ? list.size() : -1;
     }
 
     private static void setBoolean(Class<?> owner, String name, boolean value) {

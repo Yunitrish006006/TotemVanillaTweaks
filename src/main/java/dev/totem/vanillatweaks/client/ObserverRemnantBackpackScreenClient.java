@@ -30,7 +30,6 @@ public final class ObserverRemnantBackpackScreenClient {
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static int remoteRowCount;
@@ -77,30 +76,38 @@ public final class ObserverRemnantBackpackScreenClient {
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
         targetOpen = true;
         lastSnapshotNanos = now;
-
-        AbstractContainerMenu menu = container.getMenu();
-        int rows = invokeInt(menu, "getRowCount");
-        int visibleRows = Math.min(rows, 6);
-        int firstVisible = invokeInt(screen, "firstVisibleRow");
-        int upgrades = invokeInt(menu, "upgradeSlotCount");
-        boolean crafting = invokeBoolean(menu, "isCraftingEnabled");
-        boolean ender = invokeBoolean(screen, "isEnderAccessButtonVisible");
-
-        ClientPlayNetworking.send(new ObserverRemnantBackpackPayloads.BackpackState(
-                ObserverRemnantBackpackPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
-                ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK, screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(), rows, visibleRows, firstVisible,
-                upgrades, crafting, ender, captureSlots(menu)));
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
     }
 
     private static void closeTarget(boolean canSend) {
         if (!targetOpen) return;
         targetOpen = false;
         lastSnapshotNanos = 0L;
-        if (canSend) ClientPlayNetworking.send(new ObserverRemnantBackpackPayloads.BackpackState(
-                ObserverRemnantBackpackPayloads.PROTOCOL_VERSION, ++nextTargetSequence, false,
+        if (canSend) ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
+    }
+
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverRemnantBackpackPayloads.BackpackState captureTargetState(Screen screen, long sequence) {
+        if (!isRemnantBackpackScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+            throw new IllegalArgumentException("Expected TotemRemnant BackpackScreen");
+        }
+        AbstractContainerMenu menu = container.getMenu();
+        int rows = invokeInt(menu, "getRowCount");
+        int visibleRows = Math.min(rows, 6);
+        return new ObserverRemnantBackpackPayloads.BackpackState(
+                ObserverRemnantBackpackPayloads.PROTOCOL_VERSION, sequence, true,
+                ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK, screen.getClass().getName(),
+                screen.getTitle() == null ? "" : screen.getTitle().getString(), rows, visibleRows,
+                invokeInt(screen, "firstVisibleRow"), invokeInt(menu, "upgradeSlotCount"),
+                invokeBoolean(menu, "isCraftingEnabled"), invokeBoolean(screen, "isEnderAccessButtonVisible"),
+                captureSlots(menu));
+    }
+
+    public static ObserverRemnantBackpackPayloads.BackpackState closedTargetState(long sequence) {
+        return new ObserverRemnantBackpackPayloads.BackpackState(
+                ObserverRemnantBackpackPayloads.PROTOCOL_VERSION, sequence, false,
                 ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK, "", "", 0, 0, 0, 0,
-                false, false, List.of()));
+                false, false, List.of());
     }
 
     private static List<ObserverNativeScreenPayloads.SlotState> captureSlots(AbstractContainerMenu menu) {
@@ -109,7 +116,7 @@ public final class ObserverRemnantBackpackScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -143,8 +150,9 @@ public final class ObserverRemnantBackpackScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverRemnantBackpackPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote(); closeMirror(); return;
         }
@@ -195,7 +203,7 @@ public final class ObserverRemnantBackpackScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeRemnantBackpackMirrorScreen extends Screen {
+    private static final class NativeRemnantBackpackMirrorScreen extends ObserverMirrorScreen {
         private NativeRemnantBackpackMirrorScreen() { super(Component.literal("Observer Backpack")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

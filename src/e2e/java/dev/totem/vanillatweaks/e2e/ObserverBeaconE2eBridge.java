@@ -113,7 +113,8 @@ public final class ObserverBeaconE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeBeaconMirrorScreen")
-                && getBoolean(BEACON, "remoteOpen") && getLong(BEACON, "lastRemoteSequence") > 0L
+                && getBoolean(BEACON, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverBeaconScreenPayloads.FAMILY_ID) > 0L
                 && getLong(BEACON, "extractedFrames") > 0L;
     }
 

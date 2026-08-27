@@ -138,7 +138,8 @@ public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInit
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeVillagersWoodcutterMirrorScreen")
                 && getBoolean(WOODCUTTER, "remoteOpen")
-                && getLong(WOODCUTTER, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverVillagersWoodcutterPayloads.FAMILY_ID) > 0L
                 && getLong(WOODCUTTER, "extractedFrames") > 0L;
     }
 

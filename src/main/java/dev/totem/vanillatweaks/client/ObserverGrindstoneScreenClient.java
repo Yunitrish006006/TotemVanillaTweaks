@@ -8,7 +8,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -34,7 +34,6 @@ public final class ObserverGrindstoneScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static boolean remotePrimaryInputPresent;
@@ -135,7 +134,7 @@ public final class ObserverGrindstoneScreenClient {
     private static void tickTarget(Minecraft minecraft) {
         boolean supported = ObserverNativeClient.targetSupportsScreen(ObserverGrindstoneScreenPayloads.CAPABILITY);
         Screen screen = minecraft.gui.screen();
-        if (!supported || !isGrindstoneScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+        if (!supported || !(screen instanceof GrindstoneScreen grindstoneScreen)) {
             closeTarget(supported);
             return;
         }
@@ -143,16 +142,23 @@ public final class ObserverGrindstoneScreenClient {
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
         targetOpen = true;
         lastSnapshotNanos = now;
-        AbstractContainerMenu menu = container.getMenu();
+        ClientPlayNetworking.send(captureTargetState(grindstoneScreen, ++nextTargetSequence));
+    }
+
+    static ObserverGrindstoneScreenPayloads.GrindstoneState captureTargetState(
+            GrindstoneScreen grindstoneScreen,
+            long sequence
+    ) {
+        AbstractContainerMenu menu = grindstoneScreen.getMenu();
         boolean primary = menu.slots.size() > 0 && !menu.slots.get(0).getItem().isEmpty();
         boolean secondary = menu.slots.size() > 1 && !menu.slots.get(1).getItem().isEmpty();
         boolean result = menu.slots.size() > 2 && !menu.slots.get(2).getItem().isEmpty();
         boolean invalid = primary && secondary && !result;
-        ClientPlayNetworking.send(new ObserverGrindstoneScreenPayloads.GrindstoneState(
-                ObserverGrindstoneScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
-                ObserverGrindstoneScreenPayloads.FAMILY_ID, screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                primary, secondary, result, invalid, captureSlots(menu)));
+        return new ObserverGrindstoneScreenPayloads.GrindstoneState(
+                ObserverGrindstoneScreenPayloads.PROTOCOL_VERSION, sequence, true,
+                ObserverGrindstoneScreenPayloads.FAMILY_ID, grindstoneScreen.getClass().getName(),
+                grindstoneScreen.getTitle() == null ? "" : grindstoneScreen.getTitle().getString(),
+                primary, secondary, result, invalid, captureSlots(menu));
     }
 
     private static void closeTarget(boolean canSend) {
@@ -168,7 +174,7 @@ public final class ObserverGrindstoneScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -182,8 +188,9 @@ public final class ObserverGrindstoneScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverGrindstoneScreenPayloads.PROTOCOL_VERSION
                 || !ObserverGrindstoneScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverGrindstoneScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -235,7 +242,7 @@ public final class ObserverGrindstoneScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeGrindstoneMirrorScreen extends Screen {
+    private static final class NativeGrindstoneMirrorScreen extends ObserverMirrorScreen {
         private NativeGrindstoneMirrorScreen() { super(Component.literal("Observer Grindstone")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

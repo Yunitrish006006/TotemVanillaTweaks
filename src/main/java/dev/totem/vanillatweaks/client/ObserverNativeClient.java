@@ -3,6 +3,7 @@ package dev.totem.vanillatweaks.client;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 
@@ -53,6 +54,7 @@ public final class ObserverNativeClient {
                 (payload, context) -> context.client().execute(() -> acceptRelay(payload))
         );
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeClient::tick);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearObserverSession());
     }
 
     static boolean targetStateEnabled() {
@@ -83,6 +85,11 @@ public final class ObserverNativeClient {
 
     static UUID observerTargetId() {
         return observerTargetId;
+    }
+
+    /** Current accepted sequence for runtime evidence of one semantic family. */
+    public static long acceptedSemanticSequence(String familyId) {
+        return ObserverRemoteSequenceTracker.lastAccepted(familyId);
     }
 
     static long lastNativeStateSequence() {
@@ -133,6 +140,7 @@ public final class ObserverNativeClient {
     }
 
     private static void applySession(ObserverNativePayloads.NativeSession payload) {
+        ObserverRemoteSequenceTracker.beginSession();
         observerSessionActive = payload.active()
                 && payload.protocolVersion() == ObserverNativePayloads.PROTOCOL_VERSION;
         observerProtocolVersion = observerSessionActive ? payload.protocolVersion() : 0;
@@ -161,6 +169,29 @@ public final class ObserverNativeClient {
             remoteCrouching = false;
             remoteUsingItem = false;
         }
+    }
+
+    private static void clearObserverSession() {
+        ObserverRemoteSequenceTracker.beginSession();
+        observerSessionActive = false;
+        observerProtocolVersion = 0;
+        observerScreenCapabilities = 0L;
+        observerTargetId = null;
+        observerTargetName = "";
+        lastNativeStateSequence = -1L;
+        remoteYaw = 0.0F;
+        remotePitch = 0.0F;
+        remoteHealth = 0.0F;
+        remoteMaxHealth = 0.0F;
+        remoteFood = 0;
+        remoteSaturation = 0.0F;
+        remoteExperienceProgress = 0.0F;
+        remoteExperienceLevel = 0;
+        remoteSelectedHotbarSlot = 0;
+        remoteSprinting = false;
+        remoteCrouching = false;
+        remoteUsingItem = false;
+        ObserverUiClient.applyNativeSession(false, null, "");
     }
 
     private static void tick(Minecraft minecraft) {

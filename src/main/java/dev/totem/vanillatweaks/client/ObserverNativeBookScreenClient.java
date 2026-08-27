@@ -31,7 +31,6 @@ public final class ObserverNativeBookScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetBookOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteVariant = "";
     private static String remoteScreenClass = "";
@@ -68,10 +67,6 @@ public final class ObserverNativeBookScreenClient {
         return extractedFrames;
     }
 
-    static long lastRemoteSequence() {
-        return lastRemoteSequence;
-    }
-
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) {
             targetBookOpen = false;
@@ -100,8 +95,7 @@ public final class ObserverNativeBookScreenClient {
         }
 
         Screen screen = minecraft.gui.screen();
-        BookSnapshot snapshot = snapshot(screen);
-        if (snapshot == null) {
+        if (snapshot(screen) == null) {
             closeTargetBook();
             return;
         }
@@ -110,12 +104,23 @@ public final class ObserverNativeBookScreenClient {
         if (targetBookOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
             return;
         }
+        ObserverBookScreenPayloads.BookState state = captureTargetState(screen, ++nextTargetSequence);
+        if (state == null) {
+            closeTargetBook();
+            return;
+        }
         targetBookOpen = true;
         lastSnapshotNanos = now;
+        ClientPlayNetworking.send(state);
+    }
+
+    private static ObserverBookScreenPayloads.BookState captureTargetState(Screen screen, long sequence) {
+        BookSnapshot snapshot = snapshot(screen);
+        if (snapshot == null) return null;
         String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
-        ClientPlayNetworking.send(new ObserverBookScreenPayloads.BookState(
+        return new ObserverBookScreenPayloads.BookState(
                 ObserverBookScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_BOOK,
                 snapshot.variant(),
@@ -126,7 +131,7 @@ public final class ObserverNativeBookScreenClient {
                 limit(snapshot.pageText(), ObserverBookScreenPayloads.MAX_PAGE_TEXT),
                 limit(snapshot.bookTitle(), ObserverBookScreenPayloads.MAX_METADATA_TEXT),
                 limit(snapshot.author(), ObserverBookScreenPayloads.MAX_METADATA_TEXT)
-        ));
+        );
     }
 
     private static BookSnapshot snapshot(Screen screen) {
@@ -188,20 +193,7 @@ public final class ObserverNativeBookScreenClient {
         }
         targetBookOpen = false;
         lastSnapshotNanos = 0L;
-        ClientPlayNetworking.send(new ObserverBookScreenPayloads.BookState(
-                ObserverBookScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
-                false,
-                ObserverNativeScreenPayloads.FAMILY_BOOK,
-                "",
-                "",
-                "",
-                0,
-                0,
-                "",
-                "",
-                ""
-        ));
+        ClientPlayNetworking.send(ObserverBookScreenPayloads.closed(++nextTargetSequence));
     }
 
     private static void acceptRelay(ObserverBookScreenPayloads.BookRelay payload) {
@@ -212,11 +204,11 @@ public final class ObserverNativeBookScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverBookScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_BOOK.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) {
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_BOOK,
+                        payload.targetId(), payload.sequence())) {
             return;
         }
-
-        lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -327,7 +319,7 @@ public final class ObserverNativeBookScreenClient {
     ) {
     }
 
-    private static final class NativeBookMirrorScreen extends Screen {
+    private static final class NativeBookMirrorScreen extends ObserverMirrorScreen {
         private NativeBookMirrorScreen() {
             super(Component.literal("Observer Book"));
         }

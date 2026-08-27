@@ -53,7 +53,7 @@ public final class ObserverCrafterE2eBridge implements ClientModInitializer {
             if (!getBoolean(CRAFTER, "remotePowered")
                     || getInt(CRAFTER, "remoteDisabledMask") != ((1 << 1) | (1 << 7))
                     || getInt(CRAFTER, "remoteOccupiedInputSlots") != 3
-                    || getListSize(CRAFTER, "remoteSlots") != 45) {
+                    || getListSize(CRAFTER, "remoteSlots") != 46) {
                 fail("Crafter E2E semantic state mismatch");
                 return;
             }
@@ -115,13 +115,16 @@ public final class ObserverCrafterE2eBridge implements ClientModInitializer {
             result.add(new ObserverNativeScreenPayloads.SlotState(index++, 8 + col * 18, 84 + row * 18, "", 0, 0));
         for (int col = 0; col < 9; col++)
             result.add(new ObserverNativeScreenPayloads.SlotState(index++, 8 + col * 18, 142, "", 0, 0));
+        result.add(new ObserverNativeScreenPayloads.SlotState(index, 134, 35,
+                "minecraft:comparator", 1, 0));
         return List.copyOf(result);
     }
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeCrafterMirrorScreen")
-                && getBoolean(CRAFTER, "remoteOpen") && getLong(CRAFTER, "lastRemoteSequence") > 0L
+                && getBoolean(CRAFTER, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverCrafterScreenPayloads.FAMILY_ID) > 0L
                 && getLong(CRAFTER, "extractedFrames") > 0L;
     }
 

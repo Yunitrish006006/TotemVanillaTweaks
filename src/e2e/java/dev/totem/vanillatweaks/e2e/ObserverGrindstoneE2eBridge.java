@@ -114,7 +114,8 @@ public final class ObserverGrindstoneE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeGrindstoneMirrorScreen")
-                && getBoolean(GRINDSTONE, "remoteOpen") && getLong(GRINDSTONE, "lastRemoteSequence") > 0L
+                && getBoolean(GRINDSTONE, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverGrindstoneScreenPayloads.FAMILY_ID) > 0L
                 && getLong(GRINDSTONE, "extractedFrames") > 0L;
     }
 

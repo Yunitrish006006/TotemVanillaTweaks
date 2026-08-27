@@ -28,7 +28,6 @@ public final class ObserverCrafterScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static boolean remotePowered;
@@ -69,6 +68,13 @@ public final class ObserverCrafterScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
+    }
+
+    static ObserverCrafterScreenPayloads.CrafterState captureTargetState(
+            CrafterScreen screen,
+            long sequence
+    ) {
         CrafterMenu menu = screen.getMenu();
         List<ObserverNativeScreenPayloads.SlotState> slots = captureSlots(menu);
         int disabledMask = 0;
@@ -77,11 +83,11 @@ public final class ObserverCrafterScreenClient {
             if (menu.isSlotDisabled(i)) disabledMask |= 1 << i;
             if (i < menu.slots.size() && !menu.slots.get(i).getItem().isEmpty()) occupied++;
         }
-        ClientPlayNetworking.send(new ObserverCrafterScreenPayloads.CrafterState(
-                ObserverCrafterScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+        return new ObserverCrafterScreenPayloads.CrafterState(
+                ObserverCrafterScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverCrafterScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                menu.isPowered(), disabledMask, occupied, slots));
+                menu.isPowered(), disabledMask, occupied, slots);
     }
 
     private static void closeTarget(boolean canSend) {
@@ -97,7 +103,7 @@ public final class ObserverCrafterScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -111,8 +117,9 @@ public final class ObserverCrafterScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverCrafterScreenPayloads.PROTOCOL_VERSION
                 || !ObserverCrafterScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverCrafterScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -162,7 +169,7 @@ public final class ObserverCrafterScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeCrafterMirrorScreen extends Screen {
+    private static final class NativeCrafterMirrorScreen extends ObserverMirrorScreen {
         private NativeCrafterMirrorScreen() { super(Component.literal("Observer Crafter")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {
