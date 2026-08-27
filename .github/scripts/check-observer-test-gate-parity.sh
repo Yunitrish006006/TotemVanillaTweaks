@@ -175,6 +175,21 @@ for gradle_workflow in "$workflow" "$production_workflow" "$publish_workflow"; d
     fail "$(basename "$gradle_workflow") must disable every setup-gradle cache restore/write; found $cache_disabled_count/$setup_gradle_count"
   fi
 done
+if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.11.jar' "$publish_workflow" \
+    || grep -Fq 'TOTEM_CORE_REFERENCE_VERSION_ID:' "$publish_workflow" \
+    || grep -Fq 'TOTEM_CORE_PROJECT_ID:' "$publish_workflow"; then
+  fail 'Modrinth publication must use the exact built TotemCore external dependency, never a stale or guessed project/version ID'
+fi
+if ! grep -Fq 'and (.dependencies | length)==2' "$publish_workflow" \
+    || ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]' "$publish_workflow" \
+    || ! grep -Fq 'core_dependency_file="${core_archive}-${core_version}.jar"' "$publish_workflow" \
+    || ! grep -Fq 'core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact"' "$publish_workflow" \
+    || ! grep -Fq '.file_name==$core_file' "$publish_workflow" \
+    || ! grep -Fq '.project_id==null' "$publish_workflow" \
+    || ! grep -Fq '.version_id==null' "$publish_workflow" \
+    || [[ "$(grep -Fc 'dependency_type=="required"' "$publish_workflow" || true)" != 2 ]]; then
+  fail 'Modrinth remote verification must require exactly Fabric API and TotemCore dependencies'
+fi
 if ! grep -Fq 'productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"' "$build_script" \
     || ! grep -Fq 'productionRuntimeMods files(totemCoreJar)' "$build_script"; then
   fail 'Production Runtime must load the official Fabric API and pinned TotemCore jars'
