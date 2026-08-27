@@ -66,6 +66,10 @@ jobs:
           REQUESTED_RELEASE_TYPE: '${{ inputs.release_type }}'
         run: |
           set -euo pipefail
+          fail_release_source() {
+            echo "Release source validation failed: $1" >&2
+            exit 1
+          }
 
           should_publish=false
           dry_run=false
@@ -84,11 +88,20 @@ jobs:
             changed="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" 2>/dev/null || true)"
 
             if grep -Fxq "$RELEASE_REQUEST" <<<"$changed"; then
-              test -f "$RELEASE_REQUEST"
-              release_ref="$(jq -er '.release_ref' "$RELEASE_REQUEST")"
-              expected_version="$(jq -er '.version' "$RELEASE_REQUEST")"
-              dry_run="$(jq -r '.dry_run // false' "$RELEASE_REQUEST")"
-              release_type="$(jq -r '.release_type // "release"' "$RELEASE_REQUEST")"
+              [[ -f "$RELEASE_REQUEST" ]] \
+                || fail_release_source 'changed release-request file is missing.'
+              if ! release_ref="$(jq -er '.release_ref | strings | select(length > 0)' "$RELEASE_REQUEST")"; then
+                fail_release_source 'release request has no non-empty release_ref.'
+              fi
+              if ! expected_version="$(jq -er '.version | strings | select(length > 0)' "$RELEASE_REQUEST")"; then
+                fail_release_source 'release request has no non-empty version.'
+              fi
+              if ! dry_run="$(jq -er '.dry_run // false | booleans' "$RELEASE_REQUEST")"; then
+                fail_release_source 'release request dry_run must be a boolean.'
+              fi
+              if ! release_type="$(jq -er '.release_type // "release" | strings | select(length > 0)' "$RELEASE_REQUEST")"; then
+                fail_release_source 'release request has no valid release_type string.'
+              fi
               should_publish=true
             elif grep -Fxq 'gradle.properties' <<<"$changed"; then
               current="$(sed -n 's/^mod_version=//p' gradle.properties)"
@@ -101,15 +114,19 @@ jobs:
 
           case "$release_type" in
             release|beta|alpha) ;;
-            *) echo "Unsupported release_type: $release_type" >&2; exit 1 ;;
+            *) fail_release_source "unsupported release_type ${release_type}." ;;
           esac
 
           if [[ "$should_publish" == true ]]; then
-            git cat-file -e "${release_ref}^{commit}"
+            if ! git cat-file -e "${release_ref}^{commit}"; then
+              fail_release_source 'release_ref does not resolve to a commit.'
+            fi
             version="$(git show "${release_ref}:gradle.properties" | sed -n 's/^mod_version=//p')"
-            test -n "$version"
+            [[ -n "$version" ]] \
+              || fail_release_source 'release_ref gradle.properties has no mod_version.'
             if [[ -n "$expected_version" ]]; then
-              test "$version" = "$expected_version"
+              [[ "$version" == "$expected_version" ]] \
+                || fail_release_source 'release request version does not match release_ref mod_version.'
             fi
           else
             version=""
@@ -259,17 +276,31 @@ jobs:
           EXPECTED_VERSION: '${{ steps.release.outputs.version }}'
         run: |
           set -euo pipefail
-          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = "$EXPECTED_VERSION"
+          fail_release_build() {
+            echo "Release JAR validation failed: $1" >&2
+            exit 1
+          }
+
+          actual_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          [[ -n "$actual_version" ]] || fail_release_build 'gradle.properties has no mod_version.'
+          [[ "$actual_version" == "$EXPECTED_VERSION" ]] \
+            || fail_release_build 'checked-out mod_version does not match the resolved release version.'
           chmod +x gradlew .lockstep/TotemCore/gradlew
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core" = 0.7.11
+          [[ "$core" == 0.7.11 ]] \
+            || fail_release_build 'pinned TotemCore checkout is not version 0.7.11.'
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
-          test -f "$core_jar"
-          ./gradlew -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
+          [[ -f "$core_jar" ]] \
+            || fail_release_build 'pinned TotemCore production JAR is missing.'
+
+          # Never accept a formal JAR left by an earlier task or retry. Minecraft
+          # 26.2 uses the non-remapping Loom plugin, so `jar` is the production JAR.
+          ./gradlew -PtotemCoreJar="$core_jar" clean jar --no-daemon --stacktrace
           a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          [[ -n "$a" ]] || fail_release_build 'gradle.properties has no archives_base_name.'
           artifact="build/libs/${a}-${EXPECTED_VERSION}.jar"
-          [[ -f "$artifact" ]] || ./gradlew -PtotemCoreJar="$core_jar" remapJar --no-daemon --stacktrace
-          test -f "$artifact"
+          [[ -f "$artifact" ]] \
+            || fail_release_build 'clean Gradle jar build did not produce the expected release artifact.'
 
       - name: Publish and verify
         id: modrinth
@@ -283,19 +314,32 @@ jobs:
           MODRINTH_PROJECT_ID: '${{ secrets.MODRINTH_PROJECT_ID }}'
         run: |
           set -euo pipefail
+          fail_release() {
+            echo "Modrinth publication validation failed: $1" >&2
+            exit 1
+          }
+
           v="$(sed -n 's/^mod_version=//p' gradle.properties)"
-          test "$v" = "$EXPECTED_VERSION"
+          [[ -n "$v" ]] || fail_release 'gradle.properties has no mod_version.'
+          [[ "$v" == "$EXPECTED_VERSION" ]] \
+            || fail_release 'artifact version does not match the resolved release version.'
           a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
           mc="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          [[ -n "$a" ]] || fail_release 'gradle.properties has no archives_base_name.'
+          [[ -n "$mc" ]] || fail_release 'gradle.properties has no minecraft_version.'
           artifact="build/libs/${a}-${v}.jar"
-          test -n "$MODRINTH_TOKEN"
-          test -n "$MODRINTH_PROJECT_ID"
-          test -f "$artifact"
+          [[ -n "$MODRINTH_TOKEN" ]] || fail_release 'MODRINTH_TOKEN is not configured.'
+          [[ -n "$MODRINTH_PROJECT_ID" ]] || fail_release 'MODRINTH_PROJECT_ID is not configured.'
+          [[ -f "$artifact" ]] || fail_release 'expected release JAR is missing.'
 
-          unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json
-          jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.0 <0.8.0' \
+          if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
+            fail_release 'release JAR has no readable fabric.mod.json.'
+          fi
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.0 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
-            /tmp/fabric.mod.json >/dev/null
+            /tmp/fabric.mod.json >/dev/null; then
+            fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
+          fi
 
           api=https://api.modrinth.com/v2
           args=(--silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/4.0")
@@ -304,6 +348,7 @@ jobs:
             local label="$1"
             local path="$2"
             local output="$3"
+            local expected_type="$4"
             local status
 
             if ! status="$(curl "${args[@]}" --output "$output" --write-out '%{http_code}' "$api/$path")"; then
@@ -314,32 +359,54 @@ jobs:
               echo "Modrinth ${label} lookup returned HTTP ${status}." >&2
               return 1
             fi
-            if ! jq -e 'type == "object"' "$output" >/dev/null; then
-              echo "Modrinth ${label} lookup returned an invalid JSON object." >&2
+            if ! jq -e --arg expected_type "$expected_type" 'type == $expected_type' "$output" >/dev/null; then
+              echo "Modrinth ${label} lookup returned invalid JSON; expected ${expected_type}." >&2
               return 1
             fi
           }
 
-          fetch_modrinth_json 'release project' "project/${MODRINTH_PROJECT_ID}" /tmp/project.json
-          p="$(jq -er .id /tmp/project.json)"
-          if [[ "$p" != "$MODRINTH_PROJECT_ID" ]]; then
-            echo 'Modrinth release project lookup returned a different project identity.' >&2
-            exit 1
+          fetch_modrinth_json 'release project' "project/${MODRINTH_PROJECT_ID}" /tmp/project.json object
+          if ! p="$(jq -er '.id | strings | select(length > 0)' /tmp/project.json)"; then
+            fail_release 'release project response has no project ID.'
           fi
-          sha="$(sha512sum "$artifact" | awk '{print $1}')"
+          if [[ "$p" != "$MODRINTH_PROJECT_ID" ]]; then
+            fail_release 'release project lookup returned a different project identity.'
+          fi
+          if ! jq -e '.project_type == "mod"' /tmp/project.json >/dev/null; then
+            fail_release 'configured Modrinth project is not a mod project.'
+          fi
+          if ! project_summary="$(jq -er '
+              select((.title | type == "string" and length > 0)
+                     and (.slug | type == "string" and length > 0)
+                     and (.status | type == "string" and length > 0)
+                     and (.requested_status == null
+                          or (.requested_status | type == "string" and length > 0)))
+              | "Modrinth release project: title=\(.title), slug=\(.slug), status=\(.status), requested_status=\(.requested_status // "none"), project_type=\(.project_type)."
+            ' /tmp/project.json)"; then
+            fail_release 'release project response is missing non-sensitive status metadata.'
+          fi
+          echo "$project_summary"
+
+          if ! sha="$(sha512sum "$artifact" | awk '{print $1}')" \
+              || [[ ! "$sha" =~ ^[0-9a-f]{128}$ ]]; then
+            fail_release 'could not calculate a valid SHA-512 for the release JAR.'
+          fi
 
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
           core_archive="$(sed -n 's/^archives_base_name=//p' .lockstep/TotemCore/gradle.properties)"
+          [[ -n "$core_version" ]] || fail_release 'pinned TotemCore metadata has no mod_version.'
+          [[ -n "$core_archive" ]] || fail_release 'pinned TotemCore metadata has no archives_base_name.'
           core_dependency_file="${core_archive}-${core_version}.jar"
           core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
           if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
-            echo 'Pinned TotemCore artifact does not match the declared external Modrinth dependency.' >&2
-            exit 1
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.11.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"
-          deps="$(jq -nc --arg fabric "$fabric_project" --arg core_file "$core_dependency_file" \
-            '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]')"
+          if ! deps="$(jq -nce --arg fabric "$fabric_project" --arg core_file "$core_dependency_file" \
+              '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]')"; then
+            fail_release 'could not construct the exact Fabric API and TotemCore dependency metadata.'
+          fi
 
           changelog_file=".github/staging/modrinth-changelog-${v}.md"
           if [[ -f "$changelog_file" ]]; then
@@ -347,7 +414,7 @@ jobs:
           else
             c="$(git log -1 --format=%B)"
           fi
-          test -n "$c"
+          [[ -n "$c" ]] || fail_release 'release changelog is empty.'
 
           if [[ "$DRY_RUN" == true ]]; then
             echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); TotemCore external dependency=${core_dependency_file}."
@@ -356,16 +423,26 @@ jobs:
             exit 0
           fi
 
-          curl "${args[@]}" --fail "$api/project/${p}/version?include_changelog=false" >/tmp/versions.json
-          count="$(jq --arg v "$v" '[.[] | select(.version_number==$v)] | length' /tmp/versions.json)"
+          fetch_modrinth_json 'release versions' "project/${p}/version?include_changelog=false" /tmp/versions.json array
+          if ! count="$(jq -er --arg v "$v" '[.[] | select(.version_number==$v)] | length' /tmp/versions.json)"; then
+            fail_release 'could not count matching existing Modrinth versions.'
+          fi
 
-          if [[ "$count" != 0 ]]; then
-            test "$count" = 1
-            id="$(jq -er --arg v "$v" '.[] | select(.version_number==$v) | .id' /tmp/versions.json)"
-            rsha="$(jq -er --arg v "$v" '.[] | select(.version_number==$v) | (([.files[] | select(.primary==true)][0] // .files[0]).hashes.sha512)' /tmp/versions.json)"
-            test "$rsha" = "$sha"
+          if [[ "$count" == 1 ]]; then
+            if ! id="$(jq -er --arg v "$v" '.[] | select(.version_number==$v) | .id | strings | select(length > 0)' /tmp/versions.json)"; then
+              fail_release 'existing Modrinth version has no version ID.'
+            fi
+            if ! rsha="$(jq -er --arg v "$v" '.[] | select(.version_number==$v) | (([.files[] | select(.primary==true)][0] // .files[0]).hashes.sha512) | strings | select(length > 0)' /tmp/versions.json)"; then
+              fail_release 'existing Modrinth version has no primary-file SHA-512.'
+            fi
+            if [[ "$rsha" != "$sha" ]]; then
+              fail_release "version ${v} already exists with a different artifact SHA-512; refusing to overwrite it. Bump mod_version."
+            fi
+            echo "Modrinth version ${v} already exists with the expected release JAR; verifying its metadata."
+          elif [[ "$count" != 0 ]]; then
+            fail_release "found ${count} existing Modrinth versions numbered ${v}; expected at most one."
           else
-            data="$(jq -nc \
+            if ! data="$(jq -nce \
               --arg n "${MODULE_ID} ${v}" \
               --arg v "$v" \
               --arg c "$c" \
@@ -373,7 +450,9 @@ jobs:
               --arg mc "$mc" \
               --arg t "$RELEASE_TYPE" \
               --argjson deps "$deps" \
-              '{name:$n,version_number:$v,changelog:$c,dependencies:$deps,game_versions:[$mc],version_type:$t,loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"
+              '{name:$n,version_number:$v,changelog:$c,dependencies:$deps,game_versions:[$mc],version_type:$t,loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"; then
+              fail_release 'could not construct Modrinth version creation metadata.'
+            fi
             if ! create_status="$(curl "${args[@]}" -X POST "$api/version" \
                 -F "data=${data};type=application/json" \
                 -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" \
@@ -385,10 +464,12 @@ jobs:
               echo "Modrinth version creation returned HTTP ${create_status}; TotemCore was declared as required external file ${core_dependency_file}." >&2
               exit 1
             fi
-            id="$(jq -er .id /tmp/version.json)"
+            if ! id="$(jq -er '.id | strings | select(length > 0)' /tmp/version.json)"; then
+              fail_release 'Modrinth version creation response has no version ID.'
+            fi
           fi
 
-          curl "${args[@]}" --fail "$api/version/$id" >/tmp/remote.json
+          fetch_modrinth_json 'published version' "version/${id}" /tmp/remote.json object
           if ! jq -e \
             --arg p "$p" \
             --arg v "$v" \

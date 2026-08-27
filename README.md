@@ -4,10 +4,10 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
 管理員用的 Spectator Observer View。
 
-目前候選版本為 **0.1.18 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
+目前候選版本為 **0.1.19 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
 目前建議搭配已發布的 TotemCore **0.7.11**。
 
-> **0.1.18 Observer 更新：** protocol-native v4／screen protocol v2 現在有
+> **0.1.19 Observer 更新：** protocol-native v4／screen protocol v2 現在有
 > 24 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
 > 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
 > 以結構化資料本地重建。
@@ -18,7 +18,7 @@ Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
 2. TotemCore `0.7.x`（`>=0.7.0 <0.8.0`）
-3. TotemVanillaTweaks `0.1.18`
+3. TotemVanillaTweaks `0.1.19`
 
 | 項目 | 需求 |
 | --- | --- |
