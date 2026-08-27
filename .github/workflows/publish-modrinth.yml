@@ -41,8 +41,9 @@ env:
   CORE_REF: 82b21944b1e4865f5d34f13febc5049d936a636f
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
-  # Public TotemCore 0.7.11 Modrinth version ID; used only to resolve its project ID.
-  TOTEM_CORE_REFERENCE_VERSION_ID: iOzAgHtL
+  # The former first-party TotemCore project/version IDs are no longer public.
+  # Keep this an exact external dependency instead of guessing a same-name project.
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.11.jar
 
 jobs:
   publish:
@@ -297,17 +298,48 @@ jobs:
             /tmp/fabric.mod.json >/dev/null
 
           api=https://api.modrinth.com/v2
-          args=(--fail --silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/4.0")
-          curl "${args[@]}" "$api/project/${MODRINTH_PROJECT_ID}" >/tmp/project.json
+          args=(--silent --show-error --retry 3 -H "Authorization: ${MODRINTH_TOKEN}" -H "User-Agent: Yunitrish006006/${MODULE_ID}-publisher/4.0")
+
+          fetch_modrinth_json() {
+            local label="$1"
+            local path="$2"
+            local output="$3"
+            local status
+
+            if ! status="$(curl "${args[@]}" --output "$output" --write-out '%{http_code}' "$api/$path")"; then
+              echo "Modrinth ${label} lookup failed before an HTTP response was received." >&2
+              return 1
+            fi
+            if [[ "$status" != 200 ]]; then
+              echo "Modrinth ${label} lookup returned HTTP ${status}." >&2
+              return 1
+            fi
+            if ! jq -e 'type == "object"' "$output" >/dev/null; then
+              echo "Modrinth ${label} lookup returned an invalid JSON object." >&2
+              return 1
+            fi
+          }
+
+          fetch_modrinth_json 'release project' "project/${MODRINTH_PROJECT_ID}" /tmp/project.json
           p="$(jq -er .id /tmp/project.json)"
+          if [[ "$p" != "$MODRINTH_PROJECT_ID" ]]; then
+            echo 'Modrinth release project lookup returned a different project identity.' >&2
+            exit 1
+          fi
           sha="$(sha512sum "$artifact" | awk '{print $1}')"
 
-          # Resolve TotemCore project identity from a known public 0.7.x version ID.
-          curl "${args[@]}" "$api/version/${TOTEM_CORE_REFERENCE_VERSION_ID}" >/tmp/totem-core-version.json
-          core_project="$(jq -er .project_id /tmp/totem-core-version.json)"
+          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
+          core_archive="$(sed -n 's/^archives_base_name=//p' .lockstep/TotemCore/gradle.properties)"
+          core_dependency_file="${core_archive}-${core_version}.jar"
+          core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
+          if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
+            echo 'Pinned TotemCore artifact does not match the declared external Modrinth dependency.' >&2
+            exit 1
+          fi
+
           fabric_project="$FABRIC_API_PROJECT_ID"
-          deps="$(jq -nc --arg fabric "$fabric_project" --arg core "$core_project" \
-            '[{project_id:$fabric,dependency_type:"required"},{project_id:$core,dependency_type:"required"}]')"
+          deps="$(jq -nc --arg fabric "$fabric_project" --arg core_file "$core_dependency_file" \
+            '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]')"
 
           changelog_file=".github/staging/modrinth-changelog-${v}.md"
           if [[ -f "$changelog_file" ]]; then
@@ -318,13 +350,13 @@ jobs:
           test -n "$c"
 
           if [[ "$DRY_RUN" == true ]]; then
-            echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); Fabric API=${fabric_project}; TotemCore=${core_project}."
+            echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); TotemCore external dependency=${core_dependency_file}."
             echo "version=$v" >> "$GITHUB_OUTPUT"
             echo "sha512=$sha" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          curl "${args[@]}" "$api/project/${p}/version?include_changelog=false" >/tmp/versions.json
+          curl "${args[@]}" --fail "$api/project/${p}/version?include_changelog=false" >/tmp/versions.json
           count="$(jq --arg v "$v" '[.[] | select(.version_number==$v)] | length' /tmp/versions.json)"
 
           if [[ "$count" != 0 ]]; then
@@ -342,15 +374,22 @@ jobs:
               --arg t "$RELEASE_TYPE" \
               --argjson deps "$deps" \
               '{name:$n,version_number:$v,changelog:$c,dependencies:$deps,game_versions:[$mc],version_type:$t,loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"
-            curl "${args[@]}" -X POST "$api/version" \
-              -F "data=${data};type=application/json" \
-              -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" \
-              >/tmp/version.json
+            if ! create_status="$(curl "${args[@]}" -X POST "$api/version" \
+                -F "data=${data};type=application/json" \
+                -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" \
+                --output /tmp/version.json --write-out '%{http_code}')"; then
+              echo 'Modrinth version creation failed before an HTTP response was received.' >&2
+              exit 1
+            fi
+            if [[ "$create_status" != 200 ]]; then
+              echo "Modrinth version creation returned HTTP ${create_status}; TotemCore was declared as required external file ${core_dependency_file}." >&2
+              exit 1
+            fi
             id="$(jq -er .id /tmp/version.json)"
           fi
 
-          curl "${args[@]}" "$api/version/$id" >/tmp/remote.json
-          jq -e \
+          curl "${args[@]}" --fail "$api/version/$id" >/tmp/remote.json
+          if ! jq -e \
             --arg p "$p" \
             --arg v "$v" \
             --arg mc "$mc" \
@@ -358,7 +397,7 @@ jobs:
             --arg sha "$sha" \
             --arg t "$RELEASE_TYPE" \
             --arg fabric "$fabric_project" \
-            --arg core "$core_project" \
+            --arg core_file "$core_dependency_file" \
             '.project_id==$p
              and .version_number==$v
              and .version_type==$t
@@ -366,9 +405,16 @@ jobs:
              and .loaders==["fabric"]
              and (([.files[]|select(.primary==true)][0]//.files[0]).filename==$f)
              and (([.files[]|select(.primary==true)][0]//.files[0]).hashes.sha512==$sha)
+             and (.dependencies | length)==2
              and ([.dependencies[] | select(.project_id==$fabric and .dependency_type=="required")] | length)==1
-             and ([.dependencies[] | select(.project_id==$core and .dependency_type=="required")] | length)==1' \
-            /tmp/remote.json >/dev/null
+             and ([.dependencies[] | select(.file_name==$core_file
+                                            and .project_id==null
+                                            and .version_id==null
+                                            and .dependency_type=="required")] | length)==1' \
+            /tmp/remote.json >/dev/null; then
+            echo "Published Modrinth metadata verification failed; expected exactly Fabric API plus required external ${core_dependency_file}." >&2
+            exit 1
+          fi
 
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "version_id=$id" >> "$GITHUB_OUTPUT"
