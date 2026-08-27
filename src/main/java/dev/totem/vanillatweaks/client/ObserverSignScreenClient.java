@@ -24,7 +24,6 @@ public final class ObserverSignScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static String remoteVariant = "";
@@ -64,9 +63,14 @@ public final class ObserverSignScreenClient {
         }
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
+        ObserverSignScreenPayloads.SignState state = captureTargetState(screen, ++nextTargetSequence);
         targetOpen = true;
         lastSnapshotNanos = now;
+        ClientPlayNetworking.send(state);
+    }
 
+    private static ObserverSignScreenPayloads.SignState captureTargetState(
+            AbstractSignEditScreen screen, long sequence) {
         AbstractSignEditScreenAccessor accessor = (AbstractSignEditScreenAccessor) screen;
         String[] source = accessor.totem$getMessages();
         List<String> lines = new ArrayList<>(ObserverSignScreenPayloads.LINE_COUNT);
@@ -76,11 +80,11 @@ public final class ObserverSignScreenClient {
         String color = text == null || text.getColor() == null ? "" : text.getColor().getName();
         boolean glowing = text != null && text.hasGlowingText();
         String variant = screen instanceof HangingSignEditScreen ? "hanging_sign" : "sign";
-        ClientPlayNetworking.send(new ObserverSignScreenPayloads.SignState(
-                ObserverSignScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+        return new ObserverSignScreenPayloads.SignState(
+                ObserverSignScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverSignScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(), variant,
-                accessor.totem$isFrontText(), accessor.totem$getLine(), color, glowing, List.copyOf(lines)));
+                accessor.totem$isFrontText(), accessor.totem$getLine(), color, glowing, List.copyOf(lines));
     }
 
     private static void closeTarget(boolean canSend) {
@@ -97,8 +101,9 @@ public final class ObserverSignScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverSignScreenPayloads.PROTOCOL_VERSION
                 || !ObserverSignScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverSignScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -141,7 +146,7 @@ public final class ObserverSignScreenClient {
         remoteLines = List.of();
     }
 
-    private static final class NativeSignMirrorScreen extends Screen {
+    private static final class NativeSignMirrorScreen extends ObserverMirrorScreen {
         private NativeSignMirrorScreen() { super(Component.literal("Observer Sign")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

@@ -6,6 +6,7 @@ import dev.totem.vanillatweaks.client.ObserverNativeHud;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -313,7 +314,8 @@ public final class ObserverE2eClient implements ClientModInitializer {
         if (observerContainerRequested && !observerContainerSeen
                 && isNativeContainerMirror(screen)
                 && screenGetBoolean("remoteContainerOpen")
-                && screenGetLong("lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS) > 0L
                 && screenGetLong("extractedFrames") > 0L) {
             observerContainerSeen = true;
             ObserverE2eCommon.marker(

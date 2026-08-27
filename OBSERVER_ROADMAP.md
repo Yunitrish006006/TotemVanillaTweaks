@@ -85,9 +85,11 @@ CI enforces the no-frame invariant by rejecting production source that contains 
   mirrors, while each registered relay is represented in the three-JVM E2E manifest.
 - Screen metadata never includes a player's unsent ChatScreen message or command text.
 
-This list does not claim dedicated adapters for Death, Horse/Mount, sleeping, Recipe Book, Chat or
-Social Interactions screens. A screen without a listed family continues to use the generic
-`container_slots` representation when that is sufficient, or the metadata-only fallback otherwise.
+Recipe Book state is carried inside the `crafting` family rather than consuming another capability
+bit. It includes visibility, narrow-width mode, filtering, whether a search is active, selected tab
+and page state, but never the user's search text. Death, Horse/Mount, sleeping, Chat and Social
+Interactions do not have independent families. They continue to use the generic `container_slots`
+representation when that is sufficient, or the explicit metadata-only fallback otherwise.
 
 ## Current validation contract
 

@@ -38,7 +38,7 @@ concurrency:
 env:
   MODULE_ID: totem-vanilla-tweaks
   # Match the minimum 0.7.x Core used by the normal build/E2E gate.
-  CORE_REF: 5be940a1fb91d250bb6781193bd49f0f24b40a43
+  CORE_REF: 82b21944b1e4865f5d34f13febc5049d936a636f
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # Public TotemCore 0.7.11 Modrinth version ID; used only to resolve its project ID.
@@ -47,7 +47,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 65
     steps:
       - name: Check out control ref
         uses: actions/checkout@v4
@@ -178,6 +178,79 @@ jobs:
           path: .lockstep/TotemCore
           persist-credentials: false
 
+      - name: Check out pinned TotemExcavation compile dependency
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemExcavation
+          ref: 6b54011195b81ec9a9a09146d162ba303ebd8ee4
+          path: .lockstep/TotemExcavation
+          persist-credentials: false
+
+      - name: Check out pinned TotemRemnant
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemRemnant
+          ref: a8eb55ae53f3c6488775467127bab4d972c52a49
+          path: .lockstep/TotemRemnant
+          persist-credentials: false
+
+      - name: Check out pinned TotemAutomata
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemAutomata
+          ref: 59b80206768466a4ac96f89e1343849abaa82dd3
+          path: .lockstep/TotemAutomata
+          persist-credentials: false
+
+      - name: Check out pinned TotemNexus
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemNexus
+          ref: a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb
+          path: .lockstep/TotemNexus
+          persist-credentials: false
+
+      - name: Check out pinned TotemVillagers
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemVillagers
+          ref: d0d287e2df831a44b4b2cab28bbc98e396368cda
+          path: .lockstep/TotemVillagers
+          persist-credentials: false
+
+      - name: Check out pinned TotemLocksmith
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemLocksmith
+          ref: 9080ac2c37807b539c5d309fe833edb660834f3b
+          path: .lockstep/TotemLocksmith
+          persist-credentials: false
+
+      - name: Build pinned Observer integration modules
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        shell: bash
+        run: bash .github/scripts/build-observer-integration-jars.sh
+
+      - name: Run release cross-module production sender Client GameTest
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a ./gradlew \
+            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.11.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.15.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.16.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.5.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.32.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar" \
+            runIntegrationClientGametest --no-daemon --stacktrace
+
       - name: Build release JAR
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
         shell: bash
@@ -187,9 +260,8 @@ jobs:
           set -euo pipefail
           test "$(sed -n 's/^mod_version=//p' gradle.properties)" = "$EXPECTED_VERSION"
           chmod +x gradlew .lockstep/TotemCore/gradlew
-          ./.lockstep/TotemCore/gradlew -p .lockstep/TotemCore jar --no-daemon --stacktrace
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core" = 0.7.0
+          test "$core" = 0.7.11
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
           test -f "$core_jar"
           ./gradlew -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace

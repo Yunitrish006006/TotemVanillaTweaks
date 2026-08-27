@@ -120,7 +120,7 @@ public final class ObserverCartographyE2eBridge implements ClientModInitializer 
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeCartographyMirrorScreen")
                 && getBoolean(CARTOGRAPHY, "remoteOpen")
-                && getLong(CARTOGRAPHY, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(ObserverCartographyScreenPayloads.FAMILY_ID) > 0L
                 && getLong(CARTOGRAPHY, "extractedFrames") > 0L;
     }
 

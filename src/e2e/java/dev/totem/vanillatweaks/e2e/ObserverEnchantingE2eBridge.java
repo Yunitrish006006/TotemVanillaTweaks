@@ -57,7 +57,8 @@ public final class ObserverEnchantingE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeEnchantingMirrorScreen")
                 && getBoolean(ENCHANTING, "remoteOpen")
-                && getLong(ENCHANTING, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_ENCHANTING) > 0L
                 && getLong(ENCHANTING, "extractedFrames") > 0L) {
             if (getInt(ENCHANTING, "remotePlayerLevel") != 30 || getInt(ENCHANTING, "remoteLapisCount") != 12) {
                 fail("Enchanting E2E resource state mismatch");

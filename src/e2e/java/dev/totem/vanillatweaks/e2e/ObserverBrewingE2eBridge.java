@@ -114,7 +114,8 @@ public final class ObserverBrewingE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeBrewingMirrorScreen")
-                && getBoolean(BREWING, "remoteOpen") && getLong(BREWING, "lastRemoteSequence") > 0L
+                && getBoolean(BREWING, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverBrewingScreenPayloads.FAMILY_ID) > 0L
                 && getLong(BREWING, "extractedFrames") > 0L;
     }
 

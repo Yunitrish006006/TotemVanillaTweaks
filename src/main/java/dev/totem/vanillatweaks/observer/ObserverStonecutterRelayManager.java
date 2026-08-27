@@ -56,23 +56,55 @@ public final class ObserverStonecutterRelayManager {
         if (p.protocolVersion() != ObserverStonecutterScreenPayloads.PROTOCOL_VERSION || p.sequence() < 0L
                 || !ObserverStonecutterScreenPayloads.FAMILY_ID.equals(p.familyId())) return false;
         if (!p.open()) return p.selectedRecipeIndex() == -1 && p.recipeCount() == 0 && !p.hasInputItem()
-                && !p.resultAvailable() && p.slots().isEmpty();
+                && p.startIndex() == 0 && p.scrollOffset() == 0.0F && !p.displayRecipes()
+                && !p.resultAvailable() && p.recipes().isEmpty() && p.slots().isEmpty();
         if (!ObserverStonecutterScreenPayloads.SCREEN_CLASS.equals(p.screenClass())
                 || p.recipeCount() < 0 || p.recipeCount() > ObserverStonecutterScreenPayloads.MAX_RECIPES
-                || p.slots().size() != VANILLA_SLOT_COUNT) return false;
+                || p.recipes().size() != p.recipeCount()
+                || !Float.isFinite(p.scrollOffset()) || p.scrollOffset() < 0.0F || p.scrollOffset() > 1.001F
+                || p.displayRecipes() != p.hasInputItem() || p.slots().size() != VANILLA_SLOT_COUNT) return false;
+        for (int i = 0; i < p.recipes().size(); i++) {
+            var recipe = p.recipes().get(i);
+            if (recipe == null || recipe.index() != i || recipe.recipeId() == null || recipe.recipeId().length() > 256
+                    || (!recipe.recipeId().isBlank() && !validIdentifier(recipe.recipeId()))
+                    || !validIdentifier(recipe.outputItemId()) || recipe.outputCount() <= 0
+                    || recipe.outputCount() > 127 || recipe.outputDamage() < 0) return false;
+        }
+        int offscreenRows = Math.max(0, Math.ceilDiv(p.recipeCount(), 4) - 3);
+        int expectedStart = offscreenRows == 0 ? 0 : (int) (p.scrollOffset() * offscreenRows + 0.5F) * 4;
+        if (p.startIndex() != expectedStart || p.startIndex() < 0
+                || p.startIndex() > Math.max(0, offscreenRows * 4)) return false;
         if (p.recipeCount() == 0) {
             if (p.selectedRecipeIndex() != -1 || p.resultAvailable()) return false;
         } else {
             if (p.selectedRecipeIndex() < -1 || p.selectedRecipeIndex() >= p.recipeCount()) return false;
             if (p.selectedRecipeIndex() == -1 && p.resultAvailable()) return false;
         }
-        return validSlots(p.slots());
+        return p.resultAvailable() == slotPresentAtMenuOrdinal(p.slots(), 1) && validSlots(p.slots());
+    }
+
+    private static boolean slotPresentAtMenuOrdinal(
+            List<ObserverNativeScreenPayloads.SlotState> slots, int ordinal) {
+        if (ordinal < 0 || ordinal >= slots.size()) return false;
+        var slot = slots.get(ordinal);
+        return slot.count() > 0 && !slot.itemId().isBlank();
+    }
+
+    private static boolean validIdentifier(String value) {
+        if (value == null || value.isBlank() || value.length() > 256) return false;
+        try {
+            net.minecraft.resources.Identifier.parse(value);
+            return true;
+        } catch (RuntimeException error) {
+            return false;
+        }
     }
 
     private static boolean validSlots(List<ObserverNativeScreenPayloads.SlotState> slots) {
         if (slots.size() > ObserverNativeScreenPayloads.MAX_SLOTS) return false;
-        for (var slot : slots) {
-            if (slot.index() < 0 || slot.x() < -64 || slot.x() > 512 || slot.y() < -64 || slot.y() > 512
+        for (int i = 0; i < slots.size(); i++) {
+            var slot = slots.get(i);
+            if (slot.index() != i || slot.x() < -64 || slot.x() > 512 || slot.y() < -64 || slot.y() > 512
                     || slot.count() < 0 || slot.count() > 127 || slot.damage() < 0) return false;
         }
         return true;

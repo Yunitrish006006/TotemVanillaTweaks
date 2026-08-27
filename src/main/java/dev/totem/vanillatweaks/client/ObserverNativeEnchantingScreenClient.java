@@ -30,7 +30,6 @@ public final class ObserverNativeEnchantingScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteScreenClass = "";
     private static String remoteTitle = "";
@@ -80,6 +79,14 @@ public final class ObserverNativeEnchantingScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(minecraft, enchantmentScreen, ++nextTargetSequence));
+    }
+
+    static ObserverEnchantingScreenPayloads.EnchantingState captureTargetState(
+            Minecraft minecraft,
+            EnchantmentScreen enchantmentScreen,
+            long sequence
+    ) {
         EnchantmentMenu menu = enchantmentScreen.getMenu();
         List<ObserverEnchantingScreenPayloads.OptionState> options = new ArrayList<>(3);
         int lapis = menu.getSlot(1).getItem().getCount();
@@ -92,18 +99,18 @@ public final class ObserverNativeEnchantingScreenClient {
             options.add(new ObserverEnchantingScreenPayloads.OptionState(i, cost, clue, clueLevel, affordable));
         }
 
-        ClientPlayNetworking.send(new ObserverEnchantingScreenPayloads.EnchantingState(
+        return new ObserverEnchantingScreenPayloads.EnchantingState(
                 ObserverEnchantingScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_ENCHANTING,
-                screen.getClass().getName(),
-                screen.getTitle() == null ? "" : screen.getTitle().getString(),
+                enchantmentScreen.getClass().getName(),
+                enchantmentScreen.getTitle() == null ? "" : enchantmentScreen.getTitle().getString(),
                 playerLevel,
                 lapis,
                 List.copyOf(options),
                 captureSlots(menu)
-        ));
+        );
     }
 
     private static void closeTarget(boolean canSend) {
@@ -129,7 +136,7 @@ public final class ObserverNativeEnchantingScreenClient {
             ItemStack stack = slot.getItem();
             String itemId = stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             slots.add(new ObserverNativeScreenPayloads.SlotState(
-                    slot.index, slot.x, slot.y, itemId,
+                    i, slot.x, slot.y, itemId,
                     stack.isEmpty() ? 0 : stack.getCount(),
                     stack.isEmpty() ? 0 : stack.getDamageValue()
             ));
@@ -145,9 +152,9 @@ public final class ObserverNativeEnchantingScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverEnchantingScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_ENCHANTING.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_ENCHANTING,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -207,7 +214,7 @@ public final class ObserverNativeEnchantingScreenClient {
         }
     }
 
-    private static final class NativeEnchantingMirrorScreen extends Screen {
+    private static final class NativeEnchantingMirrorScreen extends ObserverMirrorScreen {
         private NativeEnchantingMirrorScreen() { super(Component.literal("Observer Enchanting")); }
 
         @Override

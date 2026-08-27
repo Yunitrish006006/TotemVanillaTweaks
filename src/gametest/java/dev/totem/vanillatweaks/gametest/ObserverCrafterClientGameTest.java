@@ -34,7 +34,7 @@ public final class ObserverCrafterClientGameTest implements FabricClientGameTest
                     && minecraft.gui.screen().getClass().getName().contains("NativeCrafterMirrorScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!getBoolean("remotePowered") || getInt("remoteDisabledMask") != ((1 << 1) | (1 << 7))
-                    || getInt("remoteOccupiedInputSlots") != 3 || getListSize("remoteSlots") != 45) {
+                    || getInt("remoteOccupiedInputSlots") != 3 || getListSize("remoteSlots") != 46) {
                 throw new AssertionError("Crafter semantic state was not reconstructed correctly");
             }
             persistForCi(context.takeScreenshot("observer-ui-native-crafter-screen"),
@@ -74,6 +74,8 @@ public final class ObserverCrafterClientGameTest implements FabricClientGameTest
             result.add(new ObserverNativeScreenPayloads.SlotState(index++, 8 + col * 18, 84 + row * 18, "", 0, 0));
         for (int col = 0; col < 9; col++)
             result.add(new ObserverNativeScreenPayloads.SlotState(index++, 8 + col * 18, 142, "", 0, 0));
+        result.add(new ObserverNativeScreenPayloads.SlotState(index, 134, 35,
+                "minecraft:comparator", 1, 0));
         return List.copyOf(result);
     }
 

@@ -56,7 +56,6 @@ public final class ObserverBeaconScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static int remoteLevels;
@@ -99,6 +98,13 @@ public final class ObserverBeaconScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(screen, ++nextTargetSequence));
+    }
+
+    static ObserverBeaconScreenPayloads.BeaconState captureTargetState(
+            BeaconScreen screen,
+            long sequence
+    ) {
         BeaconMenu menu = screen.getMenu();
         List<ObserverNativeScreenPayloads.SlotState> slots = captureSlots(menu);
         BeaconScreenAccessor accessor = (BeaconScreenAccessor) screen;
@@ -107,11 +113,11 @@ public final class ObserverBeaconScreenClient {
         int levels = menu.getLevels();
         boolean payment = menu.hasPayment();
         boolean canConfirm = levels > 0 && payment && !primary.isBlank();
-        ClientPlayNetworking.send(new ObserverBeaconScreenPayloads.BeaconState(
-                ObserverBeaconScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+        return new ObserverBeaconScreenPayloads.BeaconState(
+                ObserverBeaconScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverBeaconScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(),
-                levels, primary, secondary, payment, canConfirm, slots));
+                levels, primary, secondary, payment, canConfirm, slots);
     }
 
     private static String effectId(Holder<MobEffect> effect) {
@@ -135,7 +141,7 @@ public final class ObserverBeaconScreenClient {
         for (int i = 0; i < limit; i++) {
             Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
-            slots.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            slots.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -149,8 +155,9 @@ public final class ObserverBeaconScreenClient {
                 || targetId == null || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverBeaconScreenPayloads.PROTOCOL_VERSION
                 || !ObserverBeaconScreenPayloads.FAMILY_ID.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = payload.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverBeaconScreenPayloads.FAMILY_ID,
+                        payload.targetId(), payload.sequence())) return;
         if (!payload.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -301,7 +308,7 @@ public final class ObserverBeaconScreenClient {
         }
     }
 
-    private static final class NativeBeaconMirrorScreen extends Screen {
+    private static final class NativeBeaconMirrorScreen extends ObserverMirrorScreen {
         private NativeBeaconMirrorScreen() { super(Component.literal("Observer Beacon")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

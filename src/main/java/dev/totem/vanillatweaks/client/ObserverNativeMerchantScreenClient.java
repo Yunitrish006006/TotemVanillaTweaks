@@ -32,7 +32,6 @@ public final class ObserverNativeMerchantScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteVariant = "";
     private static String remoteScreenClass = "";
@@ -96,12 +95,10 @@ public final class ObserverNativeMerchantScreenClient {
     private static void tickTarget(Minecraft minecraft) {
         boolean supported = ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_MERCHANT);
         Screen screen = minecraft.gui.screen();
-        if (!supported || !(screen instanceof MerchantScreen merchantScreen)
-                || !(minecraft.player.containerMenu instanceof MerchantMenu menu)) {
+        if (!supported || !(screen instanceof MerchantScreen merchantScreen)) {
             closeTarget(supported);
             return;
         }
-
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
             return;
@@ -109,6 +106,14 @@ public final class ObserverNativeMerchantScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
+        ClientPlayNetworking.send(captureTargetState(merchantScreen, ++nextTargetSequence));
+    }
+
+    static ObserverMerchantScreenPayloads.MerchantState captureTargetState(
+            MerchantScreen merchantScreen,
+            long sequence
+    ) {
+        MerchantMenu menu = merchantScreen.getMenu();
         List<ObserverMerchantScreenPayloads.OfferState> offers = new ArrayList<>();
         int offerCount = Math.min(menu.getOffers().size(), ObserverMerchantScreenPayloads.MAX_OFFERS);
         for (int i = 0; i < offerCount; i++) {
@@ -125,15 +130,15 @@ public final class ObserverNativeMerchantScreenClient {
             ));
         }
 
-        String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
+        String title = merchantScreen.getTitle() == null ? "" : merchantScreen.getTitle().getString();
         int selected = ((MerchantScreenAccessor) merchantScreen).totem$getSelectedOffer();
-        ClientPlayNetworking.send(new ObserverMerchantScreenPayloads.MerchantState(
+        return new ObserverMerchantScreenPayloads.MerchantState(
                 ObserverMerchantScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_MERCHANT,
                 ObserverMerchantScreenPayloads.VARIANT_VANILLA,
-                screen.getClass().getName(),
+                merchantScreen.getClass().getName(),
                 title,
                 selected,
                 menu.getTraderLevel(),
@@ -142,7 +147,7 @@ public final class ObserverNativeMerchantScreenClient {
                 menu.showProgressBar(),
                 menu.canRestock(),
                 List.copyOf(offers)
-        ));
+        );
     }
 
     private static void closeTarget(boolean canSend) {
@@ -190,10 +195,11 @@ public final class ObserverNativeMerchantScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverMerchantScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_MERCHANT.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) {
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_MERCHANT,
+                        payload.targetId(), payload.sequence())) {
             return;
         }
-        lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -277,7 +283,7 @@ public final class ObserverNativeMerchantScreenClient {
         }
     }
 
-    private static final class NativeMerchantMirrorScreen extends Screen {
+    private static final class NativeMerchantMirrorScreen extends ObserverMirrorScreen {
         private NativeMerchantMirrorScreen() {
             super(Component.literal("Observer Merchant"));
         }

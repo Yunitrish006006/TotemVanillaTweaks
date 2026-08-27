@@ -126,10 +126,7 @@ public final class ObserverNativeSessionManager {
                 || !targetSupports(target, capability) || nativeObserverCount(target.getUUID()) == 0
                 || !acceptSequence(LAST_CRAFTING_SEQUENCE_BY_TARGET, target.getUUID(), payload.sequence())) return;
         relayToNativeObservers(target, ObserverCraftingScreenPayloads.CraftingRelay.TYPE,
-                new ObserverCraftingScreenPayloads.CraftingRelay(target.getUUID(), payload.protocolVersion(), payload.sequence(),
-                        payload.open(), payload.familyId(), payload.variant(), payload.screenClass(), payload.title(),
-                        payload.contentWidth(), payload.contentHeight(), payload.mouseX(), payload.mouseY(),
-                        payload.gridWidth(), payload.gridHeight(), payload.resultSlotIndex(), payload.slots()), capability);
+                ObserverCraftingScreenPayloads.relay(target.getUUID(), payload), capability);
     }
 
     public static void acceptMerchantState(ServerPlayer target, ObserverMerchantScreenPayloads.MerchantState payload) {
@@ -248,10 +245,28 @@ public final class ObserverNativeSessionManager {
 
     private static boolean validCrafting(ObserverCraftingScreenPayloads.CraftingState p) {
         if (p.protocolVersion() != ObserverCraftingScreenPayloads.PROTOCOL_VERSION
-                || !ObserverNativeScreenPayloads.FAMILY_CRAFTING.equals(p.familyId()) || p.sequence() < 0L || !validSlots(p.slots())) return false;
-        if (!p.open()) return p.slots().isEmpty() && p.gridWidth() == 0 && p.gridHeight() == 0;
+                || !ObserverNativeScreenPayloads.FAMILY_CRAFTING.equals(p.familyId()) || p.sequence() < 0L
+                || !validSlots(p.slots()) || !usesMenuOrdinals(p.slots())) return false;
+        if (!p.open()) return p.slots().isEmpty() && p.gridWidth() == 0 && p.gridHeight() == 0
+                && !p.recipeBookVisible() && !p.recipeBookWidthTooNarrow() && !p.recipeBookFiltering()
+                && !p.recipeBookSearchActive() && p.selectedRecipeBookTab().isEmpty()
+                && p.recipeBookPage() == 0 && p.recipeBookPageCount() == 0 && !p.activeEffectsVisible()
+                && p.activeEffects().isEmpty();
         boolean player = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(p.variant()) && p.gridWidth() == 2 && p.gridHeight() == 2;
         boolean table = ObserverCraftingScreenPayloads.VARIANT_TABLE_3X3.equals(p.variant()) && p.gridWidth() == 3 && p.gridHeight() == 3;
+        if (p.selectedRecipeBookTab() == null || p.selectedRecipeBookTab().length() > 256
+                || p.recipeBookPage() < 0 || p.recipeBookPageCount() < 0 || p.recipeBookPageCount() > 32767
+                || (p.recipeBookPageCount() == 0 ? p.recipeBookPage() != 0 : p.recipeBookPage() >= p.recipeBookPageCount())
+                || (p.recipeBookSearchActive() && !p.recipeBookVisible())
+                || (p.recipeBookVisible() && p.selectedRecipeBookTab().isBlank())
+                || p.activeEffects().size() > ObserverCraftingScreenPayloads.MAX_EFFECTS
+                || (!player && (p.activeEffectsVisible() || !p.activeEffects().isEmpty()))) return false;
+        java.util.Set<String> effectIds = new java.util.HashSet<>();
+        for (var effect : p.activeEffects()) {
+            if (effect == null || !validIdentifier(effect.effectId()) || !effectIds.add(effect.effectId())
+                    || effect.amplifier() < 0 || effect.amplifier() > 255
+                    || effect.durationTicks() < -1) return false;
+        }
         return (player || table) && p.resultSlotIndex() >= 0 && p.resultSlotIndex() < ObserverNativeScreenPayloads.MAX_SLOTS
                 && validScreenGeometry(true, p.contentWidth(), p.contentHeight(), p.mouseX(), p.mouseY(), p.slots());
     }
@@ -333,6 +348,21 @@ public final class ObserverNativeSessionManager {
                     || slot.count() < 0 || slot.count() > 127 || slot.damage() < 0) return false;
         }
         return true;
+    }
+
+    private static boolean usesMenuOrdinals(List<ObserverNativeScreenPayloads.SlotState> slots) {
+        for (int i = 0; i < slots.size(); i++) if (slots.get(i).index() != i) return false;
+        return true;
+    }
+
+    private static boolean validIdentifier(String value) {
+        if (value == null || value.isBlank() || value.length() > 256) return false;
+        try {
+            net.minecraft.resources.Identifier.parse(value);
+            return true;
+        } catch (RuntimeException error) {
+            return false;
+        }
     }
 
     private static long negotiatedScreenCapabilities(ServerPlayer observer) {

@@ -5,16 +5,26 @@ import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeCraftingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.mixin.client.AbstractRecipeBookScreenAccessor;
+import dev.totem.vanillatweaks.mixin.client.RecipeBookComponentAccessor;
 import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
+import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.inventory.RecipeBookType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,6 +35,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /** Client smoke tests for framebuffer-free Observer semantic screen reconstruction. */
@@ -35,12 +46,92 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             singleplayer.getClientLevel().waitForChunksRender();
             assertFramebufferSurfaceRemoved();
+            verifyPlayerInventoryProductionSender(context);
             verifyUnnegotiatedMetadataFallback(context);
             verifyFurnaceSemanticMirror(context);
             verifyBookSemanticMirror(context);
             verifyCraftingSemanticMirror(context);
             assertFramebufferSurfaceRemoved();
         }
+    }
+
+    private static void verifyPlayerInventoryProductionSender(ClientGameTestContext context) {
+        UUID targetId = UUID.randomUUID();
+        AtomicReference<ObserverCraftingScreenPayloads.CraftingState> captured = new AtomicReference<>();
+        context.runOnClient(minecraft -> {
+            minecraft.player.getRecipeBook().setOpen(RecipeBookType.CRAFTING, true);
+            minecraft.player.getRecipeBook().setFiltering(RecipeBookType.CRAFTING, true);
+            minecraft.player.addEffect(new MobEffectInstance(MobEffects.SPEED, 1_200, 1));
+            InventoryScreen screen = new InventoryScreen(minecraft.player);
+            minecraft.setScreenAndShow(screen);
+            if (minecraft.gui.screen() != screen || screen.getMenu() != minecraft.player.inventoryMenu) {
+                throw new AssertionError("Player inventory production test is not using the visible InventoryScreen Menu");
+            }
+            var recipeBook = ((AbstractRecipeBookScreenAccessor) screen).totem$getRecipeBookComponent();
+            if (!recipeBook.isVisible()) throw new AssertionError("Player recipe book did not open in the real screen");
+            String privateDraft = "never-transmit-this-recipe-search-draft";
+            ((RecipeBookComponentAccessor) recipeBook).totem$getSearchBox().setValue(privateDraft);
+            screen.getMenu().getSlot(0).set(new ItemStack(Items.CRAFTING_TABLE));
+            screen.getMenu().getSlot(1).set(new ItemStack(Items.OAK_PLANKS, 4));
+            screen.getMenu().getSlot(5).set(new ItemStack(Items.DIAMOND_HELMET));
+            screen.getMenu().getSlot(45).set(new ItemStack(Items.SHIELD));
+            ObserverCraftingScreenPayloads.CraftingState state =
+                    (ObserverCraftingScreenPayloads.CraftingState) invokeResult(
+                            ObserverNativeCraftingScreenClient.class, "captureTargetState",
+                            new Class<?>[]{Minecraft.class, Screen.class, long.class}, minecraft, screen, 9L);
+            if (state == null
+                    || !ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(state.variant())
+                    || !InventoryScreen.class.getName().equals(state.screenClass())
+                    || state.gridWidth() != 2 || state.gridHeight() != 2
+                    || state.resultSlotIndex() != 0 || state.slots().size() != 46
+                    || !state.recipeBookVisible() || !state.recipeBookFiltering()
+                    || !state.recipeBookSearchActive() || state.selectedRecipeBookTab().isBlank()
+                    || state.activeEffects().size() != 1
+                    || !"minecraft:speed".equals(state.activeEffects().getFirst().effectId())
+                    || !"minecraft:crafting_table".equals(state.slots().get(0).itemId())
+                    || !"minecraft:diamond_helmet".equals(state.slots().get(5).itemId())
+                    || !"minecraft:shield".equals(state.slots().get(45).itemId())) {
+                throw new AssertionError("Player inventory production sender classified/extracted the wrong state");
+            }
+            if (state.toString().contains(privateDraft)) {
+                throw new AssertionError("Recipe-book search draft leaked into Observer semantic state");
+            }
+            for (int i = 0; i < state.slots().size(); i++) if (state.slots().get(i).index() != i) {
+                throw new AssertionError("Player inventory slot " + i + " has duplicate container id "
+                        + state.slots().get(i).index());
+            }
+            boolean valid = (boolean) invokeResult(ObserverNativeSessionManager.class, "validCrafting",
+                    new Class<?>[]{ObserverCraftingScreenPayloads.CraftingState.class}, state);
+            if (!valid) throw new AssertionError("Real player inventory sender state failed server validation");
+            captured.set(state);
+            minecraft.setScreenAndShow(null);
+            applySession(true, targetId, ObserverNativeScreenPayloads.CAPABILITY_CRAFTING);
+            invoke(ObserverNativeCraftingScreenClient.class, "acceptRelay",
+                    new Class<?>[]{ObserverCraftingScreenPayloads.CraftingRelay.class},
+                    ObserverCraftingScreenPayloads.relay(targetId, state));
+            invoke(ObserverUiClient.class, "applyScreenRelay",
+                    new Class<?>[]{ObserverPayloads.ScreenRelay.class},
+                    new ObserverPayloads.ScreenRelay(targetId, true, InventoryScreen.class.getName(), "Inventory"));
+            if (getStaticBoolean(ObserverNativeScreenClient.class, "remoteGenericOpen")) {
+                throw new AssertionError("Player inventory semantic sender competed with generic metadata");
+            }
+        });
+        context.waitFor(minecraft -> minecraft.gui.screen() != null
+                && minecraft.gui.screen().getClass().getName().contains("NativeCraftingMirrorScreen"), 100);
+        context.waitFor(minecraft -> getStaticLong(
+                ObserverNativeCraftingScreenClient.class, "extractedFrames") > 0L, 100);
+        persistForCi(context.takeScreenshot("observer-ui-native-player-inventory-screen"),
+                "observer-ui-native-player-inventory-screen.png");
+        context.runOnClient(minecraft -> {
+            var state = captured.get();
+            invoke(ObserverNativeCraftingScreenClient.class, "acceptRelay",
+                    new Class<?>[]{ObserverCraftingScreenPayloads.CraftingRelay.class},
+                    ObserverCraftingScreenPayloads.relay(targetId,
+                            ObserverCraftingScreenPayloads.closed(state.sequence() + 1)));
+            applySession(false, new UUID(0L, 0L), 0L);
+            minecraft.player.removeEffect(MobEffects.SPEED);
+        });
+        context.waitForScreen(null);
     }
 
     private static void verifyUnnegotiatedMetadataFallback(ClientGameTestContext context) {
@@ -144,6 +235,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                 ObserverCraftingScreenPayloads.VARIANT_TABLE_3X3,
                 "net.minecraft.client.gui.screens.inventory.CraftingScreen", "Observer Crafting Test",
                 176, 166, 90, 45, 3, 3, 0,
+                false, false, false, false, "", 0, 0, false, List.of(),
                 List.of(
                         new ObserverNativeScreenPayloads.SlotState(0, 124, 35, "minecraft:crafting_table", 1, 0),
                         new ObserverNativeScreenPayloads.SlotState(1, 30, 17, "minecraft:oak_planks", 1, 0),
@@ -163,7 +255,8 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
 
         ObserverCraftingScreenPayloads.CraftingRelay close = new ObserverCraftingScreenPayloads.CraftingRelay(
                 targetId, ObserverCraftingScreenPayloads.PROTOCOL_VERSION, 2L, false,
-                ObserverNativeScreenPayloads.FAMILY_CRAFTING, "", "", "", 0, 0, 0, 0, 0, 0, 0, List.of());
+                ObserverNativeScreenPayloads.FAMILY_CRAFTING, "", "", "", 0, 0, 0, 0, 0, 0, 0,
+                false, false, false, false, "", 0, 0, false, List.of(), List.of());
         context.runOnClient(minecraft -> {
             invoke(ObserverNativeCraftingScreenClient.class, "acceptRelay",
                     new Class<?>[]{ObserverCraftingScreenPayloads.CraftingRelay.class}, close);
@@ -209,11 +302,31 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
         }
     }
 
+    private static boolean getStaticBoolean(Class<?> owner, String name) {
+        try {
+            Field field = owner.getDeclaredField(name);
+            field.setAccessible(true);
+            return field.getBoolean(null);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to read " + owner.getSimpleName() + "." + name, error);
+        }
+    }
+
     private static void invoke(Class<?> owner, String name, Class<?>[] parameterTypes, Object... args) {
         try {
             Method method = owner.getDeclaredMethod(name, parameterTypes);
             method.setAccessible(true);
             method.invoke(null, args);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Failed to invoke " + owner.getSimpleName() + "." + name, error);
+        }
+    }
+
+    private static Object invokeResult(Class<?> owner, String name, Class<?>[] parameterTypes, Object... args) {
+        try {
+            Method method = owner.getDeclaredMethod(name, parameterTypes);
+            method.setAccessible(true);
+            return method.invoke(null, args);
         } catch (ReflectiveOperationException error) {
             throw new RuntimeException("Failed to invoke " + owner.getSimpleName() + "." + name, error);
         }

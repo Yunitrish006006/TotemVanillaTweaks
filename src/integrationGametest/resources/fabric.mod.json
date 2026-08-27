@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "totem-vanilla-tweaks-integration-gametest",
+  "version": "1.0.0",
+  "name": "TotemVanillaTweaks Cross-module Integration GameTests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "dev.totem.vanillatweaks.client.ObserverCrossModuleProductionSenderClientGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "minecraft": "*",
+    "totem-core": "*",
+    "totem-vanilla-tweaks": "*",
+    "totem-remnant": "*",
+    "totem-automata": "*",
+    "totem-nexus": "*",
+    "totem-villagers": "*",
+    "totem-locksmith": "*"
+  }
+}

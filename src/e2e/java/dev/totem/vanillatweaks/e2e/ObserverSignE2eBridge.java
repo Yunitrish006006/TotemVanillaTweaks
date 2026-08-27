@@ -101,7 +101,8 @@ public final class ObserverSignE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeSignMirrorScreen")
-                && getBoolean(SIGN, "remoteOpen") && getLong(SIGN, "lastRemoteSequence") > 0L
+                && getBoolean(SIGN, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverSignScreenPayloads.FAMILY_ID) > 0L
                 && getLong(SIGN, "extractedFrames") > 0L;
     }
 

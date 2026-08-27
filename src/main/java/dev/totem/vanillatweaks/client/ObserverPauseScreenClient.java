@@ -80,7 +80,7 @@ public final class ObserverPauseScreenClient {
         remoteTitle = "";
     }
 
-    private static final class NativePauseMirrorScreen extends Screen {
+    private static final class NativePauseMirrorScreen extends ObserverMirrorScreen {
         private NativePauseMirrorScreen() {
             super(Component.literal("Observer Game Menu"));
         }

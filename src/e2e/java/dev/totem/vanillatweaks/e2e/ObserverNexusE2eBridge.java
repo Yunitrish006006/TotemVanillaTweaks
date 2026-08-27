@@ -201,7 +201,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 || !variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))) {
             return current;
         }
-        long sequence = getLong(NEXUS, "lastRemoteSequence");
+        long sequence = ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS);
         if (sequence <= 0L || (current != null && current.sequence() == sequence)) {
             return current;
         }
@@ -218,7 +218,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen().getClass().getName().contains("NativeNexusMirrorScreen")
                 && getBoolean(NEXUS, "remoteOpen")
                 && variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))
-                && getLong(NEXUS, "lastRemoteSequence") == barrier.sequence()
+                && ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS) == barrier.sequence()
                 && getLong(NEXUS, "extractedFrames") > barrier.frameBaseline();
     }
 

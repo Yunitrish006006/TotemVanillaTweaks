@@ -55,7 +55,10 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
                     || !getBoolean(LOOM, "remoteResultAvailable")
                     || getInt(LOOM, "remoteSelectedPatternIndex") != 5
                     || getInt(LOOM, "remoteStartRow") != 1
-                    || getListSize(LOOM, "remotePatternIds") != 20
+                    || getFloat(LOOM, "remoteScrollOffset") != 1.0F
+                    || getInt(LOOM, "remoteResultBaseColorId") != 0
+                    || getListSize(LOOM, "remotePatterns") != 20
+                    || getListSize(LOOM, "remoteResultLayers") != 1
                     || getListSize(LOOM, "remoteSlots") != 40) {
                 fail("Loom E2E semantic state mismatch");
                 return;
@@ -93,12 +96,26 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
     }
 
     private static ObserverLoomScreenPayloads.LoomState openState() {
-        List<String> patterns = new ArrayList<>();
-        for (int i = 0; i < 20; i++) patterns.add("minecraft:e2e_pattern_" + i);
         return new ObserverLoomScreenPayloads.LoomState(
                 ObserverLoomScreenPayloads.PROTOCOL_VERSION, ++targetSequence, true,
                 ObserverLoomScreenPayloads.FAMILY_ID, ObserverLoomScreenPayloads.SCREEN_CLASS,
-                "Loom", 5, 1, true, false, true, List.copyOf(patterns), slots());
+                "Loom", 5, 1, 1.0F, true, false, true, 0, patternStates(),
+                List.of(new ObserverLoomScreenPayloads.BannerLayerState("minecraft:stripe_bottom", 11)), slots());
+    }
+
+    private static List<ObserverLoomScreenPayloads.PatternState> patternStates() {
+        return List.of(
+                pattern("base"), pattern("square_bottom_left"), pattern("square_bottom_right"),
+                pattern("square_top_left"), pattern("square_top_right"), pattern("stripe_bottom"),
+                pattern("stripe_top"), pattern("stripe_left"), pattern("stripe_right"),
+                pattern("stripe_center"), pattern("stripe_middle"), pattern("stripe_downright"),
+                pattern("stripe_downleft"), pattern("stripe_small"), pattern("cross"),
+                pattern("straight_cross"), pattern("triangle_bottom"), pattern("triangle_top"),
+                pattern("triangles_bottom"), pattern("triangles_top"));
+    }
+
+    private static ObserverLoomScreenPayloads.PatternState pattern(String path) {
+        return new ObserverLoomScreenPayloads.PatternState("minecraft:" + path, "minecraft:" + path);
     }
 
     private static List<ObserverNativeScreenPayloads.SlotState> slots() {
@@ -118,7 +135,8 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeLoomMirrorScreen")
-                && getBoolean(LOOM, "remoteOpen") && getLong(LOOM, "lastRemoteSequence") > 0L
+                && getBoolean(LOOM, "remoteOpen")
+                && ObserverE2eSequenceEvidence.accepted(ObserverLoomScreenPayloads.FAMILY_ID) > 0L
                 && getLong(LOOM, "extractedFrames") > 0L;
     }
 
@@ -149,6 +167,10 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
     }
     private static long getLong(Class<?> owner, String name) {
         try { return field(owner, name).getLong(null); }
+        catch (IllegalAccessException error) { throw new RuntimeException(error); }
+    }
+    private static float getFloat(Class<?> owner, String name) {
+        try { return field(owner, name).getFloat(null); }
         catch (IllegalAccessException error) { throw new RuntimeException(error); }
     }
     private static int getListSize(Class<?> owner, String name) {

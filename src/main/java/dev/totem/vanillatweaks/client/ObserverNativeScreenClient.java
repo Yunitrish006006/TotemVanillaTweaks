@@ -13,6 +13,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
@@ -42,7 +43,6 @@ public final class ObserverNativeScreenClient {
     private static boolean targetContainerOpen;
     private static boolean targetFurnaceOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteContainerOpen;
     private static String remoteScreenClass = "";
     private static String remoteTitle = "";
@@ -134,10 +134,6 @@ public final class ObserverNativeScreenClient {
 
     static long genericExtractedFrames() {
         return genericExtractedFrames;
-    }
-
-    static long lastRemoteSequence() {
-        return lastRemoteSequence;
     }
 
     /**
@@ -292,17 +288,15 @@ public final class ObserverNativeScreenClient {
             return;
         }
 
-        if (supportsFurnace
-                && screen instanceof AbstractFurnaceScreen<?>
-                && minecraft.player.containerMenu instanceof AbstractFurnaceMenu furnaceMenu) {
+        if (supportsFurnace && screen instanceof AbstractFurnaceScreen<?> furnaceScreen) {
             closeTargetContainer(supportsContainer);
-            tickTargetFurnace(minecraft, screen, furnaceMenu);
+            tickTargetFurnace(minecraft, furnaceScreen);
             return;
         }
 
-        if (supportsContainer && screen instanceof AbstractContainerScreen<?>) {
+        if (supportsContainer && screen instanceof AbstractContainerScreen<?> containerScreen) {
             closeTargetFurnace(supportsFurnace);
-            tickTargetContainer(minecraft, screen);
+            tickTargetContainer(minecraft, containerScreen);
             return;
         }
 
@@ -310,18 +304,29 @@ public final class ObserverNativeScreenClient {
         closeTargetContainer(supportsContainer);
     }
 
-    private static void tickTargetContainer(Minecraft minecraft, Screen screen) {
+    private static void tickTargetContainer(
+            Minecraft minecraft,
+            AbstractContainerScreen<?> screen
+    ) {
         long now = System.nanoTime();
         if (targetContainerOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
             return;
         }
         targetContainerOpen = true;
         lastSnapshotNanos = now;
-        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft);
+        ClientPlayNetworking.send(captureContainerState(minecraft, screen, ++nextTargetSequence));
+    }
+
+    static ObserverNativeScreenPayloads.ContainerState captureContainerState(
+            Minecraft minecraft,
+            AbstractContainerScreen<?> screen,
+            long sequence
+    ) {
+        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft, screen.getMenu());
         String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
-        ClientPlayNetworking.send(new ObserverNativeScreenPayloads.ContainerState(
+        return new ObserverNativeScreenPayloads.ContainerState(
                 ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
                 screen.getClass().getName(),
@@ -331,21 +336,30 @@ public final class ObserverNativeScreenClient {
                 snapshot.mouseX(),
                 snapshot.mouseY(),
                 snapshot.slots()
-        ));
+        );
     }
 
-    private static void tickTargetFurnace(Minecraft minecraft, Screen screen, AbstractFurnaceMenu furnaceMenu) {
+    private static void tickTargetFurnace(Minecraft minecraft, AbstractFurnaceScreen<?> screen) {
         long now = System.nanoTime();
         if (targetFurnaceOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) {
             return;
         }
         targetFurnaceOpen = true;
         lastSnapshotNanos = now;
-        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft);
+        ClientPlayNetworking.send(captureFurnaceState(minecraft, screen, ++nextTargetSequence));
+    }
+
+    static ObserverNativeScreenPayloads.FurnaceState captureFurnaceState(
+            Minecraft minecraft,
+            AbstractFurnaceScreen<?> screen,
+            long sequence
+    ) {
+        AbstractFurnaceMenu furnaceMenu = screen.getMenu();
+        TargetScreenSnapshot snapshot = captureTargetScreen(minecraft, furnaceMenu);
         String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
-        ClientPlayNetworking.send(new ObserverNativeScreenPayloads.FurnaceState(
+        return new ObserverNativeScreenPayloads.FurnaceState(
                 ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_FURNACE,
                 screen.getClass().getName(),
@@ -358,7 +372,7 @@ public final class ObserverNativeScreenClient {
                 furnaceMenu.getBurnProgress(),
                 furnaceMenu.getLitProgress(),
                 furnaceMenu.isLit()
-        ));
+        );
     }
 
     private static void closeTargetContainer(boolean canSend) {
@@ -410,22 +424,25 @@ public final class ObserverNativeScreenClient {
         }
     }
 
-    private static TargetScreenSnapshot captureTargetScreen(Minecraft minecraft) {
+    private static TargetScreenSnapshot captureTargetScreen(
+            Minecraft minecraft,
+            AbstractContainerMenu menu
+    ) {
         List<ObserverNativeScreenPayloads.SlotState> slots = new ArrayList<>();
         int maxX = 0;
         int maxY = 0;
         int slotLimit = Math.min(
-                minecraft.player.containerMenu.slots.size(),
+                menu.slots.size(),
                 ObserverNativeScreenPayloads.MAX_SLOTS
         );
         for (int i = 0; i < slotLimit; i++) {
-            Slot slot = minecraft.player.containerMenu.slots.get(i);
+            Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
             String itemId = stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             int count = stack.isEmpty() ? 0 : stack.getCount();
             int damage = stack.isEmpty() ? 0 : stack.getDamageValue();
             slots.add(new ObserverNativeScreenPayloads.SlotState(
-                    slot.index,
+                    i,
                     slot.x,
                     slot.y,
                     itemId,
@@ -463,10 +480,11 @@ public final class ObserverNativeScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) {
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS,
+                        payload.targetId(), payload.sequence())) {
             return;
         }
-        lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemoteContainer();
             ensureBestRemoteScreen();
@@ -493,10 +511,11 @@ public final class ObserverNativeScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_FURNACE.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) {
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_FURNACE,
+                        payload.targetId(), payload.sequence())) {
             return;
         }
-        lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemoteFurnace();
             ensureBestRemoteScreen();
@@ -696,7 +715,7 @@ public final class ObserverNativeScreenClient {
     ) {
     }
 
-    private abstract static class NativeObserverScreen extends Screen {
+    private abstract static class NativeObserverScreen extends ObserverMirrorScreen {
         private NativeObserverScreen(Component title) {
             super(title);
         }

@@ -28,7 +28,6 @@ public final class ObserverLocksmithManagementScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static UUID remoteLockId;
@@ -86,8 +85,10 @@ public final class ObserverLocksmithManagementScreenClient {
     private static void tickTarget(Screen screen) {
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        ObserverLocksmithManagementPayloads.ManagementState state = capture(screen);
+        long sequence = nextTargetSequence + 1L;
+        ObserverLocksmithManagementPayloads.ManagementState state = captureTargetState(screen, sequence);
         if (state == null) return;
+        nextTargetSequence = sequence;
         targetOpen = true;
         lastSnapshotNanos = now;
         ClientPlayNetworking.send(state);
@@ -98,16 +99,18 @@ public final class ObserverLocksmithManagementScreenClient {
         targetOpen = false;
         lastSnapshotNanos = 0L;
         if (ObserverNativeClient.targetSupportsScreen(ObserverLocksmithManagementPayloads.CAPABILITY)) {
-            ClientPlayNetworking.send(ObserverLocksmithManagementPayloads.closed(++nextTargetSequence));
+            ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
         }
     }
 
-    private static ObserverLocksmithManagementPayloads.ManagementState capture(Screen screen) {
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverLocksmithManagementPayloads.ManagementState captureTargetState(Screen screen, long sequence) {
+        if (!isTargetScreen(screen)) throw new IllegalArgumentException("Expected TotemLocksmith ManagementScreen");
         try {
             Object menu = fieldValue(screen, "menu");
             Object snapshot = invoke(menu, "snapshot");
             return new ObserverLocksmithManagementPayloads.ManagementState(
-                    ObserverLocksmithManagementPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+                    ObserverLocksmithManagementPayloads.PROTOCOL_VERSION, sequence, true,
                     ObserverLocksmithManagementPayloads.FAMILY_ID, screen.getClass().getName(),
                     screen.getTitle() == null ? "" : screen.getTitle().getString(),
                     uuid(invoke(snapshot, "lockId")), longValue(invoke(snapshot, "revision")),
@@ -123,6 +126,10 @@ public final class ObserverLocksmithManagementScreenClient {
             TotemVanillaTweaks.LOGGER.debug("Unable to read TotemLocksmith management state", error);
             return null;
         }
+    }
+
+    public static ObserverLocksmithManagementPayloads.ManagementState closedTargetState(long sequence) {
+        return ObserverLocksmithManagementPayloads.closed(sequence);
     }
 
     private static List<ObserverLocksmithManagementPayloads.MemberState> members(Object value) {
@@ -162,8 +169,8 @@ public final class ObserverLocksmithManagementScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverLocksmithManagementPayloads.PROTOCOL_VERSION
                 || !ObserverLocksmithManagementPayloads.FAMILY_ID.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverLocksmithManagementPayloads.FAMILY_ID, p.targetId(), p.sequence())) return;
         if (!p.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -228,7 +235,7 @@ public final class ObserverLocksmithManagementScreenClient {
         remoteCandidates = List.of();
     }
 
-    private static final class NativeLocksmithManagementMirrorScreen extends Screen {
+    private static final class NativeLocksmithManagementMirrorScreen extends ObserverMirrorScreen {
         private NativeLocksmithManagementMirrorScreen() { super(Component.literal("Observer Locksmith Management")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {

@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -36,7 +37,6 @@ public final class ObserverAutomataCopperGolemScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static boolean remoteRunning;
@@ -121,11 +121,13 @@ public final class ObserverAutomataCopperGolemScreenClient {
     private static void tickTarget(Minecraft minecraft, Screen screen) {
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        Object snapshot = currentSnapshot(screen);
-        if (snapshot == null) return;
+        long sequence = nextTargetSequence + 1L;
+        ObserverAutomataCopperGolemPayloads.CopperGolemState state = captureTargetState(screen, sequence);
+        if (state == null) return;
+        nextTargetSequence = sequence;
         targetOpen = true;
         lastSnapshotNanos = now;
-        ClientPlayNetworking.send(captureState(minecraft, screen, snapshot, true));
+        ClientPlayNetworking.send(state);
     }
 
     private static void closeTargetIfNeeded() {
@@ -133,11 +135,14 @@ public final class ObserverAutomataCopperGolemScreenClient {
         targetOpen = false;
         lastSnapshotNanos = 0L;
         if (!ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_AUTOMATA_COPPER_GOLEM)) return;
-        ClientPlayNetworking.send(emptyState(++nextTargetSequence));
+        ClientPlayNetworking.send(closedTargetState(++nextTargetSequence));
     }
 
-    private static ObserverAutomataCopperGolemPayloads.CopperGolemState captureState(
-            Minecraft minecraft, Screen screen, Object snapshot, boolean open) {
+    /** Exact production extractor shared by the target tick and cross-module runtime gate. */
+    public static ObserverAutomataCopperGolemPayloads.CopperGolemState captureTargetState(Screen screen, long sequence) {
+        if (!isTargetScreen(screen)) throw new IllegalArgumentException("Expected TotemAutomata CopperGolemMenuScreen");
+        Object snapshot = currentSnapshot(screen);
+        if (snapshot == null) return null;
         Object ui = fieldValue(screen, "ui");
         String tab = lower(string(invoke(ui, "tab")));
         int selected = integer(invoke(ui, "selected"));
@@ -152,8 +157,8 @@ public final class ObserverAutomataCopperGolemScreenClient {
 
         return new ObserverAutomataCopperGolemPayloads.CopperGolemState(
                 ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
-                open,
+                sequence,
+                true,
                 ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM,
                 SCREEN_CLASS,
                 ObserverAutomataCopperGolemPayloads.SCREEN_TITLE,
@@ -199,10 +204,10 @@ public final class ObserverAutomataCopperGolemScreenClient {
                 strings(invoke(snapshot, "gatheringLlmAllowedTags")),
                 strings(invoke(snapshot, "gatheringLlmDeniedTags")),
                 bindings(invoke(snapshot, "bindings")),
-                captureSlots(minecraft));
+                captureSlots(screen));
     }
 
-    private static ObserverAutomataCopperGolemPayloads.CopperGolemState emptyState(long sequence) {
+    public static ObserverAutomataCopperGolemPayloads.CopperGolemState closedTargetState(long sequence) {
         return new ObserverAutomataCopperGolemPayloads.CopperGolemState(
                 ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION, sequence, false,
                 ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM, "", "", false, "", "", "bindings",
@@ -224,13 +229,16 @@ public final class ObserverAutomataCopperGolemScreenClient {
         }
     }
 
-    private static List<ObserverNativeScreenPayloads.SlotState> captureSlots(Minecraft minecraft) {
+    private static List<ObserverNativeScreenPayloads.SlotState> captureSlots(Screen screen) {
+        if (!(screen instanceof AbstractContainerScreen<?> container)) {
+            return List.of();
+        }
         List<ObserverNativeScreenPayloads.SlotState> result = new ArrayList<>();
-        int limit = Math.min(minecraft.player.containerMenu.slots.size(), ObserverNativeScreenPayloads.MAX_SLOTS);
+        int limit = Math.min(container.getMenu().slots.size(), ObserverNativeScreenPayloads.MAX_SLOTS);
         for (int i = 0; i < limit; i++) {
-            Slot slot = minecraft.player.containerMenu.slots.get(i);
+            Slot slot = container.getMenu().slots.get(i);
             ItemStack stack = slot.getItem();
-            result.add(new ObserverNativeScreenPayloads.SlotState(slot.index, slot.x, slot.y,
+            result.add(new ObserverNativeScreenPayloads.SlotState(i, slot.x, slot.y,
                     stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
                     stack.isEmpty() ? 0 : stack.getCount(), stack.isEmpty() ? 0 : stack.getDamageValue()));
         }
@@ -278,8 +286,9 @@ public final class ObserverAutomataCopperGolemScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverAutomataCopperGolemPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM,
+                        p.targetId(), p.sequence())) return;
         if (!p.open()) {
             clearRemote();
             closeMirror();
@@ -405,7 +414,7 @@ public final class ObserverAutomataCopperGolemScreenClient {
         }
     }
 
-    private static final class NativeAutomataCopperGolemMirrorScreen extends Screen {
+    private static final class NativeAutomataCopperGolemMirrorScreen extends ObserverMirrorScreen {
         private NativeAutomataCopperGolemMirrorScreen() { super(Component.literal("Observer Copper Golem")); }
 
         @Override

@@ -38,7 +38,7 @@ final class ObserverNativePayloadsTest {
         assertEquals(2, ObserverNativeScreenPayloads.SCREEN_PROTOCOL_VERSION);
         assertEquals(1, ObserverNativeScreenPayloads.FURNACE_PROTOCOL_VERSION);
         assertEquals(1, ObserverBookScreenPayloads.PROTOCOL_VERSION);
-        assertEquals(1, ObserverCraftingScreenPayloads.PROTOCOL_VERSION);
+        assertEquals(2, ObserverCraftingScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverMerchantScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverAnvilScreenPayloads.PROTOCOL_VERSION);
         assertEquals(1, ObserverEnchantingScreenPayloads.PROTOCOL_VERSION);
@@ -51,8 +51,8 @@ final class ObserverNativePayloadsTest {
         assertTrue(ObserverNativeScreenPayloads.FurnaceRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverBookScreenPayloads.BookState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverBookScreenPayloads.BookRelay.TYPE.id().getPath().endsWith("_v1"));
-        assertTrue(ObserverCraftingScreenPayloads.CraftingState.TYPE.id().getPath().endsWith("_v1"));
-        assertTrue(ObserverCraftingScreenPayloads.CraftingRelay.TYPE.id().getPath().endsWith("_v1"));
+        assertTrue(ObserverCraftingScreenPayloads.CraftingState.TYPE.id().getPath().endsWith("_v2"));
+        assertTrue(ObserverCraftingScreenPayloads.CraftingRelay.TYPE.id().getPath().endsWith("_v2"));
         assertTrue(ObserverMerchantScreenPayloads.MerchantState.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverMerchantScreenPayloads.MerchantRelay.TYPE.id().getPath().endsWith("_v1"));
         assertTrue(ObserverAnvilScreenPayloads.AnvilState.TYPE.id().getPath().endsWith("_v1"));

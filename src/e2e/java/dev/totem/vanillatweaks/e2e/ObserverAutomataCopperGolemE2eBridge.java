@@ -57,7 +57,8 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
                 && minecraft.gui.screen() != null
                 && minecraft.gui.screen().getClass().getName().contains("NativeAutomataCopperGolemMirrorScreen")
                 && getBoolean(AUTOMATA, "remoteOpen")
-                && getLong(AUTOMATA, "lastRemoteSequence") > 0L
+                && ObserverE2eSequenceEvidence.accepted(
+                        ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM) > 0L
                 && getLong(AUTOMATA, "extractedFrames") > 0L) {
             if (!"sorting".equals(String.valueOf(getObject(AUTOMATA, "remoteMode")))
                     || !"bindings".equals(String.valueOf(getObject(AUTOMATA, "remoteTab")))) {

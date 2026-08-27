@@ -1,6 +1,9 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.TotemVanillaTweaks;
+import dev.totem.vanillatweaks.mixin.client.AbstractRecipeBookScreenAccessor;
+import dev.totem.vanillatweaks.mixin.client.RecipeBookComponentAccessor;
+import dev.totem.vanillatweaks.mixin.client.RecipeBookPageAccessor;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -8,15 +11,31 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
+import net.minecraft.client.gui.screens.recipebook.SearchRecipeBookCategory;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.world.item.crafting.ExtendedRecipeBookCategory;
+import net.minecraft.world.item.crafting.RecipeBookCategory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,12 +48,27 @@ public final class ObserverNativeCraftingScreenClient {
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
     private static final int HEADER_GAP = 8;
+    private static final Identifier INVENTORY_BACKGROUND = Identifier.withDefaultNamespace(
+            "textures/gui/container/inventory.png");
+    private static final Identifier CRAFTING_TABLE_BACKGROUND = Identifier.withDefaultNamespace(
+            "textures/gui/container/crafting_table.png");
+    private static final Identifier RECIPE_BOOK_BACKGROUND = Identifier.withDefaultNamespace(
+            "textures/gui/recipe_book.png");
+    private static final Identifier RECIPE_BOOK_TAB_SELECTED = Identifier.withDefaultNamespace(
+            "recipe_book/tab_selected");
+    private static final Identifier RECIPE_BOOK_FILTER_ENABLED = Identifier.withDefaultNamespace(
+            "recipe_book/filter_enabled");
+    private static final Identifier RECIPE_BOOK_FILTER_DISABLED = Identifier.withDefaultNamespace(
+            "recipe_book/filter_disabled");
+    private static final Identifier EFFECT_BACKGROUND =
+            Identifier.withDefaultNamespace("container/inventory/effect_background");
+    private static final Identifier EFFECT_BACKGROUND_AMBIENT =
+            Identifier.withDefaultNamespace("container/inventory/effect_background_ambient");
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteVariant = "";
     private static String remoteScreenClass = "";
@@ -46,6 +80,15 @@ public final class ObserverNativeCraftingScreenClient {
     private static int remoteGridWidth;
     private static int remoteGridHeight;
     private static int remoteResultSlotIndex;
+    private static boolean remoteRecipeBookVisible;
+    private static boolean remoteRecipeBookWidthTooNarrow;
+    private static boolean remoteRecipeBookFiltering;
+    private static boolean remoteRecipeBookSearchActive;
+    private static String remoteSelectedRecipeBookTab = "";
+    private static int remoteRecipeBookPage;
+    private static int remoteRecipeBookPageCount;
+    private static boolean remoteActiveEffectsVisible;
+    private static List<ObserverCraftingScreenPayloads.EffectState> remoteActiveEffects = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
 
     private static boolean suppressMirrorStop;
@@ -192,16 +235,31 @@ public final class ObserverNativeCraftingScreenClient {
         targetOpen = true;
         lastSnapshotNanos = now;
 
-        TargetSnapshot snapshot = capture(minecraft);
+        ObserverCraftingScreenPayloads.CraftingState state = captureTargetState(minecraft, screen,
+                ++nextTargetSequence);
+        if (state == null) {
+            closeTarget(supported);
+            return;
+        }
+        ClientPlayNetworking.send(state);
+    }
+
+    static ObserverCraftingScreenPayloads.CraftingState captureTargetState(
+            Minecraft minecraft, Screen screen, long sequence) {
+        if (!isTargetCraftingScreen(screen) || !(screen instanceof AbstractContainerScreen<?> container)) {
+            return null;
+        }
+        TargetSnapshot snapshot = capture(minecraft, container.getMenu());
+        RecipeBookSnapshot recipeBook = captureRecipeBook(screen);
         boolean inventory = screen instanceof InventoryScreen;
         String variant = inventory
                 ? ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2
                 : ObserverCraftingScreenPayloads.VARIANT_TABLE_3X3;
         int grid = inventory ? 2 : 3;
         String title = screen.getTitle() == null ? "" : screen.getTitle().getString();
-        ClientPlayNetworking.send(new ObserverCraftingScreenPayloads.CraftingState(
+        return new ObserverCraftingScreenPayloads.CraftingState(
                 ObserverCraftingScreenPayloads.PROTOCOL_VERSION,
-                ++nextTargetSequence,
+                sequence,
                 true,
                 ObserverNativeScreenPayloads.FAMILY_CRAFTING,
                 variant,
@@ -214,8 +272,122 @@ public final class ObserverNativeCraftingScreenClient {
                 grid,
                 grid,
                 0,
-                snapshot.slots()
-        ));
+                recipeBook.visible(),
+                recipeBook.widthTooNarrow(),
+                recipeBook.filtering(),
+                recipeBook.searchActive(),
+                recipeBook.selectedTab(),
+                recipeBook.page(),
+                recipeBook.pageCount(),
+                inventory && ((InventoryScreen) screen).showsActiveEffects(),
+                inventory ? captureEffects(minecraft) : List.of(),
+                snapshot.slots());
+    }
+
+    private static List<ObserverCraftingScreenPayloads.EffectState> captureEffects(Minecraft minecraft) {
+        if (minecraft.player == null) return List.of();
+        return minecraft.player.getActiveEffects().stream()
+                .limit(ObserverCraftingScreenPayloads.MAX_EFFECTS)
+                .map(effect -> new ObserverCraftingScreenPayloads.EffectState(
+                        effect.getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse(""),
+                        effect.getAmplifier(), effect.getDuration(), effect.isAmbient(),
+                        effect.isVisible(), effect.showIcon()))
+                .toList();
+    }
+
+    private static RecipeBookSnapshot captureRecipeBook(Screen screen) {
+        if (!(screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+            return RecipeBookSnapshot.CLOSED;
+        }
+        AbstractRecipeBookScreenAccessor screenAccessor = (AbstractRecipeBookScreenAccessor) recipeBookScreen;
+        RecipeBookComponent<?> component = screenAccessor.totem$getRecipeBookComponent();
+        if (component == null) return RecipeBookSnapshot.CLOSED;
+        RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) component;
+        boolean visible = component.isVisible();
+        boolean filtering = componentAccessor.totem$getFilterButton() != null
+                && Boolean.TRUE.equals(componentAccessor.totem$getFilterButton().getValue());
+        // Deliberately transmit only whether a query exists, never the user's local draft text.
+        boolean searchActive = visible && componentAccessor.totem$getSearchBox() != null
+                && !componentAccessor.totem$getSearchBox().getValue().isBlank();
+        RecipeBookTabButton selectedTab = componentAccessor.totem$getSelectedTab();
+        String selectedTabId = selectedTab == null ? "" : recipeBookTabId(selectedTab.getCategory());
+        RecipeBookPage page = componentAccessor.totem$getRecipeBookPage();
+        int pageIndex = 0;
+        int pageCount = 0;
+        if (page != null) {
+            RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+            pageIndex = Math.max(0, pageAccessor.totem$getCurrentPage());
+            pageCount = Math.max(0, pageAccessor.totem$getTotalPages());
+        }
+        return new RecipeBookSnapshot(visible, screenAccessor.totem$getWidthTooNarrow(), filtering,
+                searchActive, selectedTabId, pageIndex, pageCount);
+    }
+
+    private static String recipeBookTabId(ExtendedRecipeBookCategory category) {
+        if (category instanceof SearchRecipeBookCategory search) {
+            return "search:" + search.name().toLowerCase(java.util.Locale.ROOT);
+        }
+        if (category instanceof RecipeBookCategory recipeCategory) {
+            Identifier id = BuiltInRegistries.RECIPE_BOOK_CATEGORY.getKey(recipeCategory);
+            return id == null ? "" : id.toString();
+        }
+        return "";
+    }
+
+    /** Converts bounded semantic tab ids into player-facing text without exposing registry/debug syntax. */
+    static String recipeBookTabLabel(String tabId) {
+        String safeId = tabId == null ? "" : tabId.trim().toLowerCase(java.util.Locale.ROOT);
+        String path = safeId.startsWith("search:")
+                ? safeId.substring("search:".length())
+                : safeId.substring(Math.max(0, safeId.indexOf(':') + 1));
+        String translationKey = switch (path) {
+            case "crafting" -> "container.crafting";
+            case "furnace" -> "container.furnace";
+            case "blast_furnace" -> "container.blast_furnace";
+            case "smoker" -> "container.smoker";
+            case "crafting_building_blocks", "furnace_blocks", "blast_furnace_blocks" ->
+                    "itemGroup.buildingBlocks";
+            case "crafting_redstone" -> "itemGroup.redstone";
+            case "crafting_equipment", "smithing" -> "itemGroup.tools";
+            case "furnace_food", "smoker_food", "campfire" -> "itemGroup.foodAndDrink";
+            case "crafting_misc", "furnace_misc", "blast_furnace_misc", "stonecutter" ->
+                    "itemGroup.ingredients";
+            default -> "";
+        };
+        if (!translationKey.isEmpty()) {
+            return Component.translatable(translationKey).getString();
+        }
+        if (path.isBlank()) {
+            return Component.translatable("itemGroup.search").getString();
+        }
+        String[] words = path.replace('-', '_').split("_+");
+        StringBuilder label = new StringBuilder();
+        for (String word : words) {
+            if (word.isBlank()) continue;
+            if (!label.isEmpty()) label.append(' ');
+            int first = word.offsetByCodePoints(0, 1);
+            label.append(word.substring(0, first).toUpperCase(java.util.Locale.ROOT));
+            label.append(word.substring(first));
+        }
+        return label.isEmpty() ? Component.translatable("itemGroup.search").getString() : label.toString();
+    }
+
+    private static List<ItemStack> recipeBookTabIcons(String tabId) {
+        String safeId = tabId == null ? "" : tabId.toLowerCase(java.util.Locale.ROOT);
+        String path = safeId.startsWith("search:")
+                ? safeId.substring("search:".length())
+                : safeId.substring(Math.max(0, safeId.indexOf(':') + 1));
+        return switch (path) {
+            case "crafting", "furnace", "blast_furnace", "smoker" -> List.of(new ItemStack(Items.COMPASS));
+            case "crafting_building_blocks", "furnace_blocks", "blast_furnace_blocks" ->
+                    List.of(new ItemStack(Items.BRICKS));
+            case "crafting_redstone" -> List.of(new ItemStack(Items.REDSTONE));
+            case "crafting_equipment", "smithing" ->
+                    List.of(new ItemStack(Items.IRON_AXE), new ItemStack(Items.GOLDEN_SWORD));
+            case "furnace_food", "smoker_food", "campfire" -> List.of(new ItemStack(Items.PORKCHOP));
+            case "stonecutter" -> List.of(new ItemStack(Items.STONECUTTER));
+            default -> List.of(new ItemStack(Items.COMPASS));
+        };
     }
 
     private static void closeTarget(boolean canSend) {
@@ -225,37 +397,21 @@ public final class ObserverNativeCraftingScreenClient {
         targetOpen = false;
         lastSnapshotNanos = 0L;
         if (canSend) {
-            ClientPlayNetworking.send(new ObserverCraftingScreenPayloads.CraftingState(
-                    ObserverCraftingScreenPayloads.PROTOCOL_VERSION,
-                    ++nextTargetSequence,
-                    false,
-                    ObserverNativeScreenPayloads.FAMILY_CRAFTING,
-                    "",
-                    "",
-                    "",
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    List.of()
-            ));
+            ClientPlayNetworking.send(ObserverCraftingScreenPayloads.closed(++nextTargetSequence));
         }
     }
 
-    private static TargetSnapshot capture(Minecraft minecraft) {
+    private static TargetSnapshot capture(Minecraft minecraft, AbstractContainerMenu menu) {
         List<ObserverNativeScreenPayloads.SlotState> slots = new ArrayList<>();
         int maxX = 0;
         int maxY = 0;
-        int limit = Math.min(minecraft.player.containerMenu.slots.size(), ObserverNativeScreenPayloads.MAX_SLOTS);
+        int limit = Math.min(menu.slots.size(), ObserverNativeScreenPayloads.MAX_SLOTS);
         for (int i = 0; i < limit; i++) {
-            Slot slot = minecraft.player.containerMenu.slots.get(i);
+            Slot slot = menu.slots.get(i);
             ItemStack stack = slot.getItem();
             String itemId = stack.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             slots.add(new ObserverNativeScreenPayloads.SlotState(
-                    slot.index,
+                    i,
                     slot.x,
                     slot.y,
                     itemId,
@@ -291,10 +447,11 @@ public final class ObserverNativeCraftingScreenClient {
                 || !targetId.equals(payload.targetId())
                 || payload.protocolVersion() != ObserverCraftingScreenPayloads.PROTOCOL_VERSION
                 || !ObserverNativeScreenPayloads.FAMILY_CRAFTING.equals(payload.familyId())
-                || payload.sequence() <= lastRemoteSequence) {
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverNativeScreenPayloads.FAMILY_CRAFTING,
+                        payload.targetId(), payload.sequence())) {
             return;
         }
-        lastRemoteSequence = payload.sequence();
         if (!payload.open()) {
             clearRemote();
             closeMirror();
@@ -313,6 +470,15 @@ public final class ObserverNativeCraftingScreenClient {
         remoteGridWidth = payload.gridWidth();
         remoteGridHeight = payload.gridHeight();
         remoteResultSlotIndex = payload.resultSlotIndex();
+        remoteRecipeBookVisible = payload.recipeBookVisible();
+        remoteRecipeBookWidthTooNarrow = payload.recipeBookWidthTooNarrow();
+        remoteRecipeBookFiltering = payload.recipeBookFiltering();
+        remoteRecipeBookSearchActive = payload.recipeBookSearchActive();
+        remoteSelectedRecipeBookTab = payload.selectedRecipeBookTab();
+        remoteRecipeBookPage = payload.recipeBookPage();
+        remoteRecipeBookPageCount = payload.recipeBookPageCount();
+        remoteActiveEffectsVisible = payload.activeEffectsVisible();
+        remoteActiveEffects = List.copyOf(payload.activeEffects());
         remoteSlots = List.copyOf(payload.slots());
         ensureMirror();
     }
@@ -357,6 +523,15 @@ public final class ObserverNativeCraftingScreenClient {
         remoteGridWidth = 0;
         remoteGridHeight = 0;
         remoteResultSlotIndex = 0;
+        remoteRecipeBookVisible = false;
+        remoteRecipeBookWidthTooNarrow = false;
+        remoteRecipeBookFiltering = false;
+        remoteRecipeBookSearchActive = false;
+        remoteSelectedRecipeBookTab = "";
+        remoteRecipeBookPage = 0;
+        remoteRecipeBookPageCount = 0;
+        remoteActiveEffectsVisible = false;
+        remoteActiveEffects = List.of();
         remoteSlots = List.of();
     }
 
@@ -388,7 +563,13 @@ public final class ObserverNativeCraftingScreenClient {
                                   List<ObserverNativeScreenPayloads.SlotState> slots) {
     }
 
-    private static final class NativeCraftingMirrorScreen extends Screen {
+    private record RecipeBookSnapshot(boolean visible, boolean widthTooNarrow, boolean filtering,
+                                      boolean searchActive, String selectedTab, int page, int pageCount) {
+        private static final RecipeBookSnapshot CLOSED =
+                new RecipeBookSnapshot(false, false, false, false, "", 0, 0);
+    }
+
+    private static final class NativeCraftingMirrorScreen extends ObserverMirrorScreen {
         private NativeCraftingMirrorScreen() {
             super(Component.literal("Observer Crafting"));
         }
@@ -409,32 +590,69 @@ public final class ObserverNativeCraftingScreenClient {
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(0, 0, width, height, 0x90000000);
-            int contentWidth = clamp(remoteContentWidth, 64, Math.max(64, width - 24));
-            int contentHeight = clamp(remoteContentHeight, 64, Math.max(64, height - 24));
-            int left = (width - contentWidth) / 2;
+            boolean playerInventory = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(remoteVariant);
+            int contentWidth = DEFAULT_CONTENT_WIDTH;
+            int contentHeight = DEFAULT_CONTENT_HEIGHT;
+            int left = remoteRecipeBookVisible && !remoteRecipeBookWidthTooNarrow
+                    ? 177 + (width - contentWidth - 200) / 2
+                    : (width - contentWidth) / 2;
             int top = (height - contentHeight) / 2;
-            graphics.fill(left - 7, top - 18, left + contentWidth + 7, top + contentHeight + 7, 0xEE202020);
-            graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
 
-            String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
-            String mode = "Crafting " + remoteGridWidth + "x" + remoteGridHeight + " / " + remoteVariant;
-            CraftingHeaderLayout header = craftingHeaderLayout(
-                    title, mode, contentWidth, this.minecraft.font::width);
-            graphics.text(this.minecraft.font, header.title(), left, top - 14, 0xFFFFFFFF, true);
-            graphics.text(this.minecraft.font, header.mode(),
-                    left + header.modeX(), top - 14, 0xFF9E9E9E, false);
+            Identifier background = playerInventory ? INVENTORY_BACKGROUND : CRAFTING_TABLE_BACKGROUND;
+            graphics.blit(RenderPipelines.GUI_TEXTURED, background, left, top, 0.0F, 0.0F,
+                    contentWidth, contentHeight, 256, 256);
 
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int slotX = left + slot.x();
-                int slotY = top + slot.y();
-                boolean result = slot.index() == remoteResultSlotIndex;
-                graphics.fill(slotX, slotY, slotX + 18, slotY + 18, result ? 0xFF8A7337 : 0xFF555555);
-                graphics.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, 0xFF171717);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) {
-                    graphics.item(stack, slotX + 1, slotY + 1);
-                    graphics.itemDecorations(this.minecraft.font, stack, slotX + 1, slotY + 1);
+            boolean showContainerContents = !(remoteRecipeBookVisible && remoteRecipeBookWidthTooNarrow);
+            if (showContainerContents) {
+                for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
+                    int slotX = left + slot.x();
+                    int slotY = top + slot.y();
+                    ItemStack stack = itemStack(slot);
+                    if (stack.isEmpty() && playerInventory) {
+                        Identifier empty = emptyInventorySlotSprite(slot.index());
+                        if (empty != null) {
+                            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, empty, slotX, slotY, 16, 16);
+                        }
+                    }
+                    if (!stack.isEmpty()) {
+                        graphics.item(stack, slotX, slotY);
+                        graphics.itemDecorations(this.minecraft.font, stack, slotX, slotY);
+                    }
                 }
+            }
+
+            if (remoteRecipeBookVisible) {
+                int bookX = (width - 147) / 2 - (remoteRecipeBookWidthTooNarrow ? 0 : 86);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, RECIPE_BOOK_BACKGROUND, bookX, top,
+                        1.0F, 1.0F, 147, 166, 256, 256);
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, RECIPE_BOOK_TAB_SELECTED,
+                        bookX - 32, top + 3, 35, 27);
+                List<ItemStack> tabIcons = recipeBookTabIcons(remoteSelectedRecipeBookTab);
+                if (tabIcons.size() > 1) {
+                    graphics.fakeItem(tabIcons.get(0), bookX - 31, top + 8);
+                    graphics.fakeItem(tabIcons.get(1), bookX - 20, top + 8);
+                } else {
+                    graphics.fakeItem(tabIcons.getFirst(), bookX - 25, top + 8);
+                }
+                String search = remoteRecipeBookSearchActive
+                        ? Component.translatable("itemGroup.search").getString()
+                        : Component.translatable("gui.recipebook.search_hint").getString();
+                graphics.text(font, fitHeaderText(search, 77, font::width), bookX + 27, top + 17,
+                        0xFFFFFFFF, true);
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                        remoteRecipeBookFiltering ? RECIPE_BOOK_FILTER_ENABLED : RECIPE_BOOK_FILTER_DISABLED,
+                        bookX + 110, top + 12, 26, 16);
+                String tab = recipeBookTabLabel(remoteSelectedRecipeBookTab);
+                graphics.text(font, fitHeaderText(tab, 92, font::width), bookX + 26, top + 34,
+                        0xFFFFFFFF, true);
+                if (remoteRecipeBookPageCount > 0) {
+                    String page = (remoteRecipeBookPage + 1) + "/" + remoteRecipeBookPageCount;
+                    graphics.centeredText(font, page, bookX + 73, top + 143, 0xFF404040);
+                }
+            }
+
+            if (remoteActiveEffectsVisible && playerInventory && !remoteActiveEffects.isEmpty()) {
+                extractEffects(graphics, left + contentWidth + 2, top);
             }
 
             int cursorX = left + remoteMouseX;
@@ -444,6 +662,64 @@ public final class ObserverNativeCraftingScreenClient {
                 graphics.fill(cursorX, cursorY - 4, cursorX + 1, cursorY + 5, 0xFFFFFFFF);
             }
             extractedFrames++;
+        }
+
+        private static Identifier emptyInventorySlotSprite(int slotIndex) {
+            return switch (slotIndex) {
+                case 5 -> InventoryMenu.EMPTY_ARMOR_SLOT_HELMET;
+                case 6 -> InventoryMenu.EMPTY_ARMOR_SLOT_CHESTPLATE;
+                case 7 -> InventoryMenu.EMPTY_ARMOR_SLOT_LEGGINGS;
+                case 8 -> InventoryMenu.EMPTY_ARMOR_SLOT_BOOTS;
+                case 45 -> InventoryMenu.EMPTY_ARMOR_SLOT_SHIELD;
+                default -> null;
+            };
+        }
+
+        private void extractEffects(GuiGraphicsExtractor graphics, int x, int top) {
+            int available = Math.max(32, width - x);
+            int panelWidth = available >= 120 ? Math.min(available - 7, 120) : 32;
+            int spacing = remoteActiveEffects.size() > 5
+                    ? Math.max(1, 132 / (remoteActiveEffects.size() - 1)) : 33;
+            int y = top;
+            for (ObserverCraftingScreenPayloads.EffectState effect : remoteActiveEffects) {
+                var resolved = resolveEffect(effect.effectId());
+                if (resolved == null) continue;
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                        effect.ambient() ? EFFECT_BACKGROUND_AMBIENT : EFFECT_BACKGROUND,
+                        x, y, panelWidth, 32);
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, Hud.getMobEffectSprite(resolved),
+                        x + 7, y + 7, 18, 18);
+                if (panelWidth > 32) {
+                    MobEffectInstance instance = new MobEffectInstance(resolved, effect.durationTicks(),
+                            effect.amplifier(), effect.ambient(), effect.visible(), effect.showIcon());
+                    Component name = effectName(instance);
+                    Component duration = MobEffectUtil.formatDuration(instance, 1.0F,
+                            minecraft.level == null ? 20.0F : minecraft.level.tickRateManager().tickrate());
+                    int textWidth = panelWidth - 39;
+                    graphics.text(font, fitHeaderText(name.getString(), textWidth, font::width),
+                            x + 32, y + 7, 0xFFFFFFFF, false);
+                    graphics.text(font, fitHeaderText(duration.getString(), textWidth, font::width),
+                            x + 32, y + 16, 0xFF808080, false);
+                }
+                y += spacing;
+            }
+        }
+
+        private static Component effectName(MobEffectInstance effect) {
+            var name = effect.getEffect().value().getDisplayName().copy();
+            if (effect.getAmplifier() >= 1 && effect.getAmplifier() <= 9) {
+                name.append(" ").append(Component.translatable("potion.potency." + effect.getAmplifier()));
+            }
+            return name;
+        }
+
+        private static net.minecraft.core.Holder<MobEffect> resolveEffect(String effectId) {
+            try {
+                MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(Identifier.parse(effectId));
+                return effect == null ? null : BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);
+            } catch (RuntimeException error) {
+                return null;
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
 
@@ -56,9 +57,8 @@ public final class ObserverUiClient {
                 payload.open(), payload.screenClass(), payload.title())) {
             return;
         }
-        if (payload.open() && (ObserverNativeBookScreenClient.hasStructuredRemoteScreen()
-                || ObserverNativeCraftingScreenClient.hasStructuredRemoteScreen()
-                || ObserverNativeMerchantScreenClient.hasStructuredRemoteScreen())) {
+        if (payload.open() && ObserverStructuredScreenPolicy.suppressGenericMetadata(
+                payload.screenClass(), ObserverNativeClient.observerScreenCapabilities())) {
             return;
         }
         ObserverNativeScreenClient.applyGenericScreenState(payload.open(), payload.screenClass(), payload.title());
@@ -70,20 +70,28 @@ public final class ObserverUiClient {
             return;
         }
 
-        Screen screen = minecraft.gui.screen();
-        boolean screenOpen = screen != null
-                && !ObserverNativeScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverNativeBookScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverNativeCraftingScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverNativeMerchantScreenClient.isNativeMirrorScreen(screen)
-                && !ObserverPauseScreenClient.isNativeMirrorScreen(screen);
-        String screenClass = screenOpen ? screen.getClass().getName() : "";
-        String title = screenOpen && screen.getTitle() != null ? screen.getTitle().getString() : "";
-        String key = screenOpen + "\u0000" + screenClass + "\u0000" + title;
+        ObserverPayloads.ScreenState state = captureScreenMetadata(minecraft.gui.screen());
+        String key = state.open() + "\u0000" + state.screenClass() + "\u0000" + state.title();
         if (key.equals(lastScreenKey)) {
             return;
         }
         lastScreenKey = key;
-        ClientPlayNetworking.send(new ObserverPayloads.ScreenState(screenOpen, screenClass, title));
+        ClientPlayNetworking.send(state);
+    }
+
+    /**
+     * Captures only public screen identity metadata. Screen-private fields such
+     * as a ChatScreen draft or unsent command are deliberately never read.
+     */
+    static ObserverPayloads.ScreenState captureScreenMetadata(Screen screen) {
+        if (screen == null || ObserverMirrorScreen.isMirror(screen)) {
+            return new ObserverPayloads.ScreenState(false, "", "");
+        }
+        Component title = screen.getTitle();
+        return new ObserverPayloads.ScreenState(
+                true,
+                screen.getClass().getName(),
+                title == null ? "" : title.getString()
+        );
     }
 }

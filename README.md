@@ -57,10 +57,11 @@ negotiated semantic family capability：
   `locksmith_management`、`villagers_woodcutter`。
 
 `container_slots` 仍負責可以由通用 `AbstractContainerScreen` 槽位資料充分表達的畫面；
-其餘 family 傳送各自需要的結構化狀態。這份支援表不把 Death、Horse／Mount、Sleep、
-Recipe Book、Chat 或 Social Interactions 宣稱為 dedicated semantic adapter；未列出的
-Screen 會依通用容器能力或 metadata-only 規則處理。Chat metadata 不包含玩家尚未送出的
-聊天或指令文字。
+其餘 family 傳送各自需要的結構化狀態。Recipe Book 不另占 capability bit，而是由
+`crafting` family 傳送開關、寬度模式、過濾、「是否正在搜尋」、分頁與類別等語意狀態；
+玩家輸入的搜尋文字不會傳送。Death、Horse／Mount、Sleep、Chat 與 Social Interactions
+沒有獨立 family，會依通用容器能力或 metadata-only 規則處理。Chat metadata 也不包含
+玩家尚未送出的聊天或指令文字。
 
 Server 會為每個 Observer 記錄 negotiated capability，把同一 Target 所需 capability 的
 聯集下發給 Target，再按每個 Observer 的 mask 個別過濾 semantic relay。若某個 screen

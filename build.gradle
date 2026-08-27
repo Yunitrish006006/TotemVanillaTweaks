@@ -8,7 +8,19 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.0.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.11.jar'))
+def observerIntegrationJars = [
+        remnant   : file(providers.gradleProperty('totemRemnantJar')
+                .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.15.jar')),
+        automata  : file(providers.gradleProperty('totemAutomataJar')
+                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.16.jar')),
+        nexus     : file(providers.gradleProperty('totemNexusJar')
+                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.5.jar')),
+        villagers : file(providers.gradleProperty('totemVillagersJar')
+                .getOrElse('../TotemVillagers/build/libs/totem-villagers-0.1.32.jar')),
+        locksmith : file(providers.gradleProperty('totemLocksmithJar')
+                .getOrElse('../TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar'))
+]
 
 def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
 
@@ -23,12 +35,23 @@ sourceSets {
         compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
         runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
     }
+    integrationGametest {
+        java.setSrcDirs(['src/integrationGametest/java'])
+        resources.setSrcDirs(['src/integrationGametest/resources'])
+        compileClasspath += sourceSets.main.output.classesDirs
+        compileClasspath += configurations.compileClasspath
+        compileClasspath += files(observerIntegrationJars.values())
+        runtimeClasspath += output + sourceSets.main.output
+        runtimeClasspath += configurations.runtimeClasspath
+        runtimeClasspath += files(observerIntegrationJars.values())
+    }
 }
 
 loom {
     mods {
         'totem-vanilla-tweaks' { sourceSet sourceSets.main }
         'totem-vanilla-tweaks-e2e' { sourceSet sourceSets.e2e }
+        'totem-vanilla-tweaks-integration-gametest' { sourceSet sourceSets.integrationGametest }
     }
     runs {
         e2eServer {
@@ -64,6 +87,14 @@ loom {
             programArg '--username'
             programArg 'Observer'
         }
+        integrationClientGametest {
+            client()
+            configName = 'Observer Cross-module Integration Client GameTest'
+            runDir = 'build/run/integrationClientGametest'
+            source = sourceSets.integrationGametest
+            vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+        }
     }
 }
 
@@ -94,6 +125,29 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('compileIntegrationGametestJava').configure {
+    doFirst {
+        observerIntegrationJars.each { module, jarFile ->
+            if (!jarFile.isFile()) {
+                throw new GradleException("Missing pinned Observer integration JAR for ${module}: ${jarFile}")
+            }
+        }
+    }
+}
+
+tasks.named('runIntegrationClientGametest').configure {
+    dependsOn(sourceSets.integrationGametest.classesTaskName,
+            sourceSets.integrationGametest.processResourcesTaskName)
+    doFirst {
+        File dir = file('build/run/integrationClientGametest')
+        dir.mkdirs()
+        new File(dir, 'options.txt').text = '''onboardAccessibility:false
+skipMultiplayerWarning:true
+tutorialStep:none
+'''
+    }
 }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }

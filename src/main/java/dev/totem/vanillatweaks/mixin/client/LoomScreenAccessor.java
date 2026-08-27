@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 /** Read-only semantic access to Loom viewport state. */
 @Mixin(LoomScreen.class)
 public interface LoomScreenAccessor {
+    @Accessor("scrollOffs") float totem$getScrollOffs();
     @Accessor("startRow") int totem$getStartRow();
     @Accessor("displayPatterns") boolean totem$getDisplayPatterns();
     @Accessor("hasMaxPatterns") boolean totem$getHasMaxPatterns();

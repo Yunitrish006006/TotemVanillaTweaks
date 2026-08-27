@@ -39,7 +39,6 @@ public final class ObserverAdvancementsScreenClient {
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
 
-    private static long lastRemoteSequence = -1L;
     private static boolean remoteOpen;
     private static String remoteTitle = "";
     private static String remoteSelectedRootId = "";
@@ -90,7 +89,8 @@ public final class ObserverAdvancementsScreenClient {
     private static void tickTarget(Minecraft minecraft, AdvancementsScreen screen) {
         long now = System.nanoTime();
         if (targetOpen && now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
-        ObserverAdvancementsScreenPayloads.AdvancementsState state = capture(minecraft, screen);
+        ObserverAdvancementsScreenPayloads.AdvancementsState state =
+                captureTargetState(minecraft, screen, ++nextTargetSequence);
         if (state == null) return;
         targetOpen = true;
         lastSnapshotNanos = now;
@@ -106,7 +106,8 @@ public final class ObserverAdvancementsScreenClient {
         }
     }
 
-    private static ObserverAdvancementsScreenPayloads.AdvancementsState capture(Minecraft minecraft, AdvancementsScreen screen) {
+    private static ObserverAdvancementsScreenPayloads.AdvancementsState captureTargetState(
+            Minecraft minecraft, AdvancementsScreen screen, long sequence) {
         ClientAdvancements manager = minecraft.getConnection().getAdvancements();
         AdvancementTree tree = manager.getTree();
         Map<AdvancementHolder, AdvancementProgress> progress =
@@ -122,7 +123,7 @@ public final class ObserverAdvancementsScreenClient {
         List<ObserverAdvancementsScreenPayloads.NodeState> nodes = captureNodes(tree, progress, selectedRootId);
 
         return new ObserverAdvancementsScreenPayloads.AdvancementsState(
-                ObserverAdvancementsScreenPayloads.PROTOCOL_VERSION, ++nextTargetSequence, true,
+                ObserverAdvancementsScreenPayloads.PROTOCOL_VERSION, sequence, true,
                 ObserverAdvancementsScreenPayloads.FAMILY_ID, screen.getClass().getName(),
                 screen.getTitle() == null ? "" : screen.getTitle().getString(), selectedRootId,
                 scrollX, scrollY, tabs, nodes);
@@ -183,8 +184,8 @@ public final class ObserverAdvancementsScreenClient {
                 || targetId == null || !targetId.equals(p.targetId())
                 || p.protocolVersion() != ObserverAdvancementsScreenPayloads.PROTOCOL_VERSION
                 || !ObserverAdvancementsScreenPayloads.FAMILY_ID.equals(p.familyId())
-                || p.sequence() <= lastRemoteSequence) return;
-        lastRemoteSequence = p.sequence();
+                || !ObserverRemoteSequenceTracker.accept(
+                        ObserverAdvancementsScreenPayloads.FAMILY_ID, p.targetId(), p.sequence())) return;
         if (!p.open()) { clearRemote(); closeMirror(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
@@ -235,7 +236,7 @@ public final class ObserverAdvancementsScreenClient {
         }
     }
 
-    private static final class NativeAdvancementsMirrorScreen extends Screen {
+    private static final class NativeAdvancementsMirrorScreen extends ObserverMirrorScreen {
         private NativeAdvancementsMirrorScreen() { super(Component.literal("Observer Advancements")); }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {
