@@ -1,8 +1,8 @@
 {
   "version": "0.1.19",
-  "release_ref": "release/observer-0.1.19",
+  "release_ref": "main",
   "release_type": "beta",
-  "run": "33111660385",
-  "status": "success",
-  "publish_step": "success"
+  "run": "33114245817",
+  "status": "failure",
+  "publish_step": "failure"
 }
