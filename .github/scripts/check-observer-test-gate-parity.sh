@@ -200,6 +200,24 @@ fi
 if grep -Eq '^[[:space:]]+test([[:space:]]|$)' "$publish_workflow"; then
   fail 'Modrinth publication preconditions must emit explicit non-secret errors instead of bare test exits'
 fi
+release_dry_run_filter='(.dry_run // false) | booleans | tostring'
+if ! grep -Fq "jq -er '$release_dry_run_filter'" "$publish_workflow"; then
+  fail 'Modrinth release requests must accept false without weakening dry_run boolean validation'
+fi
+for dry_run_case in '{}' '{"dry_run":null}' '{"dry_run":false}' '{"dry_run":true}'; do
+  expected_dry_run=false
+  [[ "$dry_run_case" == '{"dry_run":true}' ]] && expected_dry_run=true
+  if ! actual_dry_run="$(jq -er "$release_dry_run_filter" <<<"$dry_run_case")"; then
+    fail "Modrinth dry_run parser rejected valid input $dry_run_case"
+  elif [[ "$actual_dry_run" != "$expected_dry_run" ]]; then
+    fail "Modrinth dry_run parser returned $actual_dry_run for $dry_run_case; expected $expected_dry_run"
+  fi
+done
+for dry_run_case in '{"dry_run":"false"}' '{"dry_run":0}' '{"dry_run":[]}' '{"dry_run":{}}'; do
+  if jq -er "$release_dry_run_filter" <<<"$dry_run_case" >/dev/null 2>&1; then
+    fail "Modrinth dry_run parser accepted non-boolean input $dry_run_case"
+  fi
+done
 if ! grep -Fq 'productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"' "$build_script" \
     || ! grep -Fq 'productionRuntimeMods files(totemCoreJar)' "$build_script"; then
   fail 'Production Runtime must load the official Fabric API and pinned TotemCore jars'
