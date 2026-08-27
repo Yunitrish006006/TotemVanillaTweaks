@@ -493,6 +493,10 @@ jobs:
                                             and .version_id==null
                                             and .dependency_type=="required")] | length)==1' \
             /tmp/remote.json >/dev/null; then
+            if ! dependency_summary="$(jq -c -f .github/scripts/modrinth-dependency-summary.jq /tmp/remote.json)"; then
+              dependency_summary='{"dependency_count":null,"dependencies":[]}'
+            fi
+            printf 'Published Modrinth dependency summary: %s\n' "$dependency_summary" >&2
             echo "Published Modrinth metadata verification failed; expected exactly Fabric API plus required external ${core_dependency_file}." >&2
             exit 1
           fi
