@@ -190,6 +190,16 @@ if ! grep -Fq 'and (.dependencies | length)==2' "$publish_workflow" \
     || [[ "$(grep -Fc 'dependency_type=="required"' "$publish_workflow" || true)" != 2 ]]; then
   fail 'Modrinth remote verification must require exactly Fabric API and TotemCore dependencies'
 fi
+if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" clean jar --no-daemon --stacktrace' "$publish_workflow" \
+    || ! grep -Fq 'version ${v} already exists with a different artifact SHA-512; refusing to overwrite it. Bump mod_version.' "$publish_workflow" \
+    || ! grep -Fq "fetch_modrinth_json 'release versions'" "$publish_workflow" \
+    || ! grep -Fq '.project_type == "mod"' "$publish_workflow" \
+    || ! grep -Fq 'requested_status=' "$publish_workflow"; then
+  fail 'Modrinth publication must clean-build its JAR and report project state plus explicit existing-version conflicts'
+fi
+if grep -Eq '^[[:space:]]+test([[:space:]]|$)' "$publish_workflow"; then
+  fail 'Modrinth publication preconditions must emit explicit non-secret errors instead of bare test exits'
+fi
 if ! grep -Fq 'productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"' "$build_script" \
     || ! grep -Fq 'productionRuntimeMods files(totemCoreJar)' "$build_script"; then
   fail 'Production Runtime must load the official Fabric API and pinned TotemCore jars'

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.18",
+  "version": "0.1.19",
   "release_ref": "main",
   "release_type": "beta",
   "dry_run": false,
-  "request_id": "modrinth-0.1.18-beta-publish-20260827",
-  "reason": "Publish the fully validated TotemVanillaTweaks 0.1.18 Beta release candidate with 24 framebuffer-free Observer semantic families and exhaustive release gates."
+  "request_id": "modrinth-0.1.19-beta-publish-20260828",
+  "reason": "Publish TotemVanillaTweaks 0.1.19 Beta with the completed 24-family framebuffer-free Observer update, exhaustive release gates, and an exact required external TotemCore 0.7.11 file dependency."
 }
