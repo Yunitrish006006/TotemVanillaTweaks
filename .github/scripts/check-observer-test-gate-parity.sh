@@ -430,6 +430,27 @@ for checkout in \
     fail "cross-module integration build script is missing exact checkout $checkout"
   fi
 done
+production_jar_assertion_count="$(grep -Ec '^assert_production_jar ' "$integration_build_script" || true)"
+if [[ "$production_jar_assertion_count" != 7 ]]; then
+  fail "cross-module integration build script must validate all seven production JARs; found $production_jar_assertion_count"
+fi
+if ! grep -Fq '*/build/libs/*.jar)' "$integration_build_script" \
+    || ! grep -Fq '*-dev.jar|*-sources.jar)' "$integration_build_script" \
+    || ! grep -Fq "jar tf \"\$archive\"" "$integration_build_script" \
+    || ! grep -Fq "unzip -p \"\$archive\" fabric.mod.json" "$integration_build_script"; then
+  fail 'cross-module integration build script must reject dev/source/test-only artifacts and verify production mod metadata'
+fi
+remnant_build_step="$({
+  awk '
+    index($0, "\"$wrapper\" -p \"$lockstep_root/TotemRemnant\"") { in_step = 1 }
+    in_step { print }
+    in_step && /^assert_production_jar "\$remnant_jar"/ { exit }
+  ' "$integration_build_script"
+} || true)"
+if ! grep -Fq 'remapJar --no-daemon --stacktrace' <<< "$remnant_build_step" \
+    || grep -Fq ' jar --no-daemon --stacktrace' <<< "$remnant_build_step"; then
+  fail 'pinned Remnant split-environment checkout must use remapJar for its build/libs production artifact'
+fi
 
 # Every local semantic reconstruction uses one exact marker base. This prevents
 # an Observer that is itself a target from retransmitting a mirror into a nested
