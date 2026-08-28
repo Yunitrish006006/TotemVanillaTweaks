@@ -17,6 +17,7 @@ workflow="$repo_root/.github/workflows/build.yml"
 production_workflow="$repo_root/.github/workflows/production-runtime.yml"
 publish_workflow="$repo_root/.github/workflows/publish-modrinth.yml"
 dependency_summary_filter="$repo_root/.github/scripts/modrinth-dependency-summary.jq"
+remote_dependency_filter="$repo_root/.github/scripts/verify-modrinth-remote-dependencies.jq"
 build_script="$repo_root/build.gradle"
 integration_build_script="$repo_root/.github/scripts/build-observer-integration-jars.sh"
 
@@ -181,15 +182,36 @@ if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.11.jar' "$publish_work
     || grep -Fq 'TOTEM_CORE_PROJECT_ID:' "$publish_workflow"; then
   fail 'Modrinth publication must use the exact built TotemCore external dependency, never a stale or guessed project/version ID'
 fi
-if ! grep -Fq 'and (.dependencies | length)==2' "$publish_workflow" \
-    || ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]' "$publish_workflow" \
+if ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]' "$publish_workflow" \
     || ! grep -Fq 'core_dependency_file="${core_archive}-${core_version}.jar"' "$publish_workflow" \
     || ! grep -Fq 'core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact"' "$publish_workflow" \
-    || ! grep -Fq '.file_name==$core_file' "$publish_workflow" \
-    || ! grep -Fq '.project_id==null' "$publish_workflow" \
-    || ! grep -Fq '.version_id==null' "$publish_workflow" \
-    || [[ "$(grep -Fc 'dependency_type=="required"' "$publish_workflow" || true)" != 2 ]]; then
-  fail 'Modrinth remote verification must require exactly Fabric API and TotemCore dependencies'
+    || ! grep -Fq -- '-f .github/scripts/verify-modrinth-remote-dependencies.jq' "$publish_workflow" \
+    || [[ ! -f "$remote_dependency_filter" ]]; then
+  fail 'Modrinth publication must submit the exact TotemCore file and reuse the strict remote dependency verifier'
+fi
+if [[ -f "$remote_dependency_filter" ]]; then
+  remote_dependencies_exact='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.11.jar"}]}'
+  remote_dependencies_normalized='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null}]}'
+  remote_dependencies_wrong_file='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"wrong-core.jar"}]}'
+  remote_dependencies_extra='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null},{"dependency_type":"optional","project_id":"extra","version_id":null,"file_name":null}]}'
+
+  for accepted_dependencies in "$remote_dependencies_exact" "$remote_dependencies_normalized"; do
+    if ! jq -e \
+        --arg fabric 'P7dR8mSH' \
+        --arg core_file 'totem-core-0.7.11.jar' \
+        -f "$remote_dependency_filter" <<<"$accepted_dependencies" >/dev/null; then
+      fail 'Modrinth remote dependency verifier must accept exact and normalized-null TotemCore file_name metadata'
+    fi
+  done
+
+  for rejected_dependencies in "$remote_dependencies_wrong_file" "$remote_dependencies_extra"; do
+    if jq -e \
+        --arg fabric 'P7dR8mSH' \
+        --arg core_file 'totem-core-0.7.11.jar' \
+        -f "$remote_dependency_filter" <<<"$rejected_dependencies" >/dev/null; then
+      fail 'Modrinth remote dependency verifier must reject wrong TotemCore file names and extra dependencies'
+    fi
+  done
 fi
 if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" clean jar --no-daemon --stacktrace' "$publish_workflow" \
     || ! grep -Fq 'version ${v} already exists with a different artifact SHA-512; refusing to overwrite it. Bump mod_version.' "$publish_workflow" \
