@@ -2,7 +2,7 @@
   "version": "0.1.19",
   "release_ref": "main",
   "release_type": "beta",
-  "run": "33140231126",
-  "status": "failure",
-  "publish_step": "failure"
+  "run": "33141901470",
+  "status": "success",
+  "publish_step": "success"
 }
