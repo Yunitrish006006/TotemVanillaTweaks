@@ -16,6 +16,7 @@ e2e_manifest="$repo_root/src/e2e/resources/fabric.mod.json"
 workflow="$repo_root/.github/workflows/build.yml"
 production_workflow="$repo_root/.github/workflows/production-runtime.yml"
 publish_workflow="$repo_root/.github/workflows/publish-modrinth.yml"
+dependency_summary_filter="$repo_root/.github/scripts/modrinth-dependency-summary.jq"
 build_script="$repo_root/build.gradle"
 integration_build_script="$repo_root/.github/scripts/build-observer-integration-jars.sh"
 
@@ -196,6 +197,27 @@ if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" clean jar --no-daemon --stac
     || ! grep -Fq '.project_type == "mod"' "$publish_workflow" \
     || ! grep -Fq 'requested_status=' "$publish_workflow"; then
   fail 'Modrinth publication must clean-build its JAR and report project state plus explicit existing-version conflicts'
+fi
+if [[ ! -f "$dependency_summary_filter" ]] \
+    || ! grep -Fq 'jq -c -f .github/scripts/modrinth-dependency-summary.jq /tmp/remote.json' "$publish_workflow" \
+    || ! grep -Fq "printf 'Published Modrinth dependency summary: %s\\n' \"\$dependency_summary\" >&2" "$publish_workflow"; then
+  fail 'Modrinth verification failures must emit the dedicated redacted dependency summary'
+else
+  dependency_summary_input='{"token":"must-not-leak","author":{"id":"private"},"unrelated":"must-not-leak","dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"private":"must-not-leak"},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.11.jar","private":"must-not-leak"}]}'
+  dependency_summary_expected='{"dependency_count":2,"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name_present":false,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name_present":true,"file_name":"totem-core-0.7.11.jar"}]}'
+  if ! dependency_summary_actual="$(jq -c -f "$dependency_summary_filter" <<<"$dependency_summary_input")"; then
+    fail 'Modrinth dependency summary filter rejected valid metadata'
+  elif [[ "$dependency_summary_actual" != "$dependency_summary_expected" ]]; then
+    fail 'Modrinth dependency summary filter emitted fields beyond the approved projection'
+  fi
+
+  dependency_summary_invalid='{"token":"must-not-leak","dependencies":{"unexpected":"must-not-leak"}}'
+  dependency_summary_empty='{"dependency_count":null,"dependencies":[]}'
+  if ! dependency_summary_actual="$(jq -c -f "$dependency_summary_filter" <<<"$dependency_summary_invalid")"; then
+    fail 'Modrinth dependency summary filter rejected non-array dependency metadata'
+  elif [[ "$dependency_summary_actual" != "$dependency_summary_empty" ]]; then
+    fail 'Modrinth dependency summary filter must redact malformed dependency metadata'
+  fi
 fi
 if grep -Eq '^[[:space:]]+test([[:space:]]|$)' "$publish_workflow"; then
   fail 'Modrinth publication preconditions must emit explicit non-secret errors instead of bare test exits'
