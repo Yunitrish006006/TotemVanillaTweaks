@@ -45,11 +45,11 @@ assert_production_jar() {
 
 assert_checkout TotemCore e9dc2975cca37210f9d3bab2df4830e81af77295 0.7.12
 assert_checkout TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8
-assert_checkout TotemRemnant 954ac6667384b65f45d513d5e9e9d8efd9627266 0.2.15
-assert_checkout TotemAutomata 0fb0833f264a1b2026e8784ca1f412cae2bf690d 0.1.17
-assert_checkout TotemNexus d88107984f54aa34c094d297ce647cf45068a132 0.3.5
-assert_checkout TotemVillagers 1cca1c7b404be4c4f409f48cdf486e42f8d249a0 0.1.32
-assert_checkout TotemLocksmith 3c62c42e38b356bf3a834078796dbc8c40f7ad5f 0.1.5
+assert_checkout TotemRemnant a3f9231b50c6c55f03a8c145e80644bd6cff7021 0.2.16
+assert_checkout TotemAutomata b007eeb0ef0417804fe2abb25524842480419ae1 0.1.18
+assert_checkout TotemNexus 0267e2d4017c3a97a9389f71903b5b26744eff23 0.3.6
+assert_checkout TotemVillagers c4d37815c45b86f102939ec5e43b171692a406e0 0.1.33
+assert_checkout TotemLocksmith c89d380b88b10a3f0f55044e04266bc8ada70357 0.1.6
 
 chmod +x "$wrapper"
 "$wrapper" -p "$core" jar --no-daemon --stacktrace
@@ -62,32 +62,32 @@ assert_production_jar "$excavation_jar" totem-excavation 0.1.8
 
 "$wrapper" -p "$lockstep_root/TotemRemnant" \
   -PtotemCoreJar="$core_jar" remapJar --no-daemon --stacktrace
-remnant_jar="$lockstep_root/TotemRemnant/build/libs/totem-remnant-0.2.15.jar"
-assert_production_jar "$remnant_jar" totem-remnant 0.2.15
+remnant_jar="$lockstep_root/TotemRemnant/build/libs/totem-remnant-0.2.16.jar"
+assert_production_jar "$remnant_jar" totem-remnant 0.2.16
 
 "$wrapper" -p "$lockstep_root/TotemAutomata" \
   -PtotemCoreJar="$core_jar" \
   -PtotemExcavationJar="$excavation_jar" \
   -PincludeTotemExcavationRuntime=false jar --no-daemon --stacktrace
 assert_production_jar \
-  "$lockstep_root/TotemAutomata/build/libs/totem-automata-0.1.17.jar" \
-  totem-automata 0.1.17
+  "$lockstep_root/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
+  totem-automata 0.1.18
 
 "$wrapper" -p "$lockstep_root/TotemNexus" \
   -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
 assert_production_jar \
-  "$lockstep_root/TotemNexus/build/libs/totem-nexus-0.3.5.jar" \
-  totem-nexus 0.3.5
+  "$lockstep_root/TotemNexus/build/libs/totem-nexus-0.3.6.jar" \
+  totem-nexus 0.3.6
 
 "$wrapper" -p "$lockstep_root/TotemVillagers" \
   -PtotemCoreJar="$core_jar" -PtotemRemnantJar="$remnant_jar" \
   jar --no-daemon --stacktrace
 assert_production_jar \
-  "$lockstep_root/TotemVillagers/build/libs/totem-villagers-0.1.32.jar" \
-  totem-villagers 0.1.32
+  "$lockstep_root/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
+  totem-villagers 0.1.33
 
 "$wrapper" -p "$lockstep_root/TotemLocksmith" \
   -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
 assert_production_jar \
-  "$lockstep_root/TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar" \
-  totem-locksmith 0.1.5
+  "$lockstep_root/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+  totem-locksmith 0.1.6

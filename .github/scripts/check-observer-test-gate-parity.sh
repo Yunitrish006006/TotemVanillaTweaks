@@ -177,7 +177,7 @@ for gradle_workflow in "$workflow" "$production_workflow" "$publish_workflow"; d
     fail "$(basename "$gradle_workflow") must disable every setup-gradle cache restore/write; found $cache_disabled_count/$setup_gradle_count"
   fi
 done
-if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.11.jar' "$publish_workflow" \
+if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.12.jar' "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_REFERENCE_VERSION_ID:' "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_PROJECT_ID:' "$publish_workflow"; then
   fail 'Modrinth publication must use the exact built TotemCore external dependency, never a stale or guessed project/version ID'
@@ -190,7 +190,7 @@ if ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core
   fail 'Modrinth publication must submit the exact TotemCore file and reuse the strict remote dependency verifier'
 fi
 if [[ -f "$remote_dependency_filter" ]]; then
-  remote_dependencies_exact='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.11.jar"}]}'
+  remote_dependencies_exact='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.12.jar"}]}'
   remote_dependencies_normalized='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null}]}'
   remote_dependencies_wrong_file='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"wrong-core.jar"}]}'
   remote_dependencies_extra='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null},{"dependency_type":"optional","project_id":"extra","version_id":null,"file_name":null}]}'
@@ -198,7 +198,7 @@ if [[ -f "$remote_dependency_filter" ]]; then
   for accepted_dependencies in "$remote_dependencies_exact" "$remote_dependencies_normalized"; do
     if ! jq -e \
         --arg fabric 'P7dR8mSH' \
-        --arg core_file 'totem-core-0.7.11.jar' \
+        --arg core_file 'totem-core-0.7.12.jar' \
         -f "$remote_dependency_filter" <<<"$accepted_dependencies" >/dev/null; then
       fail 'Modrinth remote dependency verifier must accept exact and normalized-null TotemCore file_name metadata'
     fi
@@ -207,7 +207,7 @@ if [[ -f "$remote_dependency_filter" ]]; then
   for rejected_dependencies in "$remote_dependencies_wrong_file" "$remote_dependencies_extra"; do
     if jq -e \
         --arg fabric 'P7dR8mSH' \
-        --arg core_file 'totem-core-0.7.11.jar' \
+        --arg core_file 'totem-core-0.7.12.jar' \
         -f "$remote_dependency_filter" <<<"$rejected_dependencies" >/dev/null; then
       fail 'Modrinth remote dependency verifier must reject wrong TotemCore file names and extra dependencies'
     fi
@@ -225,8 +225,8 @@ if [[ ! -f "$dependency_summary_filter" ]] \
     || ! grep -Fq "printf 'Published Modrinth dependency summary: %s\\n' \"\$dependency_summary\" >&2" "$publish_workflow"; then
   fail 'Modrinth verification failures must emit the dedicated redacted dependency summary'
 else
-  dependency_summary_input='{"token":"must-not-leak","author":{"id":"private"},"unrelated":"must-not-leak","dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"private":"must-not-leak"},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.11.jar","private":"must-not-leak"}]}'
-  dependency_summary_expected='{"dependency_count":2,"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name_present":false,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name_present":true,"file_name":"totem-core-0.7.11.jar"}]}'
+  dependency_summary_input='{"token":"must-not-leak","author":{"id":"private"},"unrelated":"must-not-leak","dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"private":"must-not-leak"},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.12.jar","private":"must-not-leak"}]}'
+  dependency_summary_expected='{"dependency_count":2,"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name_present":false,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name_present":true,"file_name":"totem-core-0.7.12.jar"}]}'
   if ! dependency_summary_actual="$(jq -c -f "$dependency_summary_filter" <<<"$dependency_summary_input")"; then
     fail 'Modrinth dependency summary filter rejected valid metadata'
   elif [[ "$dependency_summary_actual" != "$dependency_summary_expected" ]]; then
@@ -513,11 +513,11 @@ done
 for checkout in \
   'TotemCore e9dc2975cca37210f9d3bab2df4830e81af77295 0.7.12' \
   'TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8' \
-  'TotemRemnant 954ac6667384b65f45d513d5e9e9d8efd9627266 0.2.15' \
-  'TotemAutomata 0fb0833f264a1b2026e8784ca1f412cae2bf690d 0.1.17' \
-  'TotemNexus d88107984f54aa34c094d297ce647cf45068a132 0.3.5' \
-  'TotemVillagers 1cca1c7b404be4c4f409f48cdf486e42f8d249a0 0.1.32' \
-  'TotemLocksmith 3c62c42e38b356bf3a834078796dbc8c40f7ad5f 0.1.5'; do
+  'TotemRemnant a3f9231b50c6c55f03a8c145e80644bd6cff7021 0.2.16' \
+  'TotemAutomata b007eeb0ef0417804fe2abb25524842480419ae1 0.1.18' \
+  'TotemNexus 0267e2d4017c3a97a9389f71903b5b26744eff23 0.3.6' \
+  'TotemVillagers c4d37815c45b86f102939ec5e43b171692a406e0 0.1.33' \
+  'TotemLocksmith c89d380b88b10a3f0f55044e04266bc8ada70357 0.1.6'; do
   if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then
     fail "cross-module integration build script is missing exact checkout $checkout"
   fi

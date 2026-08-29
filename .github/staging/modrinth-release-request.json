@@ -1,8 +1,8 @@
 {
-  "version": "0.1.19",
+  "version": "0.1.20",
   "release_ref": "main",
-  "release_type": "beta",
+  "release_type": "release",
   "dry_run": false,
-  "request_id": "modrinth-0.1.19-beta-publish-20260828",
-  "reason": "Publish TotemVanillaTweaks 0.1.19 Beta with the completed 24-family framebuffer-free Observer update, exhaustive release gates, and an exact required external TotemCore 0.7.11 file dependency."
+  "request_id": "modrinth-0.1.20-release-publish-20260829",
+  "reason": "Publish TotemVanillaTweaks 0.1.20 with module-owned Observer screens, exhaustive framebuffer-free release gates, and an exact required external TotemCore 0.7.12 file dependency."
 }

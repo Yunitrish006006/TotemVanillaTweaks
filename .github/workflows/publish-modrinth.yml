@@ -39,13 +39,13 @@ concurrency:
 
 env:
   MODULE_ID: totem-vanilla-tweaks
-  # Match the minimum 0.7.x Core used by the normal build/E2E gate.
-  CORE_REF: 82b21944b1e4865f5d34f13febc5049d936a636f
+  # Match the module-owned Observer contract used by the normal build/E2E gate.
+  CORE_REF: e9dc2975cca37210f9d3bab2df4830e81af77295
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # The former first-party TotemCore project/version IDs are no longer public.
   # Keep this an exact external dependency instead of guessing a same-name project.
-  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.11.jar
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.12.jar
 
 jobs:
   publish:
@@ -212,7 +212,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: a8eb55ae53f3c6488775467127bab4d972c52a49
+          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -221,7 +221,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemAutomata
-          ref: f70969454c82474d27fdcbabb98685596d037ae6
+          ref: b007eeb0ef0417804fe2abb25524842480419ae1
           path: .lockstep/TotemAutomata
           persist-credentials: false
 
@@ -230,7 +230,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb
+          ref: 0267e2d4017c3a97a9389f71903b5b26744eff23
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -239,7 +239,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemVillagers
-          ref: d0d287e2df831a44b4b2cab28bbc98e396368cda
+          ref: c4d37815c45b86f102939ec5e43b171692a406e0
           path: .lockstep/TotemVillagers
           persist-credentials: false
 
@@ -248,7 +248,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemLocksmith
-          ref: 9080ac2c37807b539c5d309fe833edb660834f3b
+          ref: c89d380b88b10a3f0f55044e04266bc8ada70357
           path: .lockstep/TotemLocksmith
           persist-credentials: false
 
@@ -263,12 +263,12 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a ./gradlew \
-            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.11.jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.15.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.17.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.5.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.32.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar" \
+            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.12.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.6.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
 
       - name: Verify release cross-module integration screenshots
@@ -309,8 +309,8 @@ jobs:
             || fail_release_build 'checked-out mod_version does not match the resolved release version.'
           chmod +x gradlew .lockstep/TotemCore/gradlew
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          [[ "$core" == 0.7.11 ]] \
-            || fail_release_build 'pinned TotemCore checkout is not version 0.7.11.'
+          [[ "$core" == 0.7.12 ]] \
+            || fail_release_build 'pinned TotemCore checkout is not version 0.7.12.'
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
           [[ -f "$core_jar" ]] \
             || fail_release_build 'pinned TotemCore production JAR is missing.'
@@ -421,7 +421,7 @@ jobs:
           core_dependency_file="${core_archive}-${core_version}.jar"
           core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
           if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
-            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.11.jar.'
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.12.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"
