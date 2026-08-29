@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.TotemVanillaTweaks;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -15,6 +16,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.BrewingStandMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -40,7 +42,7 @@ public final class ObserverBrewingScreenClient {
     private static int remoteBrewingTicks;
     private static int remoteFuel;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverBrewingScreenClient() {}
@@ -144,9 +146,9 @@ public final class ObserverBrewingScreenClient {
         }
         if (!ObserverNativeClient.observerSessionActive()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
         } else if (remoteOpen) {
-            ensureMirror();
+            ensureObserverScreen();
         }
     }
 
@@ -228,7 +230,7 @@ public final class ObserverBrewingScreenClient {
                         payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
@@ -237,25 +239,34 @@ public final class ObserverBrewingScreenClient {
         remoteBrewingTicks = payload.brewingTicks();
         remoteFuel = payload.fuel();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeBrewingMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeBrewingMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverBrewingScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverBrewingScreen(new BrewingStandMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Brewing Stand" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverBrewingScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            screen.getMenu().setData(0, remoteBrewingTicks);
+            screen.getMenu().setData(1, remoteFuel);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeBrewingMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverBrewingScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -283,58 +294,14 @@ public final class ObserverBrewingScreenClient {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static final class NativeBrewingMirrorScreen extends ObserverMirrorScreen {
-        private NativeBrewingMirrorScreen() { super(Component.literal("Observer Brewing Stand")); }
-        @Override public boolean isPauseScreen() { return false; }
 
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
-        }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int panelWidth = 176;
-            int panelHeight = 166;
-            int left = (width - panelWidth) / 2;
-            int top = (height - panelHeight) / 2;
-            graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xFFE8E8E8);
-            graphics.fill(left + 3, top + 3, left + panelWidth - 3, top + panelHeight - 3, 0xFFC6C6C6);
-            BrewingHeaderLayout header = brewingHeaderLayout(
-                    remoteTitle.isBlank() ? "Brewing Stand" : remoteTitle,
-                    remoteFuel,
-                    panelWidth - 16,
-                    font::width
-            );
-            graphics.text(font, header.title(), left + 8, top + HEADER_TEXT_Y, 0xFF404040, false);
-            graphics.text(font, header.fuel(), left + 8 + header.fuelX(),
-                    top + HEADER_TEXT_Y, 0xFF404040, false);
-
-            int brewDone = ObserverBrewingScreenPayloads.MAX_BREW_TICKS - remoteBrewingTicks;
-            int brewWidth = clamp((brewDone * 48) / ObserverBrewingScreenPayloads.MAX_BREW_TICKS, 0, 48);
-            graphics.fill(left + 63, top + 34, left + 113, top + 42, 0xFF505050);
-            graphics.fill(left + 64, top + 35, left + 64 + brewWidth, top + 41, 0xFF8A5A2B);
-            int fuelWidth = clamp((remoteFuel * 18) / ObserverBrewingScreenPayloads.MAX_FUEL, 0, 18);
-            graphics.fill(left + 60, top + 16, left + 80, top + 22, 0xFF505050);
-            graphics.fill(left + 61, top + 17, left + 61 + fuelWidth, top + 21, 0xFFE0A020);
-            graphics.text(font, "Brew " + remoteBrewingTicks + "t", left + 116, top + 34, 0xFF404040, false);
-
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int sx = left + slot.x();
-                int sy = top + slot.y();
-                graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
-                graphics.fill(sx, sy, sx + 16, sy + 16, 0xFF202020);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) {
-                    graphics.item(stack, sx, sy);
-                    graphics.itemDecorations(font, stack, sx, sy);
-                }
-            }
-            extractedFrames++;
+    private static final class ObserverBrewingScreen extends BrewingStandScreen implements ObserverReadOnlyScreen {
+        private ObserverBrewingScreen(BrewingStandMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                      Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

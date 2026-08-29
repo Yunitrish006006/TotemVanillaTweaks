@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.mixin.client.BeaconScreenAccessor;
 import dev.totem.vanillatweaks.network.ObserverBeaconScreenPayloads;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -64,7 +65,7 @@ public final class ObserverBeaconScreenClient {
     private static boolean remotePaymentPresent;
     private static boolean remoteCanConfirm;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverBeaconScreenClient() {}
@@ -82,8 +83,8 @@ public final class ObserverBeaconScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -158,7 +159,7 @@ public final class ObserverBeaconScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverBeaconScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
@@ -168,25 +169,35 @@ public final class ObserverBeaconScreenClient {
         remotePaymentPresent = payload.paymentPresent();
         remoteCanConfirm = payload.canConfirm();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeBeaconMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeBeaconMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverBeaconScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverBeaconScreen(new BeaconMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Beacon" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverBeaconScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            screen.getMenu().setData(0, remoteLevels);
+            screen.getMenu().setData(1, encodeEffect(remotePrimaryEffectId));
+            screen.getMenu().setData(2, encodeEffect(remoteSecondaryEffectId));
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeBeaconMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverBeaconScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -216,6 +227,14 @@ public final class ObserverBeaconScreenClient {
         int colon = id.indexOf(':');
         String value = colon >= 0 ? id.substring(colon + 1) : id;
         return value.replace('_', ' ');
+    }
+
+    private static int encodeEffect(String id) {
+        if (id == null || id.isBlank()) return 0;
+        try {
+            var effect = BuiltInRegistries.MOB_EFFECT.getValue(Identifier.parse(id));
+            return effect == null ? 0 : BeaconMenu.encodeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
+        } catch (RuntimeException ignored) { return 0; }
     }
 
     /** Binds every semantic label to its own row and its available vanilla pixel budget. */
@@ -308,42 +327,14 @@ public final class ObserverBeaconScreenClient {
         }
     }
 
-    private static final class NativeBeaconMirrorScreen extends ObserverMirrorScreen {
-        private NativeBeaconMirrorScreen() { super(Component.literal("Observer Beacon")); }
-        @Override public boolean isPauseScreen() { return false; }
-        @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
-        }
-        @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = PANEL_WIDTH, ph = PANEL_HEIGHT, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
-            graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
-            BeaconTextLayout labels = beaconTextLayout(remoteTitle, remoteLevels,
-                    remotePrimaryEffectId, remoteSecondaryEffectId,
-                    remotePaymentPresent, remoteCanConfirm, font::width);
-            graphics.text(font, labels.title().text(), left + CONTENT_X, top + TITLE_Y, 0xFF404040, false);
-            graphics.text(font, labels.tier().text(), left + CONTENT_X, top + TIER_Y,
-                    remoteLevels > 0 ? 0xFF206020 : 0xFF804040, false);
-            graphics.text(font, labels.primary().text(), left + CONTENT_X, top + PRIMARY_Y, 0xFF404040, false);
-            graphics.text(font, labels.secondary().text(), left + CONTENT_X, top + SECONDARY_Y, 0xFF404040, false);
-            graphics.text(font, labels.payment().text(), left + CONTENT_X, top + PAYMENT_Y,
-                    remotePaymentPresent ? 0xFF206020 : 0xFF804040, false);
-            graphics.text(font, labels.confirm().text(), left + CONTENT_X, top + CONFIRM_Y,
-                    remoteCanConfirm ? 0xFF206020 : 0xFF555555, false);
-            graphics.text(font, labels.effect1().text(), left + CONTENT_X, top + EFFECT_1_Y, 0xFF555555, false);
-            graphics.text(font, labels.effect2().text(), left + CONTENT_X, top + EFFECT_2_Y, 0xFF555555, false);
-            graphics.text(font, labels.effect3().text(), left + CONTENT_X, top + EFFECT_3_Y, 0xFF555555, false);
-            graphics.text(font, labels.effect4().text(), left + CONTENT_X, top + EFFECT_4_Y, 0xFF555555, false);
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int sx = left + slot.x(), sy = top + slot.y();
-                graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
-                graphics.fill(sx, sy, sx + 16, sy + 16, 0xFF202020);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
-            }
-            extractedFrames++;
+
+    private static final class ObserverBeaconScreen extends BeaconScreen implements ObserverReadOnlyScreen {
+        private ObserverBeaconScreen(BeaconMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                     Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

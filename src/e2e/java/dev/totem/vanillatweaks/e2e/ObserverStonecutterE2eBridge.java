@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -63,6 +65,12 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
                 fail("Stonecutter E2E semantic state mismatch");
                 return;
             }
+            StonecutterScreen screen = (StonecutterScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1)
+                    || screen.getMenu().getNumberOfVisibleRecipes() < 1) {
+                fail("Stonecutter production Menu did not apply relayed input, result, and recipes");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Stonecutter semantic relay");
                 return;
@@ -73,7 +81,7 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
         }
         if (observerSaved && !observerClosed && !getBoolean(STONECUTTER, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-stonecutter-closed.txt", "Stonecutter semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-stonecutter-closed.txt", "Stonecutter semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -127,10 +135,13 @@ public final class ObserverStonecutterE2eBridge implements ClientModInitializer 
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeStonecutterMirrorScreen")
+                && minecraft.gui.screen() instanceof StonecutterScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(STONECUTTER, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverStonecutterScreenPayloads.FAMILY_ID) > 0L
-                && getLong(STONECUTTER, "extractedFrames") > 0L;
+                && getLong(STONECUTTER, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverStonecutterScreenPayloads.FAMILY_ID,
+                        getLong(STONECUTTER, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

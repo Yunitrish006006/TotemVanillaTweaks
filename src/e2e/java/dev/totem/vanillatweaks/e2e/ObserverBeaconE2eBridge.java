@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.BeaconScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -60,6 +62,11 @@ public final class ObserverBeaconE2eBridge implements ClientModInitializer {
                 fail("Beacon E2E semantic state mismatch");
                 return;
             }
+            BeaconScreen screen = (BeaconScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0)) {
+                fail("Beacon production Menu did not apply relayed payment slot");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Beacon semantic relay");
                 return;
@@ -70,7 +77,7 @@ public final class ObserverBeaconE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(BEACON, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-beacon-closed.txt", "Beacon semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-beacon-closed.txt", "Beacon semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -112,10 +119,13 @@ public final class ObserverBeaconE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeBeaconMirrorScreen")
+                && minecraft.gui.screen() instanceof BeaconScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(BEACON, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverBeaconScreenPayloads.FAMILY_ID) > 0L
-                && getLong(BEACON, "extractedFrames") > 0L;
+                && getLong(BEACON, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverBeaconScreenPayloads.FAMILY_ID,
+                        getLong(BEACON, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

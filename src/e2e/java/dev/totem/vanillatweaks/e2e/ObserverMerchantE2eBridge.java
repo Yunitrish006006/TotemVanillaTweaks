@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -56,17 +58,25 @@ public final class ObserverMerchantE2eBridge implements ClientModInitializer {
 
         if (observerRequested && !observerSeen
                 && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeMerchantMirrorScreen")
+                && minecraft.gui.screen() instanceof MerchantScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(MERCHANT, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNativeScreenPayloads.FAMILY_MERCHANT) > 0L
-                && getLong(MERCHANT, "extractedFrames") > 0L) {
+                && getLong(MERCHANT, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverNativeScreenPayloads.FAMILY_MERCHANT,
+                        getLong(MERCHANT, "extractedFrames"))) {
             if (!"vanilla_merchant".equals(String.valueOf(getObject(MERCHANT, "remoteVariant")))) {
                 fail("Merchant E2E variant mismatch");
                 return;
             }
             if (getInt(MERCHANT, "remoteSelectedOffer") != 1) {
                 fail("Merchant E2E selected offer mismatch");
+                return;
+            }
+            MerchantScreen screen = (MerchantScreen) minecraft.gui.screen();
+            if (screen.getMenu().getOffers().size() != 2) {
+                fail("Merchant production Menu did not apply relayed offers");
                 return;
             }
             if (getBoolean(GENERIC, "remoteContainerOpen")) {
@@ -83,7 +93,7 @@ public final class ObserverMerchantE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-merchant-closed.txt",
-                    "Merchant semantic mirror closed after Target close state.\n");
+                    "Merchant semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }

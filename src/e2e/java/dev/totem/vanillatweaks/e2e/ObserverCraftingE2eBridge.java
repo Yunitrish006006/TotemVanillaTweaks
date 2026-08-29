@@ -7,6 +7,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -64,8 +65,8 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
     }
 
     private static void tickObserver(Minecraft minecraft) {
-        if (observerProofWritten || minecraft.gui.screen() == null
-                || !minecraft.gui.screen().getClass().getName().contains("NativeCraftingMirrorScreen")) {
+        if (observerProofWritten || !(minecraft.gui.screen() instanceof InventoryScreen)
+                || !(minecraft.gui.screen() instanceof ObserverReadOnlyScreen)) {
             return;
         }
         if (!getBoolean(CRAFTING, "remoteOpen")
@@ -77,11 +78,13 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
         String variant = String.valueOf(getObject(CRAFTING, "remoteVariant"));
         int gridWidth = getInt(CRAFTING, "remoteGridWidth");
         int gridHeight = getInt(CRAFTING, "remoteGridHeight");
+        int remoteSlotCount = getListSize(CRAFTING, "remoteSlots");
+        int productionSlotCount = ((InventoryScreen) minecraft.gui.screen()).getMenu().slots.size();
         if (!"player_2x2".equals(variant) || gridWidth != 2 || gridHeight != 2
-                || getListSize(CRAFTING, "remoteSlots") != 46) {
+                || remoteSlotCount < 46 || remoteSlotCount != productionSlotCount) {
             fail("Unexpected Inventory crafting semantic state: variant=" + variant
                     + " grid=" + gridWidth + "x" + gridHeight
-                    + " slots=" + getListSize(CRAFTING, "remoteSlots"));
+                    + " remoteSlots=" + remoteSlotCount + " productionSlots=" + productionSlotCount);
             return;
         }
         if (getBoolean(GENERIC_CONTAINER, "remoteContainerOpen")) {
@@ -93,7 +96,8 @@ public final class ObserverCraftingE2eBridge implements ClientModInitializer {
         observerProofWritten = true;
         ObserverE2eCommon.marker(
                 "observer-native-container-ok.txt",
-                "Observer rendered player_2x2 Inventory crafting semantics locally with no competing generic container mirror.\n"
+                "Observer rendered player_2x2 Inventory crafting semantics in the production InventoryScreen with "
+                        + remoteSlotCount + " matching production Menu slots and no competing generic container mirror.\n"
         );
         ObserverE2eCommon.marker(
                 "observer-native-crafting-mirror-priority-suppressed.txt",

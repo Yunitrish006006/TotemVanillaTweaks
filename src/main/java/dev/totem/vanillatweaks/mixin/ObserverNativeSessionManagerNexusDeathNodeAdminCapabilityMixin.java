@@ -3,6 +3,8 @@ package dev.totem.vanillatweaks.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverNexusDeathNodeAdminRelayManager;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -19,7 +21,10 @@ import java.util.UUID;
 public abstract class ObserverNativeSessionManagerNexusDeathNodeAdminCapabilityMixin {
     @ModifyReturnValue(method = "negotiatedScreenCapabilities", at = @At("RETURN"))
     private static long totem$includeNexusDeathNodeAdmin(long original, ServerPlayer observer) {
-        if (!ServerPlayNetworking.canSend(observer, ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE)) return original;
+        if (!ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
+                || !ObserverNativeSessionManager.ownedProviderAdvertises(observer,
+                ObserverNexusDeathNodeAdminPayloads.FAMILY_ID,
+                ObserverOwnedScreenProtocols.expected(ObserverNexusDeathNodeAdminPayloads.FAMILY_ID))) return original;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(original | ObserverNexusDeathNodeAdminPayloads.CAPABILITY);
     }
 

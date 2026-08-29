@@ -31,7 +31,7 @@ public final class ObserverCrafterClientGameTest implements FabricClientGameTest
                 accept(ObserverCrafterScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeCrafterMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverCrafterScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!getBoolean("remotePowered") || getInt("remoteDisabledMask") != ((1 << 1) | (1 << 7))
                     || getInt("remoteOccupiedInputSlots") != 3 || getListSize("remoteSlots") != 46) {

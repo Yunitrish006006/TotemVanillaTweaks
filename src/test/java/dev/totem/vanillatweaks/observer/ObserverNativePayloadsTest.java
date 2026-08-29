@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -126,6 +127,21 @@ final class ObserverNativePayloadsTest {
         assertEquals(Set.of("ScreenState", "ScreenRelay", "Stop"), nestedTypes);
         assertThrows(ClassNotFoundException.class, () ->
                 Class.forName("dev.totem.vanillatweaks.observer.ObserverFrameRules"));
+    }
+
+    @Test
+    void slotValidationAcceptsOnlyTheProductionHiddenSlotSentinel() {
+        var visible = new ObserverNativeScreenPayloads.SlotState(0, 8, 84, "", 0, 0);
+        var hidden = new ObserverNativeScreenPayloads.SlotState(1,
+                ObserverNativeSessionManager.HIDDEN_SLOT_COORDINATE,
+                ObserverNativeSessionManager.HIDDEN_SLOT_COORDINATE, "", 0, 0);
+        assertTrue(ObserverNativeSessionManager.validSlots(List.of(visible, hidden)));
+
+        var partialSentinel = new ObserverNativeScreenPayloads.SlotState(1,
+                ObserverNativeSessionManager.HIDDEN_SLOT_COORDINATE, 84, "", 0, 0);
+        var arbitraryOffScreen = new ObserverNativeScreenPayloads.SlotState(1, -9_999, -9_999, "", 0, 0);
+        assertFalse(ObserverNativeSessionManager.validSlots(List.of(visible, partialSentinel)));
+        assertFalse(ObserverNativeSessionManager.validSlots(List.of(visible, arbitraryOffScreen)));
     }
 
     private static void assertNativeVersioned(String path) {

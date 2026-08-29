@@ -9,7 +9,7 @@
   "book.deadrecall.vanilla_tweaks_manual.page.1": "物品欄\n\n開啟選單後，把游標放在玩家或容器一側，按下整理背包鍵（預設滑鼠中鍵）。伺服器會驗證目標。",
   "book.deadrecall.vanilla_tweaks_manual.page.2": "世界\n\n講台使用四個半磚與一本書；書櫃會轉為雕紋書櫃，接觸水的混凝土粉末會硬化，漏斗取出熔煉成品也會釋放經驗。",
   "book.deadrecall.vanilla_tweaks_manual.page.3": "骷髏箭袋\n\n出生時基礎箭數：簡單 3–5、普通 5–8、困難 8–12。普通最多再擲 2 支、困難最多 4 支；每支是否加入直接使用原版區域難度的特殊倍率判定，因此成熟區域最高約為 3–5、7–10、12–16。箭可撿，用完後改用近戰。附魔有效目標請查閱 Enchanting 章節。",
-  "book.deadrecall.vanilla_tweaks_manual.page.4": "觀察者視角\n\n管理員在觀察者模式使用 /observeui <玩家> 可跟隨玩家。平時沿用原版觀察鏡頭；對方開啟任何 UI 時，會在觀察期間即時鏡像其畫面與游標，因此容器、聊天、設定與模組介面都能看見。按 ESC 或使用 /observeui stop 結束。",
+  "book.deadrecall.vanilla_tweaks_manual.page.4": "觀察者視角\n\n在觀察者模式使用 /observeui <玩家>。支援的原版 UI 以原版 Screen 唯讀重建；Totem UI 使用所屬模組的正式 Screen。同步遠端游標，但不傳未送出的聊天、密鑰等私密資料。未支援畫面只顯示狀態。按 ESC 或使用 /observeui stop 結束。",
   "screen.totem-vanilla-tweaks.observer_view": "觀察者視角",
   "screen.totem-vanilla-tweaks.observer_view.exit": "ESC：結束觀察",
   "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",

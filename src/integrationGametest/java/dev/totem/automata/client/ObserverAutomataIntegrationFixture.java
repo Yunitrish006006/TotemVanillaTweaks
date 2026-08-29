@@ -24,11 +24,19 @@ public final class ObserverAutomataIntegrationFixture {
     private ObserverAutomataIntegrationFixture() {}
 
     public static CopperGolemMenuScreen create(Inventory inventory, UUID golemId) {
+        return create(inventory, golemId, 7);
+    }
+
+    public static CopperGolemMenuScreen create(Inventory inventory, UUID golemId, int revision) {
         CopperGolemMenu menu = new CopperGolemMenu(
                 CopperGolemMenuRegistration.TYPE, 42, inventory, new CopperGolemMenuOpenData(golemId));
         CopperGolemMenuScreen screen = new CopperGolemMenuScreen(menu, inventory, Component.literal("Copper Golem"));
-        screen.acceptSnapshotForVisualTest(snapshot(golemId));
+        screen.acceptSnapshotForVisualTest(snapshot(golemId, revision));
         return screen;
+    }
+
+    public static int revision(CopperGolemMenuScreen screen) {
+        return screen.observerCaptureSource().orElseThrow().revision();
     }
 
     public static void enterPrivateEditorValues(CopperGolemMenuScreen screen) {
@@ -40,13 +48,13 @@ public final class ObserverAutomataIntegrationFixture {
         set(screen, "cacheValueField", PRIVATE_CACHE_VALUE);
     }
 
-    private static CopperWrenchBindingsPayload snapshot(UUID golemId) {
+    private static CopperWrenchBindingsPayload snapshot(UUID golemId, int revision) {
         var source = new CopperWrenchBindingsPayload.BindingEntry(
                 "minecraft:overworld", 10, 64, 10, "minecraft:chest", "minecraft:chest",
                 true, true, true, PRIVATE_BINDING_PROMPT, 1, 1,
                 List.of("minecraft:iron_ingot"), List.of("minecraft:dirt"), List.of("c:ingots"), List.of());
         return new CopperWrenchBindingsPayload(
-                golemId, 7, true, "sorting", "searching",
+                golemId, revision, true, "sorting", "searching",
                 "minecraft:nether_star", 1, 800, true,
                 "minecraft:iron_pickaxe", 1, 12, 250,
                 "minecraft:chest", 1,

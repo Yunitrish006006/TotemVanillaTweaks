@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.network.ObserverCrafterScreenPayloads;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -34,7 +35,7 @@ public final class ObserverCrafterScreenClient {
     private static int remoteDisabledMask;
     private static int remoteOccupiedInputSlots;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverCrafterScreenClient() {}
@@ -52,8 +53,8 @@ public final class ObserverCrafterScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -120,7 +121,7 @@ public final class ObserverCrafterScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverCrafterScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
@@ -128,25 +129,34 @@ public final class ObserverCrafterScreenClient {
         remoteDisabledMask = payload.disabledMask();
         remoteOccupiedInputSlots = payload.occupiedInputSlots();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeCrafterMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeCrafterMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverCrafterScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverCrafterScreen(new CrafterMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Crafter" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverCrafterScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            for (int i = 0; i < 9; i++) screen.getMenu().setSlotState(i, (remoteDisabledMask & (1 << i)) == 0);
+            screen.getMenu().setData(9, remotePowered ? 1 : 0);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeCrafterMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverCrafterScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -169,37 +179,14 @@ public final class ObserverCrafterScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeCrafterMirrorScreen extends ObserverMirrorScreen {
-        private NativeCrafterMirrorScreen() { super(Component.literal("Observer Crafter")); }
-        @Override public boolean isPauseScreen() { return false; }
-        @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
-        }
-        @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = 176, ph = 166, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
-            graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
-            graphics.text(font, remoteTitle.isBlank() ? "Crafter" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
-            graphics.text(font, remotePowered ? "Redstone: powered" : "Redstone: idle", left + 96, top + 22,
-                    remotePowered ? 0xFF8A2020 : 0xFF555555, false);
-            graphics.text(font, "Inputs: " + remoteOccupiedInputSlots + "/9", left + 96, top + 36, 0xFF555555, false);
-            graphics.text(font, "Disabled: " + Integer.bitCount(remoteDisabledMask), left + 96, top + 50, 0xFF555555, false);
-            for (int i = 0; i < remoteSlots.size(); i++) {
-                ObserverNativeScreenPayloads.SlotState slot = remoteSlots.get(i);
-                int sx = left + slot.x(), sy = top + slot.y();
-                boolean disabled = i < 9 && (remoteDisabledMask & (1 << i)) != 0;
-                graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, disabled ? 0xFF7A3030 : 0xFF666666);
-                graphics.fill(sx, sy, sx + 16, sy + 16, disabled ? 0xFF4A2020 : 0xFF202020);
-                if (disabled) {
-                    graphics.text(font, "X", sx + 5, sy + 4, 0xFFFF8080, false);
-                    continue;
-                }
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
-            }
-            extractedFrames++;
+
+    private static final class ObserverCrafterScreen extends CrafterScreen implements ObserverReadOnlyScreen {
+        private ObserverCrafterScreen(CrafterMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                      Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

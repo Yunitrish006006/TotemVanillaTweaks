@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.SmithingScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -56,6 +58,11 @@ public final class ObserverSmithingE2eBridge implements ClientModInitializer {
                 fail("Smithing E2E semantic state mismatch");
                 return;
             }
+            SmithingScreen screen = (SmithingScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 2, 3)) {
+                fail("Smithing production Menu did not apply relayed template, input, material, and result slots");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Smithing semantic relay");
                 return;
@@ -66,7 +73,7 @@ public final class ObserverSmithingE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(SMITHING, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-smithing-closed.txt", "Smithing semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-smithing-closed.txt", "Smithing semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -111,10 +118,13 @@ public final class ObserverSmithingE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeSmithingMirrorScreen")
+                && minecraft.gui.screen() instanceof SmithingScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(SMITHING, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverSmithingScreenPayloads.FAMILY_ID) > 0L
-                && getLong(SMITHING, "extractedFrames") > 0L;
+                && getLong(SMITHING, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverSmithingScreenPayloads.FAMILY_ID,
+                        getLong(SMITHING, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

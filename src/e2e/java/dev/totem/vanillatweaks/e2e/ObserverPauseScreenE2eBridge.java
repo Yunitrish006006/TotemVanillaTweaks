@@ -8,8 +8,9 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Screenshot;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -57,7 +58,7 @@ public final class ObserverPauseScreenE2eBridge implements ClientModInitializer 
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
-                fail("Generic semantic-adapter-pending mirror competed with PauseScreen semantic mirror");
+                fail("Generic semantic-adapter-pending metadata screen competed with PauseScreen semantic view");
                 return;
             }
             observerSeen = true;
@@ -70,7 +71,7 @@ public final class ObserverPauseScreenE2eBridge implements ClientModInitializer 
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-pause-screen-closed.txt",
-                    "PauseScreen semantic mirror closed after metadata close.\n");
+                    "PauseScreen semantic view closed after metadata close.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -92,9 +93,12 @@ public final class ObserverPauseScreenE2eBridge implements ClientModInitializer 
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativePauseMirrorScreen")
+                && minecraft.gui.screen() instanceof PauseScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(PAUSE, "remoteOpen")
-                && getLong(PAUSE, "extractedFrames") > 0L;
+                && getLong(PAUSE, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(PauseScreen.class.getName(),
+                        getLong(PAUSE, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

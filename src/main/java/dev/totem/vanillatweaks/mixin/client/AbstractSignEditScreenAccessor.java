@@ -17,6 +17,12 @@ public interface AbstractSignEditScreenAccessor {
     @Accessor("line")
     int totem$getLine();
 
+    @Accessor("line")
+    void totem$setLine(int value);
+
     @Accessor("text")
     SignText totem$getText();
+
+    @Accessor("text")
+    void totem$setText(SignText value);
 }

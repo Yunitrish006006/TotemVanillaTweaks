@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.advancements.AdvancementsScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -61,7 +63,7 @@ public final class ObserverAdvancementsE2eBridge implements ClientModInitializer
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
-                fail("Generic semantic-adapter-pending mirror competed with Advancements semantic relay");
+                fail("Generic semantic-adapter-pending metadata screen competed with Advancements semantic relay");
                 return;
             }
             observerSeen = true;
@@ -74,7 +76,7 @@ public final class ObserverAdvancementsE2eBridge implements ClientModInitializer
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-advancements-closed.txt",
-                    "Advancements semantic mirror closed.\n");
+                    "Advancements semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -103,8 +105,10 @@ public final class ObserverAdvancementsE2eBridge implements ClientModInitializer
                 ObserverAdvancementsScreenPayloads.FAMILY_ID, ObserverAdvancementsScreenPayloads.SCREEN_CLASS,
                 "Advancements", "minecraft:story/root", -14.0D, 9.0D,
                 List.of(
-                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:story/root", "Minecraft", "minecraft:grass_block"),
-                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:adventure/root", "Adventure", "minecraft:map")
+                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:story/root", "Minecraft", "minecraft:grass_block",
+                                "minecraft:gui/advancements/backgrounds/stone"),
+                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:adventure/root", "Adventure", "minecraft:map",
+                                "minecraft:gui/advancements/backgrounds/adventure")
                 ),
                 List.of(
                         new ObserverAdvancementsScreenPayloads.NodeState(
@@ -121,10 +125,13 @@ public final class ObserverAdvancementsE2eBridge implements ClientModInitializer
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeAdvancementsMirrorScreen")
+                && minecraft.gui.screen() instanceof AdvancementsScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(ADVANCEMENTS, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverAdvancementsScreenPayloads.FAMILY_ID) > 0L
-                && getLong(ADVANCEMENTS, "extractedFrames") > 0L;
+                && getLong(ADVANCEMENTS, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverAdvancementsScreenPayloads.FAMILY_ID,
+                        getLong(ADVANCEMENTS, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

@@ -84,14 +84,15 @@ public final class ObserverUiClient {
      * as a ChatScreen draft or unsent command are deliberately never read.
      */
     static ObserverPayloads.ScreenState captureScreenMetadata(Screen screen) {
-        if (screen == null || ObserverMirrorScreen.isMirror(screen)) {
+        if (screen == null || ObserverOwnedScreenCoordinator.isReadOnlyObserverScreen(screen)) {
             return new ObserverPayloads.ScreenState(false, "", "");
         }
         Component title = screen.getTitle();
+        String screenClass = screen.getClass().getName();
         return new ObserverPayloads.ScreenState(
                 true,
-                screen.getClass().getName(),
-                title == null ? "" : title.getString()
+                screenClass,
+                ObserverMetadataScreenPolicy.safeTitle(screenClass, title == null ? "" : title.getString())
         );
     }
 }

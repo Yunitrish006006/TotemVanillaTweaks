@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.CrafterScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -57,6 +59,11 @@ public final class ObserverCrafterE2eBridge implements ClientModInitializer {
                 fail("Crafter E2E semantic state mismatch");
                 return;
             }
+            CrafterScreen screen = (CrafterScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 4, 8, 45)) {
+                fail("Crafter production Menu did not apply relayed grid and result slots");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Crafter semantic relay");
                 return;
@@ -67,7 +74,7 @@ public final class ObserverCrafterE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(CRAFTER, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-crafter-closed.txt", "Crafter semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-crafter-closed.txt", "Crafter semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -122,10 +129,13 @@ public final class ObserverCrafterE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeCrafterMirrorScreen")
+                && minecraft.gui.screen() instanceof CrafterScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(CRAFTER, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverCrafterScreenPayloads.FAMILY_ID) > 0L
-                && getLong(CRAFTER, "extractedFrames") > 0L;
+                && getLong(CRAFTER, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverCrafterScreenPayloads.FAMILY_ID,
+                        getLong(CRAFTER, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

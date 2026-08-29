@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.AnvilScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -56,10 +58,13 @@ public final class ObserverAnvilE2eBridge implements ClientModInitializer {
 
         if (observerRequested && !observerSeen
                 && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeAnvilMirrorScreen")
+                && minecraft.gui.screen() instanceof AnvilScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(ANVIL, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_ANVIL) > 0L
-                && getLong(ANVIL, "extractedFrames") > 0L) {
+                && getLong(ANVIL, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverNativeScreenPayloads.FAMILY_ANVIL,
+                        getLong(ANVIL, "extractedFrames"))) {
             if (!"E2E Blade".equals(String.valueOf(getObject(ANVIL, "remoteItemName")))) {
                 fail("Anvil E2E rename mismatch");
                 return;
@@ -70,6 +75,11 @@ public final class ObserverAnvilE2eBridge implements ClientModInitializer {
             }
             if (!getBoolean(ANVIL, "remoteResultAvailable") || getBoolean(ANVIL, "remoteTooExpensive")) {
                 fail("Anvil E2E result state mismatch");
+                return;
+            }
+            AnvilScreen screen = (AnvilScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 2)) {
+                fail("Anvil production Menu did not apply relayed input and result slots");
                 return;
             }
             if (getBoolean(GENERIC, "remoteContainerOpen")) {
@@ -86,7 +96,7 @@ public final class ObserverAnvilE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-anvil-closed.txt",
-                    "Anvil semantic mirror closed after Target close state.\n");
+                    "Anvil semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }

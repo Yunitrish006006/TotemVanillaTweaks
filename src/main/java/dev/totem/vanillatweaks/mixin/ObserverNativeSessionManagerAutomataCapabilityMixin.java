@@ -3,6 +3,8 @@ package dev.totem.vanillatweaks.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import dev.totem.vanillatweaks.network.ObserverAutomataCopperGolemPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
 import dev.totem.vanillatweaks.observer.ObserverAutomataCopperGolemRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -19,7 +21,10 @@ import java.util.UUID;
 public abstract class ObserverNativeSessionManagerAutomataCapabilityMixin {
     @ModifyReturnValue(method = "negotiatedScreenCapabilities", at = @At("RETURN"))
     private static long totem$includeAutomataCapability(long original, ServerPlayer observer) {
-        if (!ServerPlayNetworking.canSend(observer, ObserverAutomataCopperGolemPayloads.CopperGolemRelay.TYPE)) {
+        if (!ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
+                || !ObserverNativeSessionManager.ownedProviderAdvertises(observer,
+                ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM,
+                ObserverOwnedScreenProtocols.expected(ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM))) {
             return original;
         }
         return ObserverNativeScreenPayloads.sanitizeCapabilities(

@@ -29,7 +29,7 @@ public final class ObserverAdvancementsClientGameTest implements FabricClientGam
                 accept(ObserverAdvancementsScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeAdvancementsMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverAdvancementsScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!"minecraft:story/root".equals(getString("remoteSelectedRootId"))
                     || getDouble("remoteScrollX") != -14.0D
@@ -54,8 +54,10 @@ public final class ObserverAdvancementsClientGameTest implements FabricClientGam
                 ObserverAdvancementsScreenPayloads.FAMILY_ID, ObserverAdvancementsScreenPayloads.SCREEN_CLASS,
                 "Advancements", "minecraft:story/root", -14.0D, 9.0D,
                 List.of(
-                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:story/root", "Minecraft", "minecraft:grass_block"),
-                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:adventure/root", "Adventure", "minecraft:map")
+                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:story/root", "Minecraft", "minecraft:grass_block",
+                                "minecraft:gui/advancements/backgrounds/stone"),
+                        new ObserverAdvancementsScreenPayloads.TabState("minecraft:adventure/root", "Adventure", "minecraft:map",
+                                "minecraft:gui/advancements/backgrounds/adventure")
                 ),
                 List.of(
                         new ObserverAdvancementsScreenPayloads.NodeState(

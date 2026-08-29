@@ -37,6 +37,7 @@
       "dev.totem.vanillatweaks.gametest.ObserverPauseScreenClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverAdvancementsClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverStatsClientGameTest",
+      "dev.totem.vanillatweaks.gametest.ObserverHorseClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverUiNetworkLoopbackClientGameTest",
       "dev.totem.vanillatweaks.gametest.ObserverVanillaProductionSenderClientGameTest",
       "dev.totem.vanillatweaks.gametest.SkeletonAmmoRuntimeClientGameTest"

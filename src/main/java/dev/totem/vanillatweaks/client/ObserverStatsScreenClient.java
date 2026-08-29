@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.client;
 
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.mixin.client.StatsScreenAccessor;
 import dev.totem.vanillatweaks.mixin.client.StatsScreenItemStatisticsListAccessor;
 import dev.totem.vanillatweaks.mixin.client.StatsScreenStatisticsTabAccessor;
@@ -26,6 +27,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -72,7 +74,9 @@ public final class ObserverStatsScreenClient {
     private static List<ObserverStatsScreenPayloads.GeneralRow> remoteGeneralRows = List.of();
     private static List<ObserverStatsScreenPayloads.ItemRow> remoteItemRows = List.of();
     private static List<ObserverStatsScreenPayloads.MobRow> remoteMobRows = List.of();
-    private static boolean suppressMirrorStop;
+    private static StatsCounter remoteCounter;
+    private static String renderedTab = "";
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverStatsScreenClient() {}
@@ -102,12 +106,12 @@ public final class ObserverStatsScreenClient {
         }
 
         if (!ObserverNativeClient.observerSessionActive()) {
-            if (remoteOpen || minecraft.gui.screen() instanceof NativeStatsMirrorScreen) {
+            if (remoteOpen || minecraft.gui.screen() instanceof ObserverStatsScreen) {
                 clearRemote();
-                closeMirror();
+                closeObserverScreen();
             }
         } else if (remoteOpen) {
-            ensureMirror();
+            ensureObserverScreen();
         }
     }
 
@@ -260,7 +264,7 @@ public final class ObserverStatsScreenClient {
                 || !ObserverStatsScreenPayloads.FAMILY_ID.equals(p.familyId())
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverStatsScreenPayloads.FAMILY_ID, p.targetId(), p.sequence())) return;
-        if (!p.open()) { clearRemote(); closeMirror(); return; }
+        if (!p.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = p.title();
@@ -272,25 +276,37 @@ public final class ObserverStatsScreenClient {
         remoteGeneralRows = List.copyOf(p.generalRows());
         remoteItemRows = List.copyOf(p.itemRows());
         remoteMobRows = List.copyOf(p.mobRows());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeStatsMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeStatsMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverStatsScreen) || !renderedTab.equals(remoteActiveTab)) {
+            suppressObserverScreenStop = true;
+            try {
+                remoteCounter = createRemoteCounter();
+                ObserverStatsScreen screen = new ObserverStatsScreen(remoteCounter);
+                minecraft.setScreenAndShow(screen);
+                renderedTab = remoteActiveTab;
+            }
+            finally { suppressObserverScreenStop = false; }
         }
+        ObserverStatsScreen screen = (ObserverStatsScreen) minecraft.gui.screen();
+        StatsScreenAccessor accessor = (StatsScreenAccessor) (Object) screen;
+        // setScreenAndShow may finish vanilla init after this relay callback. Keep
+        // driving the real StatsScreen lifecycle until its loading tabs have
+        // actually been replaced by the production statistics lists.
+        if (!remoteLoading && accessor.totem$isLoading()) screen.onStatsUpdated();
+        applyRemoteState(screen);
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeStatsMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverStatsScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -304,6 +320,82 @@ public final class ObserverStatsScreenClient {
         remoteGeneralRows = List.of();
         remoteItemRows = List.of();
         remoteMobRows = List.of();
+        remoteCounter = null;
+        renderedTab = "";
+    }
+
+    private static StatsCounter createRemoteCounter() {
+        StatsCounter counter = new StatsCounter();
+        for (ObserverStatsScreenPayloads.GeneralRow row : remoteGeneralRows) {
+            try {
+                Identifier id = Identifier.parse(row.statId());
+                if (Stats.CUSTOM.contains(id)) counter.setValue(null, Stats.CUSTOM.get(id), Math.max(0, row.rawValue()));
+            } catch (RuntimeException ignored) {
+                // A datapack may remove a statistic between capture and reconstruction.
+            }
+        }
+        for (ObserverStatsScreenPayloads.ItemRow row : remoteItemRows) {
+            Item item = itemStack(row.itemId()).getItem();
+            if (item == Items.AIR) continue;
+            counter.setValue(null, Stats.ITEM_BROKEN.get(item), Math.max(0, row.broken()));
+            counter.setValue(null, Stats.ITEM_CRAFTED.get(item), Math.max(0, row.crafted()));
+            counter.setValue(null, Stats.ITEM_USED.get(item), Math.max(0, row.used()));
+            counter.setValue(null, Stats.ITEM_PICKED_UP.get(item), Math.max(0, row.pickedUp()));
+            counter.setValue(null, Stats.ITEM_DROPPED.get(item), Math.max(0, row.dropped()));
+            if (item instanceof BlockItem blockItem) {
+                counter.setValue(null, Stats.BLOCK_MINED.get(blockItem.getBlock()), Math.max(0, row.mined()));
+            }
+        }
+        for (ObserverStatsScreenPayloads.MobRow row : remoteMobRows) {
+            try {
+                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(row.entityId()));
+                if (type != null) {
+                    counter.setValue(null, Stats.ENTITY_KILLED.get(type), Math.max(0, row.killed()));
+                    counter.setValue(null, Stats.ENTITY_KILLED_BY.get(type), Math.max(0, row.killedBy()));
+                }
+            } catch (RuntimeException ignored) {
+                // A datapack may remove an entity type between capture and reconstruction.
+            }
+        }
+        return counter;
+    }
+
+    private static void applyRemoteState(ObserverStatsScreen screen) {
+        StatsScreenAccessor accessor = (StatsScreenAccessor) (Object) screen;
+        MenuTabBar tabBar = accessor.totem$getTabNavigationBar();
+        int tabIndex = switch (remoteActiveTab) {
+            case "items" -> 1;
+            case "mobs" -> 2;
+            default -> 0;
+        };
+        if (tabBar != null && tabBar.getTabs().size() > tabIndex) {
+            tabBar.selectTab(tabIndex, false);
+        }
+        Tab current = accessor.totem$getTabManager().getCurrentTab();
+        AbstractSelectionList<?> list = current instanceof StatsScreenStatisticsTabAccessor tab ? tab.totem$getList() : null;
+        if (list != null) list.setScrollAmount(Math.max(0.0D, remoteScrollAmount));
+        if (list instanceof StatsScreenItemStatisticsListAccessor itemList && !remoteItemSortColumn.isEmpty()) {
+            StatType<?> column = statType(remoteItemSortColumn);
+            if (column != null && (itemList.totem$getSortColumn() != column
+                    || itemList.totem$getSortOrder() != remoteItemSortOrder)) {
+                itemList.totem$setSortColumn(null);
+                itemList.totem$setSortOrder(0);
+                itemList.totem$sortByColumn(column);
+                if (remoteItemSortOrder > 0) itemList.totem$sortByColumn(column);
+            }
+        }
+    }
+
+    private static StatType<?> statType(String column) {
+        return switch (column) {
+            case "mined" -> Stats.BLOCK_MINED;
+            case "broken" -> Stats.ITEM_BROKEN;
+            case "crafted" -> Stats.ITEM_CRAFTED;
+            case "used" -> Stats.ITEM_USED;
+            case "picked_up" -> Stats.ITEM_PICKED_UP;
+            case "dropped" -> Stats.ITEM_DROPPED;
+            default -> null;
+        };
     }
 
     private static ItemStack itemStack(String itemId) {
@@ -480,166 +572,18 @@ public final class ObserverStatsScreenClient {
         }
     }
 
-    private static final class NativeStatsMirrorScreen extends ObserverMirrorScreen {
-        private NativeStatsMirrorScreen() { super(Component.literal("Observer Statistics")); }
+    private static final class ObserverStatsScreen extends StatsScreen implements ObserverReadOnlyScreen {
+        private ObserverStatsScreen(StatsCounter counter) { super(null, counter); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
         @Override public boolean isPauseScreen() { return false; }
         @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
+            if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving();
         }
-
         @Override public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            g.fill(0, 0, width, height, 0xA0000000);
-            StatsLayout layout = statsLayout(width, height);
-            int pw = layout.panelWidth();
-            int ph = layout.panelHeight();
-            int left = layout.left();
-            int top = layout.top();
-            g.fill(left, top, left + pw, top + ph, 0xFFC6C6C6);
-            g.outline(left, top, pw, ph, 0xFF303030);
-            BoundedLabel title = boundedLabel(remoteTitle.isBlank() ? "Statistics" : remoteTitle,
-                    layout.titleWidth(), font::width);
-            g.text(font, title.text(), left + layout.contentLeft(), top + TITLE_Y, 0xFF303030, false);
-            drawSort(g, layout, left, top);
-            drawTabs(g, layout, left, top);
-            int bodyLeft = left + layout.bodyX();
-            int bodyTop = top + layout.bodyY();
-            int bodyBottom = bodyTop + layout.bodyHeight();
-            g.fill(bodyLeft, bodyTop, bodyLeft + layout.bodyWidth(), bodyBottom, 0xFFF0F0F0);
-            g.outline(bodyLeft, bodyTop, layout.bodyWidth(), layout.bodyHeight(), 0xFF808080);
-            if (remoteLoading) {
-                BoundedLabel loading = boundedLabel("Loading statistics…",
-                        layout.bodyInnerRight() - layout.bodyInnerLeft(), font::width);
-                g.text(font, loading.text(), left + layout.bodyInnerLeft(), bodyTop + 16, 0xFF555555, false);
-            } else {
-                switch (remoteActiveTab) {
-                    case "items" -> drawItems(g, layout, left, top);
-                    case "mobs" -> drawMobs(g, layout, left, top);
-                    default -> drawGeneral(g, layout, left, top);
-                }
-            }
+            super.extractRenderState(g, mouseX, mouseY, partialTick);
             extractedFrames++;
         }
-
-        private void drawSort(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
-            if (!"items".equals(remoteActiveTab) || remoteItemSortColumn.isEmpty()) return;
-            String arrow = remoteItemSortOrder < 0 ? "↓" : remoteItemSortOrder > 0 ? "↑" : "";
-            String column = remoteItemSortColumn.replace('_', ' ');
-            BoundedLabel sort = boundedLabel("Sort: " + column + (arrow.isEmpty() ? "" : " " + arrow),
-                    layout.sortWidth(), font::width);
-            g.text(font, sort.text(), left + layout.sortX() + layout.sortWidth() - sort.textWidth(),
-                    top + TITLE_Y, 0xFF555555, false);
-        }
-
-        private void drawTabs(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
-            String[] tabs = {"general", "items", "mobs"};
-            for (int i = 0; i < tabs.length; i++) {
-                int x = left + layout.tabX(i);
-                boolean selected = tabs[i].equals(remoteActiveTab);
-                g.fill(x, top + TAB_Y, x + layout.tabWidth(), top + TAB_Y + TAB_HEIGHT,
-                        selected ? 0xFF8C8C8C : 0xFFE0E0E0);
-                g.outline(x, top + TAB_Y, layout.tabWidth(), TAB_HEIGHT, 0xFF707070);
-                String rawLabel = switch (tabs[i]) {
-                    case "items" -> "Items";
-                    case "mobs" -> "Mobs";
-                    default -> "General";
-                };
-                BoundedLabel label = boundedLabel(rawLabel, Math.max(0, layout.tabWidth() - 8), font::width);
-                int labelX = x + (layout.tabWidth() - label.textWidth()) / 2;
-                g.text(font, label.text(), labelX, top + TAB_Y + 6,
-                        selected ? 0xFFFFFFFF : 0xFF404040, false);
-            }
-        }
-
-        private void drawGeneral(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
-            RowWindow window = rowWindow(remoteGeneralRows.size(), remoteScrollAmount,
-                    GENERAL_ROW_HEIGHT, layout.generalRowCapacity());
-            int rowY = top + layout.bodyY() + 4;
-            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
-                var row = remoteGeneralRows.get(i);
-                if ((i & 1) == 0) {
-                    g.fill(left + layout.bodyX() + 2, rowY,
-                            left + layout.bodyRight() - 2, rowY + GENERAL_ROW_HEIGHT, 0xFFE5E5E5);
-                }
-                BoundedLabel label = boundedLabel(row.label(), layout.generalLabelWidth(), font::width);
-                BoundedLabel value = boundedLabel(row.formattedValue(), layout.generalValueWidth(), font::width);
-                g.text(font, label.text(), left + layout.bodyInnerLeft(), rowY + 3, 0xFF333333, false);
-                g.text(font, value.text(), left + layout.generalValueX() + layout.generalValueWidth() - value.textWidth(),
-                        rowY + 3, 0xFF555555, false);
-                rowY += GENERAL_ROW_HEIGHT;
-            }
-        }
-
-        private void drawItems(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
-            int headerY = top + layout.bodyY() + 5;
-            BoundedLabel itemHeader = boundedLabel("Item",
-                    layout.itemFirstStatX() - layout.bodyInnerLeft() - ITEM_ICON_TEXT_GAP, font::width);
-            g.text(font, itemHeader.text(), left + layout.bodyInnerLeft(), headerY, 0xFF555555, false);
-            String[] headers = {"Mine", "Break", "Craft", "Use", "Pick", "Drop"};
-            for (int i = 0; i < headers.length; i++) {
-                BoundedLabel header = boundedLabel(headers[i], Math.max(0, layout.itemStatWidth() - 4), font::width);
-                g.text(font, header.text(), left + layout.itemStatX(i)
-                                + (layout.itemStatWidth() - header.textWidth()) / 2,
-                        headerY, 0xFF555555, false);
-            }
-            RowWindow window = rowWindow(remoteItemRows.size(), remoteScrollAmount,
-                    TABLE_ROW_HEIGHT, layout.tableRowCapacity());
-            int rowY = top + layout.bodyY() + TABLE_HEADER_HEIGHT;
-            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
-                var row = remoteItemRows.get(i);
-                if ((i & 1) == 0) {
-                    g.fill(left + layout.bodyX() + 2, rowY,
-                            left + layout.bodyRight() - 2, rowY + TABLE_ROW_HEIGHT, 0xFFE5E5E5);
-                }
-                ItemStack stack = itemStack(row.itemId());
-                if (!stack.isEmpty()) g.item(stack, left + layout.bodyInnerLeft(), rowY + 2);
-                String shortId = row.itemId().startsWith("minecraft:") ? row.itemId().substring(10) : row.itemId();
-                BoundedLabel itemName = boundedLabel(shortId, layout.itemLabelWidth(), font::width);
-                g.text(font, itemName.text(), left + layout.itemLabelX(), rowY + 6, 0xFF333333, false);
-                int[] values = {row.mined(), row.broken(), row.crafted(), row.used(), row.pickedUp(), row.dropped()};
-                for (int c = 0; c < values.length; c++) {
-                    BoundedLabel value = boundedLabel(Integer.toString(values[c]),
-                            Math.max(0, layout.itemStatWidth() - 4), font::width);
-                    g.text(font, value.text(), left + layout.itemStatRight(c) - 2 - value.textWidth(),
-                            rowY + 6, 0xFF555555, false);
-                }
-                rowY += TABLE_ROW_HEIGHT;
-            }
-        }
-
-        private void drawMobs(GuiGraphicsExtractor g, StatsLayout layout, int left, int top) {
-            int headerY = top + layout.bodyY() + 5;
-            BoundedLabel mobHeader = boundedLabel("Mob", layout.mobNameWidth(), font::width);
-            BoundedLabel killedHeader = boundedLabel("Killed", layout.mobStatWidth(), font::width);
-            BoundedLabel killedByHeader = boundedLabel("Killed by", layout.mobStatWidth(), font::width);
-            g.text(font, mobHeader.text(), left + layout.bodyInnerLeft(), headerY, 0xFF555555, false);
-            g.text(font, killedHeader.text(), left + layout.mobKilledX()
-                            + (layout.mobStatWidth() - killedHeader.textWidth()) / 2,
-                    headerY, 0xFF555555, false);
-            g.text(font, killedByHeader.text(), left + layout.mobKilledByX()
-                            + (layout.mobStatWidth() - killedByHeader.textWidth()) / 2,
-                    headerY, 0xFF555555, false);
-            RowWindow window = rowWindow(remoteMobRows.size(), remoteScrollAmount,
-                    TABLE_ROW_HEIGHT, layout.tableRowCapacity());
-            int rowY = top + layout.bodyY() + TABLE_HEADER_HEIGHT;
-            for (int i = window.firstRow(); i < window.lastExclusive(); i++) {
-                var row = remoteMobRows.get(i);
-                if ((i & 1) == 0) {
-                    g.fill(left + layout.bodyX() + 2, rowY,
-                            left + layout.bodyRight() - 2, rowY + TABLE_ROW_HEIGHT, 0xFFE5E5E5);
-                }
-                BoundedLabel name = boundedLabel(row.name(), layout.mobNameWidth(), font::width);
-                BoundedLabel killed = boundedLabel(Integer.toString(row.killed()),
-                        Math.max(0, layout.mobStatWidth() - 4), font::width);
-                BoundedLabel killedBy = boundedLabel(Integer.toString(row.killedBy()),
-                        Math.max(0, layout.mobStatWidth() - 4), font::width);
-                g.text(font, name.text(), left + layout.bodyInnerLeft(), rowY + 6, 0xFF333333, false);
-                g.text(font, killed.text(), left + layout.mobKilledRight() - 2 - killed.textWidth(),
-                        rowY + 6, 0xFF555555, false);
-                g.text(font, killedBy.text(), left + layout.mobKilledByRight() - 2 - killedBy.textWidth(),
-                        rowY + 6, 0xFF555555, false);
-                rowY += TABLE_ROW_HEIGHT;
-            }
-        }
     }
+
+    /** Historical renderer retained only until its layout unit tests are migrated; never instantiated. */
 }

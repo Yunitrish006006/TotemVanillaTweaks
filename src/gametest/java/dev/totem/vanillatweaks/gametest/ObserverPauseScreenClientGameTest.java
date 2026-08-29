@@ -28,7 +28,7 @@ public final class ObserverPauseScreenClientGameTest implements FabricClientGame
                 applyMetadata(true, PauseScreen.class.getName(), "Game Menu");
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativePauseMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverPauseScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!getBoolean("remoteOpen") || !"Game Menu".equals(getString("remoteTitle"))) {
                 throw new AssertionError("PauseScreen semantic metadata was not reconstructed correctly");

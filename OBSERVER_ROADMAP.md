@@ -6,6 +6,9 @@ Observer View has completed the migration to **protocol-native observation**. Pr
 
 The current gameplay protocol is **Observer protocol v4** and the semantic screen transport is **screen protocol v2**. Session authority remains on the dedicated server, while Target and Observer clients exchange only versioned structured state through server relay and reconstruct the observed experience locally.
 
+The current four-way screen classification is recorded in
+[`OBSERVER_SCREEN_GAP_AUDIT.md`](OBSERVER_SCREEN_GAP_AUDIT.md).
+
 ### Architecture invariants
 
 - Do **not** capture the Target player's full framebuffer for transport.
@@ -68,9 +71,9 @@ CI enforces the no-frame invariant by rejecting production source that contains 
 - Observer clients reconstruct furnace-family UI locally, including semantic progress indicators, without receiving Target pixels.
 - Client GameTests render furnace semantic state locally and persist screenshot evidence.
 
-### Phase 7 — expanded semantic coverage — complete for current main
+### Phase 7 — expanded semantic coverage — active compatibility audit
 
-- The negotiated capability surface now occupies bits 0 through 23: `container_slots`, `furnace`,
+- The 24 pre-existing semantic families occupy bits 0 through 23: `container_slots`, `furnace`,
   `book`, `crafting`, `merchant`, `anvil`, `enchanting`, `remnant_backpack`,
   `automata_copper_golem`, `nexus`, `villagers_woodcutter`, `brewing`, `smithing`,
   `stonecutter`, `grindstone`, `loom`, `cartography`, `beacon`, `sign`, `crafter`,
@@ -82,14 +85,20 @@ CI enforces the no-frame invariant by rejecting production source that contains 
 - Dedicated family senders suppress lower-priority generic container or metadata output, and
   lifecycle sequences are cleared with the Observer session.
 - Layout-focused unit tests and native-scale Client GameTest screenshots cover the semantic
-  mirrors, while each registered relay is represented in the three-JVM E2E manifest.
+  views, while each registered relay is represented in the three-JVM E2E manifest.
 - Screen metadata never includes a player's unsent ChatScreen message or command text.
+- Native anvil, writable-book/signing and sign-editor reconstruction keeps
+  unsent rename/page/title/line drafts blank and proves that with sentinel
+  production-extractor coverage.
+- The remote cursor uses bit 24. `horse_inventory` uses bit 25 and reconstructs the genuine
+  `HorseInventoryScreen`; the next capability starts at bit 26.
 
 Recipe Book state is carried inside the `crafting` family rather than consuming another capability
 bit. It includes visibility, narrow-width mode, filtering, whether a search is active, selected tab
-and page state, but never the user's search text. Death, Horse/Mount, sleeping, Chat and Social
-Interactions do not have independent families. They continue to use the generic `container_slots`
-representation when that is sufficient, or the explicit metadata-only fallback otherwise.
+and page state, but never the user's search text. Death, sleeping, Chat and Social Interactions use
+explicit metadata-only privacy classifications where no dedicated semantic family is warranted.
+Discord configuration plus Nexus rename/access dialogs are also metadata-only and redact their
+titles; URL, key, token, credential and draft fields are never inspected or relayed.
 
 ## Current validation contract
 
@@ -123,9 +132,8 @@ Framebuffer removal and screen-family negotiation are no longer migration tasks.
 
 ## Success criterion
 
-The original architectural success criterion has been reached for the current supported Observer
-surface: an Observer can reconstruct the tested world/HUD, all 24 negotiated semantic families and
-metadata-only screen experience **without receiving full-screen image frames from the Target
-client**.
-
-Feature-completeness for every possible vanilla/modded GUI is a separate ongoing compatibility goal; unsupported or unnegotiated screens must continue to degrade to structured metadata rather than framebuffer transport.
+The framebuffer-free architecture is established for the tested surface: world/HUD, 25 negotiated
+semantic families, remote cursor, and intentional metadata-only states are covered without receiving
+full-screen image frames from the Target client. GUI coverage remains an explicit gap audit rather
+than a claim that every vanilla or modded screen is complete. Unsupported or unnegotiated screens
+must remain classified metadata and must never gain a pixel-stream fallback.

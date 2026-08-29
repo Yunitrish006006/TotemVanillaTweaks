@@ -3,6 +3,8 @@ package dev.totem.vanillatweaks.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
 import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverVillagersWoodcutterRelayManager;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -22,8 +24,10 @@ public abstract class ObserverNativeSessionManagerVillagersCapabilityMixin {
     private static long totem$includeWoodcutterCapability(long original, ServerPlayer observer) {
         boolean familyAvailable = FabricLoader.getInstance().isModLoaded("totem-villagers")
                 || Boolean.getBoolean("totem.observer.e2e.enabled");
-        if (!familyAvailable
-                || !ServerPlayNetworking.canSend(observer, ObserverVillagersWoodcutterPayloads.WoodcutterRelay.TYPE)) {
+        if (!familyAvailable || !ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
+                || !ObserverNativeSessionManager.ownedProviderAdvertises(observer,
+                ObserverVillagersWoodcutterPayloads.FAMILY_ID,
+                ObserverOwnedScreenProtocols.expected(ObserverVillagersWoodcutterPayloads.FAMILY_ID))) {
             return original;
         }
         return ObserverNativeScreenPayloads.sanitizeCapabilities(

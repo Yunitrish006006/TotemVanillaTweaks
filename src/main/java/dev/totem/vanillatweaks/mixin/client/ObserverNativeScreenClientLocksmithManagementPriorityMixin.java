@@ -1,6 +1,6 @@
 package dev.totem.vanillatweaks.mixin.client;
 
-import dev.totem.vanillatweaks.client.ObserverLocksmithManagementScreenClient;
+import dev.totem.vanillatweaks.client.ObserverStructuredScreenPolicy;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.network.ObserverLocksmithManagementPayloads;
@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Prevents generic container/metadata relays from competing with Locksmith management semantics. */
 @Mixin(value = ObserverNativeScreenClient.class, remap = false)
@@ -28,13 +27,9 @@ public abstract class ObserverNativeScreenClientLocksmithManagementPriorityMixin
         ci.cancel();
     }
 
-    @Inject(method = "isStructuredTargetScreen", at = @At("HEAD"), cancellable = true)
-    private static void totem$markLocksmithStructured(Screen screen, CallbackInfoReturnable<Boolean> cir) {
-        if (supportsLocksmith(screen)) cir.setReturnValue(true);
-    }
-
     private static boolean supportsLocksmith(Screen screen) {
         return ObserverNativeClient.targetSupportsScreen(ObserverLocksmithManagementPayloads.CAPABILITY)
-                && ObserverLocksmithManagementScreenClient.isTargetScreen(screen);
+                && ObserverStructuredScreenPolicy.suppressGenericMetadata(
+                screen == null ? "" : screen.getClass().getName(), ObserverLocksmithManagementPayloads.CAPABILITY);
     }
 }

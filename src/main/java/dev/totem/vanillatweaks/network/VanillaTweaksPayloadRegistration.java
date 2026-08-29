@@ -19,7 +19,11 @@ import dev.totem.vanillatweaks.observer.ObserverSmithingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverStatsRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverStonecutterRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverVillagersWoodcutterRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverOwnedScreenRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverRemoteCursorRelayManager;
+import dev.totem.vanillatweaks.observer.ObserverHorseRelayManager;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 public final class VanillaTweaksPayloadRegistration {
@@ -37,6 +41,11 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativePayloads.NativeControl.TYPE, ObserverNativePayloads.NativeControl.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativePayloads.NativeSession.TYPE, ObserverNativePayloads.NativeSession.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativePayloads.NativeViewRelay.TYPE, ObserverNativePayloads.NativeViewRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverOwnedScreenPayloads.State.TYPE, ObserverOwnedScreenPayloads.State.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverOwnedScreenPayloads.ProviderSet.TYPE, ObserverOwnedScreenPayloads.ProviderSet.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverOwnedScreenPayloads.Relay.TYPE, ObserverOwnedScreenPayloads.Relay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverRemoteCursorPayloads.State.TYPE, ObserverRemoteCursorPayloads.State.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverRemoteCursorPayloads.Relay.TYPE, ObserverRemoteCursorPayloads.Relay.CODEC);
 
         PayloadTypeRegistry.serverboundPlay().register(ObserverNativeScreenPayloads.ContainerState.TYPE, ObserverNativeScreenPayloads.ContainerState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverNativeScreenPayloads.ContainerRelay.TYPE, ObserverNativeScreenPayloads.ContainerRelay.CODEC);
@@ -86,6 +95,8 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.clientboundPlay().register(ObserverAdvancementsScreenPayloads.AdvancementsRelay.TYPE, ObserverAdvancementsScreenPayloads.AdvancementsRelay.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverStatsScreenPayloads.StatsState.TYPE, ObserverStatsScreenPayloads.StatsState.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverStatsScreenPayloads.StatsRelay.TYPE, ObserverStatsScreenPayloads.StatsRelay.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ObserverHorseScreenPayloads.HorseState.TYPE, ObserverHorseScreenPayloads.HorseState.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ObserverHorseScreenPayloads.HorseRelay.TYPE, ObserverHorseScreenPayloads.HorseRelay.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ObserverPayloads.ScreenState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptScreenState(context.player(), payload)));
@@ -93,6 +104,12 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverSessionManager.acceptStop(context.player())));
         ServerPlayNetworking.registerGlobalReceiver(ObserverNativePayloads.NativeViewState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptViewState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverOwnedScreenPayloads.State.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverOwnedScreenRelayManager.accept(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverOwnedScreenPayloads.ProviderSet.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptOwnedProviderSet(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverRemoteCursorPayloads.State.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverRemoteCursorRelayManager.accept(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverNativeScreenPayloads.ContainerState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverNativeSessionManager.acceptContainerState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverNativeScreenPayloads.FurnaceState.TYPE,
@@ -141,5 +158,9 @@ public final class VanillaTweaksPayloadRegistration {
                 (payload, context) -> context.server().execute(() -> ObserverAdvancementsRelayManager.acceptState(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ObserverStatsScreenPayloads.StatsState.TYPE,
                 (payload, context) -> context.server().execute(() -> ObserverStatsRelayManager.acceptState(context.player(), payload)));
+        ServerPlayNetworking.registerGlobalReceiver(ObserverHorseScreenPayloads.HorseState.TYPE,
+                (payload, context) -> context.server().execute(() -> ObserverHorseRelayManager.accept(context.player(), payload)));
+        ServerPlayConnectionEvents.DISCONNECT.register((listener, server) ->
+                ObserverNativeSessionManager.clearOwnedProviderSet(listener.getPlayer().getUUID()));
     }
 }

@@ -27,7 +27,7 @@ public final class ObserverAdvancementsScreenPayloads {
         return Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, path);
     }
 
-    public record TabState(String rootId, String title, String iconItemId) {}
+    public record TabState(String rootId, String title, String iconItemId, String backgroundTextureId) {}
 
     public record NodeState(
             String id, String rootId, String parentId,
@@ -99,6 +99,7 @@ public final class ObserverAdvancementsScreenPayloads {
             buf.writeUtf(tab.rootId(), MAX_ID);
             buf.writeUtf(tab.title(), MAX_TEXT);
             buf.writeUtf(tab.iconItemId(), MAX_ID);
+            buf.writeUtf(tab.backgroundTextureId(), MAX_ID);
         }
 
         int nodeCount = Math.min(nodes.size(), MAX_NODES);
@@ -134,7 +135,8 @@ public final class ObserverAdvancementsScreenPayloads {
         int tabCount = boundedCount(buf.readVarInt(), MAX_TABS, "tab");
         List<TabState> tabs = new ArrayList<>(tabCount);
         for (int i = 0; i < tabCount; i++) {
-            tabs.add(new TabState(buf.readUtf(MAX_ID), buf.readUtf(MAX_TEXT), buf.readUtf(MAX_ID)));
+            tabs.add(new TabState(
+                    buf.readUtf(MAX_ID), buf.readUtf(MAX_TEXT), buf.readUtf(MAX_ID), buf.readUtf(MAX_ID)));
         }
 
         int nodeCount = boundedCount(buf.readVarInt(), MAX_NODES, "node");

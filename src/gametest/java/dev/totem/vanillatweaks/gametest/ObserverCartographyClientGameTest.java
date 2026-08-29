@@ -31,7 +31,7 @@ public final class ObserverCartographyClientGameTest implements FabricClientGame
                 accept(ObserverCartographyScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeCartographyMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverCartographyScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!"scale".equals(getString("remoteOperation")) || !getBoolean("remoteMapPresent")
                     || !getBoolean("remoteAdditionalPresent") || !getBoolean("remoteResultAvailable")

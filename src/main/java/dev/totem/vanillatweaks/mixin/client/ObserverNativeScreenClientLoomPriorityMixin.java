@@ -11,7 +11,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Gives Loom semantics priority over generic container/metadata adapters. */
 @Mixin(value = ObserverNativeScreenClient.class, remap = false)
@@ -25,11 +24,6 @@ public abstract class ObserverNativeScreenClientLoomPriorityMixin {
         closeTargetFurnace(ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_FURNACE));
         closeTargetContainer(ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS));
         ci.cancel();
-    }
-
-    @Inject(method = "isStructuredTargetScreen", at = @At("HEAD"), cancellable = true)
-    private static void totem$markLoomStructured(Screen screen, CallbackInfoReturnable<Boolean> cir) {
-        if (supportsLoom(screen)) cir.setReturnValue(true);
     }
 
     private static boolean supportsLoom(Screen screen) {

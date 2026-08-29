@@ -15,4 +15,20 @@ public final class ObserverNexusIntegrationFixture {
     public static Screen registration(SpaceUnitRegistrationPreviewPayload payload) {
         return new NexusSpaceUnitRegistrationPreviewScreen(payload);
     }
+
+    public static String mapName(Screen screen) {
+        return ((NexusSpaceUnitMapScreen) screen).observerPayload().sourceName();
+    }
+
+    public static int friendCount(Screen screen) {
+        return ((NexusSpaceUnitFriendsScreen) screen).observerPayload().entries().size();
+    }
+
+    public static int registrationTier(Screen screen) {
+        return ((NexusSpaceUnitRegistrationPreviewScreen) screen).observerPayload().tier();
+    }
+
+    public static int deathEntryCount(Screen screen) {
+        return ((NexusDeathNodeAdminScreen) screen).observerPayload().entries().size();
+    }
 }

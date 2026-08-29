@@ -8,6 +8,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(StonecutterScreen.class)
 public interface StonecutterScreenAccessor {
     @Accessor("scrollOffs") float totem$getScrollOffs();
+    @Accessor("scrollOffs") void totem$setScrollOffs(float value);
     @Accessor("startIndex") int totem$getStartIndex();
+    @Accessor("startIndex") void totem$setStartIndex(int value);
     @Accessor("displayRecipes") boolean totem$getDisplayRecipes();
+    @Accessor("displayRecipes") void totem$setDisplayRecipes(boolean value);
 }

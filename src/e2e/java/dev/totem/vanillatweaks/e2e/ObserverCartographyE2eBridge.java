@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.CartographyTableScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -59,6 +61,11 @@ public final class ObserverCartographyE2eBridge implements ClientModInitializer 
                 fail("Cartography E2E semantic state mismatch");
                 return;
             }
+            CartographyTableScreen screen = (CartographyTableScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 2)) {
+                fail("Cartography production Menu did not apply relayed map, material, and result slots");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Cartography semantic relay");
                 return;
@@ -72,7 +79,7 @@ public final class ObserverCartographyE2eBridge implements ClientModInitializer 
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-cartography-closed.txt",
-                    "Cartography semantic mirror closed.\n");
+                    "Cartography semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -118,10 +125,13 @@ public final class ObserverCartographyE2eBridge implements ClientModInitializer 
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeCartographyMirrorScreen")
+                && minecraft.gui.screen() instanceof CartographyTableScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(CARTOGRAPHY, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverCartographyScreenPayloads.FAMILY_ID) > 0L
-                && getLong(CARTOGRAPHY, "extractedFrames") > 0L;
+                && getLong(CARTOGRAPHY, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverCartographyScreenPayloads.FAMILY_ID,
+                        getLong(CARTOGRAPHY, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

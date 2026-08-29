@@ -15,12 +15,12 @@ import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-
+import dev.totem.vanillatweaks.network.ObserverHorseScreenPayloads;
 import java.util.Map;
+import java.util.Set;
 
-/** Selects semantic screen relays before the compatibility metadata mirror. */
-final class ObserverStructuredScreenPolicy {
+/** Selects semantic Screen reconstruction before metadata-only compatibility status. */
+public final class ObserverStructuredScreenPolicy {
     private static final Map<String, Long> DEDICATED_CAPABILITIES = Map.ofEntries(
             Map.entry("net.minecraft.client.gui.screens.inventory.InventoryScreen",
                     ObserverNativeScreenPayloads.CAPABILITY_CRAFTING),
@@ -72,6 +72,8 @@ final class ObserverStructuredScreenPolicy {
                     ObserverAdvancementsScreenPayloads.CAPABILITY),
             Map.entry(ObserverStatsScreenPayloads.SCREEN_CLASS,
                     ObserverStatsScreenPayloads.CAPABILITY),
+            Map.entry(ObserverHorseScreenPayloads.SCREEN_CLASS,
+                    ObserverHorseScreenPayloads.CAPABILITY),
             Map.entry("net.minecraft.client.gui.screens.inventory.BookViewScreen",
                     ObserverNativeScreenPayloads.CAPABILITY_BOOK),
             Map.entry("net.minecraft.client.gui.screens.inventory.BookEditScreen",
@@ -93,10 +95,15 @@ final class ObserverStructuredScreenPolicy {
             Map.entry("dev.totem.nexus.client.NexusSpaceUnitRegistrationPreviewScreen",
                     ObserverNativeScreenPayloads.CAPABILITY_NEXUS)
     );
+    private static final Set<String> EXACT_GENERIC_CONTAINERS = Set.of(
+            "net.minecraft.client.gui.screens.inventory.ContainerScreen",
+            "net.minecraft.client.gui.screens.inventory.HopperScreen",
+            "net.minecraft.client.gui.screens.inventory.DispenserScreen",
+            "net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen");
 
     private ObserverStructuredScreenPolicy() {}
 
-    static boolean suppressGenericMetadata(String screenClass, long negotiatedCapabilities) {
+    public static boolean suppressGenericMetadata(String screenClass, long negotiatedCapabilities) {
         if (screenClass == null || screenClass.isBlank()) return false;
         long dedicated = DEDICATED_CAPABILITIES.getOrDefault(screenClass, 0L);
         if (dedicated != 0L && supports(negotiatedCapabilities, dedicated)) return true;
@@ -105,12 +112,7 @@ final class ObserverStructuredScreenPolicy {
     }
 
     private static boolean isContainerScreenClass(String screenClass) {
-        try {
-            Class<?> type = Class.forName(screenClass, false, ObserverStructuredScreenPolicy.class.getClassLoader());
-            return AbstractContainerScreen.class.isAssignableFrom(type);
-        } catch (LinkageError | ClassNotFoundException ignored) {
-            return false;
-        }
+        return EXACT_GENERIC_CONTAINERS.contains(screenClass);
     }
 
     private static boolean supports(long capabilities, long capability) {

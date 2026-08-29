@@ -31,7 +31,7 @@ public final class ObserverGrindstoneClientGameTest implements FabricClientGameT
                 accept(ObserverGrindstoneScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeGrindstoneMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverGrindstoneScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!getBoolean("remotePrimaryInputPresent") || !getBoolean("remoteSecondaryInputPresent")
                     || !getBoolean("remoteResultAvailable") || getBoolean("remoteInvalidCombination")

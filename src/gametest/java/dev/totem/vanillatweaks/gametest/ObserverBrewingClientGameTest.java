@@ -32,7 +32,7 @@ public final class ObserverBrewingClientGameTest implements FabricClientGameTest
                 accept(ObserverBrewingScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeBrewingMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverBrewingScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (getInt("remoteBrewingTicks") != 180 || getInt("remoteFuel") != 12
                     || getListSize("remoteSlots") != 41) {

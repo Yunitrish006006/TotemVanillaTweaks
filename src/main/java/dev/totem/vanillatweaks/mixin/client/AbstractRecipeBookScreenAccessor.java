@@ -10,4 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface AbstractRecipeBookScreenAccessor {
     @Accessor("recipeBookComponent") RecipeBookComponent<?> totem$getRecipeBookComponent();
     @Accessor("widthTooNarrow") boolean totem$getWidthTooNarrow();
+    @Accessor("widthTooNarrow") void totem$setWidthTooNarrow(boolean value);
 }

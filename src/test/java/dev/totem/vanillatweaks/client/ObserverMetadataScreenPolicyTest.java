@@ -28,7 +28,10 @@ final class ObserverMetadataScreenPolicyTest {
         for (String screenClass : List.of(
                 "net.minecraft.client.gui.screens.ChatScreen",
                 "net.minecraft.client.gui.screens.InBedChatScreen",
-                "net.minecraft.client.gui.screens.social.SocialInteractionsScreen"
+                "net.minecraft.client.gui.screens.social.SocialInteractionsScreen",
+                "dev.totem.discord.client.DiscordConfigScreen",
+                "dev.totem.nexus.client.NexusSpaceUnitMapScreen$RenameSpaceUnitScreen",
+                "dev.totem.nexus.client.NexusSpaceUnitMapScreen$AccessSpaceUnitScreen"
         )) {
             ObserverMetadataScreenPolicy.Presentation presentation =
                     ObserverMetadataScreenPolicy.classify(screenClass);
@@ -38,6 +41,10 @@ final class ObserverMetadataScreenPolicyTest {
             assertEquals("Metadata only by design.", presentation.statusLine());
             assertEquals("Unsent and private text is not transmitted.", presentation.detailLine());
         }
+        assertEquals("Private configuration screen", ObserverMetadataScreenPolicy.safeTitle(
+                "dev.totem.discord.client.DiscordConfigScreen", "https://secret.example/token"));
+        assertEquals("Private configuration screen", ObserverMetadataScreenPolicy.safeTitle(
+                "dev.totem.nexus.client.NexusSpaceUnitMapScreen$RenameSpaceUnitScreen", "private draft"));
     }
 
     @Test

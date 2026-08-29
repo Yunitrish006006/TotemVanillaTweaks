@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 82b21944b1e4865f5d34f13febc5049d936a636f
+          ref: e9dc2975cca37210f9d3bab2df4830e81af77295
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: a8eb55ae53f3c6488775467127bab4d972c52a49
+          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemAutomata
-          ref: 59b80206768466a4ac96f89e1343849abaa82dd3
+          ref: b007eeb0ef0417804fe2abb25524842480419ae1
           path: .lockstep/TotemAutomata
           persist-credentials: false
 
@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb
+          ref: 0267e2d4017c3a97a9389f71903b5b26744eff23
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -75,7 +75,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemVillagers
-          ref: d0d287e2df831a44b4b2cab28bbc98e396368cda
+          ref: c4d37815c45b86f102939ec5e43b171692a406e0
           path: .lockstep/TotemVillagers
           persist-credentials: false
 
@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemLocksmith
-          ref: 9080ac2c37807b539c5d309fe833edb660834f3b
+          ref: c89d380b88b10a3f0f55044e04266bc8ada70357
           path: .lockstep/TotemLocksmith
           persist-credentials: false
 
@@ -91,24 +91,46 @@ jobs:
         shell: bash
         run: bash .github/scripts/build-observer-integration-jars.sh
 
+      - name: Enforce module-owned Observer screens
+        shell: bash
+        run: bash .github/scripts/check-owned-observer-screens.sh
+
       - name: Run cross-module production sender Client GameTest
         shell: bash
         run: |
           set -euo pipefail
           xvfb-run -a ./gradlew \
-            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.11.jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.15.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.16.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.5.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.32.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar" \
+            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.12.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.6.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
+
+      - name: Verify cross-module integration screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          integration_screenshots="${GITHUB_WORKSPACE}/build/owner-present-integration-screenshots"
+          count="$(find "$integration_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
+          if [[ "$count" != 8 ]]; then
+            echo "Expected exactly 8 owner-present screenshots; found $count." >&2
+            exit 1
+          fi
+
+      - name: Upload cross-module integration screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-owner-present-production-runtime-screenshots
+          path: build/owner-present-integration-screenshots/*.png
+          if-no-files-found: error
 
       - name: Run production-namespace client GameTests
         shell: bash
         run: |
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.11'
+          test "$core_version" = '0.7.12'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace

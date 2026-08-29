@@ -31,7 +31,7 @@ public final class ObserverBeaconClientGameTest implements FabricClientGameTest 
                 accept(ObserverBeaconScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeBeaconMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverBeaconScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (getInt("remoteLevels") != 4
                     || !"minecraft:speed".equals(getString("remotePrimaryEffectId"))
