@@ -5,10 +5,13 @@ import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.client.ObserverStatsScreenClient;
 import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
+import dev.totem.vanillatweaks.mixin.client.StatsScreenAccessor;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.achievement.StatsScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -60,7 +63,7 @@ public final class ObserverStatsE2eBridge implements ClientModInitializer {
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
-                fail("Generic semantic-adapter-pending mirror competed with Statistics semantic relay");
+                fail("Generic semantic-adapter-pending metadata screen competed with Statistics semantic relay");
                 return;
             }
             observerSeen = true;
@@ -70,8 +73,7 @@ public final class ObserverStatsE2eBridge implements ClientModInitializer {
 
         if (observerSaved && !observerClosed && !getBoolean(STATS, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-stats-closed.txt", "Statistics semantic mirror closed.\n");
-            setBoolean(DRIVER, "observerStopRequested", false);
+            ObserverE2eCommon.marker("observer-native-stats-closed.txt", "Statistics semantic view closed.\n");
         }
     }
 
@@ -107,10 +109,14 @@ public final class ObserverStatsE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeStatsMirrorScreen")
+                && minecraft.gui.screen() instanceof StatsScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
+                && !((StatsScreenAccessor) (Object) minecraft.gui.screen()).totem$isLoading()
                 && getBoolean(STATS, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverStatsScreenPayloads.FAMILY_ID) > 0L
-                && getLong(STATS, "extractedFrames") > 0L;
+                && getLong(STATS, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverStatsScreenPayloads.FAMILY_ID,
+                        getLong(STATS, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

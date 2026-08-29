@@ -45,7 +45,7 @@ public final class ObserverStonecutterClientGameTest implements FabricClientGame
                 }
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeStonecutterMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverStonecutterScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (getInt("remoteSelectedRecipeIndex") != 2 || getInt("remoteRecipeCount") != 5
                     || getInt("remoteStartIndex") != 0 || getFloat("remoteScrollOffset") != 0.0F

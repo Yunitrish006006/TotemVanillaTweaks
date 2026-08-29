@@ -1,5 +1,6 @@
 package dev.totem.vanillatweaks.client;
 
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.mixin.client.BookEditScreenAccessor;
 import dev.totem.vanillatweaks.mixin.client.BookSignScreenAccessor;
 import dev.totem.vanillatweaks.mixin.client.BookViewScreenAccessor;
@@ -15,7 +16,18 @@ import net.minecraft.client.gui.screens.inventory.BookEditScreen;
 import net.minecraft.client.gui.screens.inventory.BookSignScreen;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
 import net.minecraft.client.gui.screens.inventory.LecternScreen;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.network.Filterable;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.LecternMenu;
+import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.WritableBookContent;
+import net.minecraft.world.item.component.WrittenBookContent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,9 +36,6 @@ import java.util.UUID;
 /** Client-side target adapter and Observer reconstruction for the semantic book family. */
 public final class ObserverNativeBookScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
-    private static final int MAX_RENDERED_LINES = 14;
-    private static final int APPROX_CHARS_PER_LINE = 24;
-
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetBookOpen;
@@ -41,7 +50,7 @@ public final class ObserverNativeBookScreenClient {
     private static String remoteBookTitle = "";
     private static String remoteAuthor = "";
 
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverNativeBookScreenClient() {
@@ -55,8 +64,11 @@ public final class ObserverNativeBookScreenClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeBookScreenClient::tick);
     }
 
-    static boolean isNativeMirrorScreen(Screen screen) {
-        return screen instanceof NativeBookMirrorScreen;
+    static boolean isNativeObserverScreen(Screen screen) {
+        return screen instanceof ObserverBookViewScreen
+                || screen instanceof ObserverBookEditScreen
+                || screen instanceof ObserverBookSignScreen
+                || screen instanceof ObserverLecternScreen;
     }
 
     static boolean hasStructuredRemoteScreen() {
@@ -77,12 +89,12 @@ public final class ObserverNativeBookScreenClient {
 
         if (!ObserverNativeClient.observerSessionActive()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
 
         if (remoteOpen) {
-            ensureMirror();
+            ensureObserverScreen();
         }
     }
 
@@ -138,14 +150,13 @@ public final class ObserverNativeBookScreenClient {
         if (screen instanceof BookSignScreen signScreen) {
             BookSignScreenAccessor accessor = (BookSignScreenAccessor) signScreen;
             List<String> pages = accessor.totemVanillaTweaks$getPages();
-            Component ownerText = accessor.totemVanillaTweaks$getOwnerText();
             return new BookSnapshot(
                     ObserverBookScreenPayloads.VARIANT_SIGNING,
                     0,
                     pages == null ? 0 : pages.size(),
                     "",
-                    nullToEmpty(accessor.totemVanillaTweaks$getTitleValue()),
-                    ownerText == null ? "" : ownerText.getString()
+                    "",
+                    ""
             );
         }
 
@@ -154,12 +165,11 @@ public final class ObserverNativeBookScreenClient {
             List<String> pages = accessor.totemVanillaTweaks$getPages();
             int count = pages == null ? 0 : pages.size();
             int page = count == 0 ? 0 : clamp(accessor.totemVanillaTweaks$getCurrentPage(), 0, count - 1);
-            String text = count == 0 ? "" : nullToEmpty(pages.get(page));
             return new BookSnapshot(
                     ObserverBookScreenPayloads.VARIANT_WRITABLE,
                     page,
                     count,
-                    text,
+                    "",
                     "",
                     ""
             );
@@ -211,7 +221,7 @@ public final class ObserverNativeBookScreenClient {
         }
         if (!payload.open()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
 
@@ -225,34 +235,36 @@ public final class ObserverNativeBookScreenClient {
         remotePageText = limit(payload.pageText(), ObserverBookScreenPayloads.MAX_PAGE_TEXT);
         remoteBookTitle = limit(payload.bookTitle(), ObserverBookScreenPayloads.MAX_METADATA_TEXT);
         remoteAuthor = limit(payload.author(), ObserverBookScreenPayloads.MAX_METADATA_TEXT);
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
-        if (!(minecraft.gui.screen() instanceof NativeBookMirrorScreen)) {
-            suppressMirrorStop = true;
+        Screen current = minecraft.gui.screen();
+        if (!matchesRemoteVariant(current)) {
+            suppressObserverScreenStop = true;
             try {
-                minecraft.setScreenAndShow(new NativeBookMirrorScreen());
+                minecraft.setScreenAndShow(createRemoteScreen(minecraft));
             } finally {
-                suppressMirrorStop = false;
+                suppressObserverScreenStop = false;
             }
         }
+        applyRemoteState(minecraft.gui.screen());
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeBookMirrorScreen)) {
+        if (!isNativeObserverScreen(minecraft.gui.screen())) {
             return;
         }
-        suppressMirrorStop = true;
+        suppressObserverScreenStop = true;
         try {
             minecraft.setScreenAndShow(null);
         } finally {
-            suppressMirrorStop = false;
+            suppressObserverScreenStop = false;
         }
     }
 
@@ -268,32 +280,92 @@ public final class ObserverNativeBookScreenClient {
         remoteAuthor = "";
     }
 
-    private static List<String> wrap(String text) {
-        List<String> lines = new ArrayList<>();
-        String normalized = nullToEmpty(text).replace("\r", "");
-        for (String paragraph : normalized.split("\n", -1)) {
-            String remaining = paragraph;
-            if (remaining.isEmpty()) {
-                lines.add("");
-                continue;
-            }
-            while (!remaining.isEmpty() && lines.size() < MAX_RENDERED_LINES) {
-                int take = Math.min(APPROX_CHARS_PER_LINE, remaining.length());
-                int split = take;
-                if (take < remaining.length()) {
-                    int space = remaining.lastIndexOf(' ', take);
-                    if (space > 0) {
-                        split = space;
-                    }
-                }
-                lines.add(remaining.substring(0, split));
-                remaining = remaining.substring(split).stripLeading();
-            }
-            if (lines.size() >= MAX_RENDERED_LINES) {
-                break;
-            }
+    private static boolean matchesRemoteVariant(Screen screen) {
+        return switch (remoteVariant) {
+            case ObserverBookScreenPayloads.VARIANT_WRITABLE -> screen instanceof ObserverBookEditScreen;
+            case ObserverBookScreenPayloads.VARIANT_SIGNING -> screen instanceof ObserverBookSignScreen;
+            case ObserverBookScreenPayloads.VARIANT_LECTERN -> screen instanceof ObserverLecternScreen;
+            default -> screen instanceof ObserverBookViewScreen;
+        };
+    }
+
+    private static Screen createRemoteScreen(Minecraft minecraft) {
+        List<Component> pages = componentPages();
+        if (ObserverBookScreenPayloads.VARIANT_WRITABLE.equals(remoteVariant)) {
+            WritableBookContent content = new WritableBookContent(stringPages().stream()
+                    .map(Filterable::passThrough).toList());
+            ItemStack stack = new ItemStack(Items.WRITABLE_BOOK);
+            stack.set(DataComponents.WRITABLE_BOOK_CONTENT, content);
+            return new ObserverBookEditScreen(minecraft.player, stack, InteractionHand.MAIN_HAND, content);
         }
-        return lines;
+        if (ObserverBookScreenPayloads.VARIANT_SIGNING.equals(remoteVariant)) {
+            WritableBookContent content = new WritableBookContent(stringPages().stream()
+                    .map(Filterable::passThrough).toList());
+            ItemStack stack = new ItemStack(Items.WRITABLE_BOOK);
+            stack.set(DataComponents.WRITABLE_BOOK_CONTENT, content);
+            ObserverBookEditScreen edit = new ObserverBookEditScreen(
+                    minecraft.player, stack, InteractionHand.MAIN_HAND, content);
+            ObserverBookSignScreen sign = new ObserverBookSignScreen(
+                    edit, minecraft.player, InteractionHand.MAIN_HAND, stringPages());
+            BookSignScreenAccessor accessor = (BookSignScreenAccessor) (Object) sign;
+            accessor.totemVanillaTweaks$setTitleValue(remoteBookTitle);
+            accessor.totemVanillaTweaks$setOwnerText(Component.literal(remoteAuthor));
+            return sign;
+        }
+        if (ObserverBookScreenPayloads.VARIANT_LECTERN.equals(remoteVariant)) {
+            SimpleContainer container = new SimpleContainer(1);
+            ItemStack writtenBook = new ItemStack(Items.WRITTEN_BOOK);
+            writtenBook.set(DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(
+                    Filterable.passThrough(remoteBookTitle), remoteAuthor, 0,
+                    pages.stream().map(Filterable::passThrough).toList(), true));
+            container.setItem(0, writtenBook);
+            SimpleContainerData data = new SimpleContainerData(1);
+            data.set(0, remotePageIndex);
+            Inventory inventory = ObserverVanillaScreenSupport.detachedInventory();
+            return new ObserverLecternScreen(
+                    new LecternMenu(0, container, data), inventory,
+                    Component.literal(remoteTitle.isBlank() ? "Lectern" : remoteTitle));
+        }
+        return new ObserverBookViewScreen(new BookViewScreen.BookAccess(pages));
+    }
+
+    private static void applyRemoteState(Screen screen) {
+        if (screen instanceof ObserverBookViewScreen view) {
+            view.setBookAccess(new BookViewScreen.BookAccess(componentPages()));
+            view.setPage(remotePageIndex);
+        } else if (screen instanceof ObserverBookEditScreen edit) {
+            BookEditScreenAccessor accessor = (BookEditScreenAccessor) (Object) edit;
+            accessor.totemVanillaTweaks$getPages().clear();
+            accessor.totemVanillaTweaks$getPages().addAll(stringPages());
+            accessor.totemVanillaTweaks$setCurrentPage(remotePageIndex);
+            accessor.totemVanillaTweaks$updatePageContent();
+        } else if (screen instanceof ObserverBookSignScreen sign) {
+            BookSignScreenAccessor accessor = (BookSignScreenAccessor) (Object) sign;
+            accessor.totemVanillaTweaks$getPages().clear();
+            accessor.totemVanillaTweaks$getPages().addAll(stringPages());
+            accessor.totemVanillaTweaks$setTitleValue(remoteBookTitle);
+            accessor.totemVanillaTweaks$setOwnerText(Component.literal(remoteAuthor));
+            if (accessor.totemVanillaTweaks$getTitleBox() != null) {
+                accessor.totemVanillaTweaks$getTitleBox().setValue(remoteBookTitle);
+            }
+        } else if (screen instanceof ObserverLecternScreen lectern) {
+            lectern.getMenu().setData(0, remotePageIndex);
+            lectern.setBookAccess(new BookViewScreen.BookAccess(componentPages()));
+            lectern.setPage(remotePageIndex);
+        }
+    }
+
+    private static List<String> stringPages() {
+        int count = Math.max(1, remotePageCount);
+        List<String> pages = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            pages.add(index == remotePageIndex ? remotePageText : "");
+        }
+        return pages;
+    }
+
+    private static List<Component> componentPages() {
+        return stringPages().stream().<Component>map(Component::literal).toList();
     }
 
     private static String limit(String value, int maxLength) {
@@ -319,75 +391,48 @@ public final class ObserverNativeBookScreenClient {
     ) {
     }
 
-    private static final class NativeBookMirrorScreen extends ObserverMirrorScreen {
-        private NativeBookMirrorScreen() {
-            super(Component.literal("Observer Book"));
+    private static final class ObserverBookViewScreen extends BookViewScreen implements ObserverReadOnlyScreen {
+        private ObserverBookViewScreen(BookAccess access) { super(access); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public boolean isPauseScreen() { return false; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g, int x, int y, float tick) {
+            super.extractRenderState(g, x, y, tick); extractedFrames++;
         }
+    }
 
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
+    private static final class ObserverBookEditScreen extends BookEditScreen implements ObserverReadOnlyScreen {
+        private ObserverBookEditScreen(net.minecraft.world.entity.player.Player player, ItemStack book,
+                                       InteractionHand hand, WritableBookContent content) {
+            super(player, book, hand, content);
         }
-
-        @Override
-        public boolean isPauseScreen() {
-            return false;
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public boolean isPauseScreen() { return false; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g, int x, int y, float tick) {
+            super.extractRenderState(g, x, y, tick); extractedFrames++;
         }
+    }
 
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int bookWidth = Math.min(220, Math.max(180, width - 80));
-            int bookHeight = Math.min(190, Math.max(150, height - 70));
-            int left = (width - bookWidth) / 2;
-            int top = (height - bookHeight) / 2;
+    private static final class ObserverBookSignScreen extends BookSignScreen implements ObserverReadOnlyScreen {
+        private ObserverBookSignScreen(BookEditScreen edit, net.minecraft.world.entity.player.Player player,
+                                       InteractionHand hand, List<String> pages) { super(edit, player, hand, pages); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public boolean isPauseScreen() { return false; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g, int x, int y, float tick) {
+            super.extractRenderState(g, x, y, tick); extractedFrames++;
+        }
+    }
 
-            graphics.fill(left, top, left + bookWidth, top + bookHeight, 0xFFF1E4C2);
-            graphics.fill(left + 5, top + 5, left + bookWidth - 5, top + bookHeight - 5, 0xFFFFF8DC);
-            graphics.fill(left + 9, top + 28, left + bookWidth - 9, top + 29, 0xFFB8A77E);
-
-            String title = remoteTitle.isBlank() ? "Book" : remoteTitle;
-            graphics.text(this.minecraft.font, title, left + 12, top + 10, 0xFF3B2A1F, true);
-            String mode = "book/" + (remoteVariant.isBlank() ? "unknown" : remoteVariant);
-            graphics.text(
-                    this.minecraft.font,
-                    mode,
-                    left + bookWidth - 12 - this.minecraft.font.width(mode),
-                    top + 10,
-                    0xFF6D5A45,
-                    false
-            );
-
-            if (ObserverBookScreenPayloads.VARIANT_SIGNING.equals(remoteVariant)) {
-                graphics.text(this.minecraft.font, "Sign book", left + 16, top + 45, 0xFF3B2A1F, true);
-                graphics.text(this.minecraft.font, remoteBookTitle, left + 16, top + 68, 0xFF202020, false);
-                graphics.text(this.minecraft.font, remoteAuthor, left + 16, top + 92, 0xFF6D5A45, false);
-            } else {
-                int y = top + 40;
-                for (String line : wrap(remotePageText)) {
-                    graphics.text(this.minecraft.font, line, left + 16, y, 0xFF202020, false);
-                    y += 10;
-                    if (y > top + bookHeight - 30) {
-                        break;
-                    }
-                }
-                String page = remotePageCount <= 0
-                        ? "Page 0/0"
-                        : "Page " + (remotePageIndex + 1) + "/" + remotePageCount;
-                graphics.text(
-                        this.minecraft.font,
-                        page,
-                        left + bookWidth - 14 - this.minecraft.font.width(page),
-                        top + bookHeight - 20,
-                        0xFF6D5A45,
-                        false
-                );
-            }
-
-            extractedFrames++;
+    private static final class ObserverLecternScreen extends LecternScreen implements ObserverReadOnlyScreen {
+        private ObserverLecternScreen(LecternMenu menu, Inventory inventory, Component title) {
+            super(menu, inventory, title);
+        }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g, int x, int y, float tick) {
+            super.extractRenderState(g, x, y, tick); extractedFrames++;
         }
     }
 }

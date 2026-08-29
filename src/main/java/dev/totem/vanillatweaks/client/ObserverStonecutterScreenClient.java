@@ -10,13 +10,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
-import net.minecraft.client.renderer.RenderPipelines;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.StonecutterMenu;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.SelectableRecipe;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
@@ -43,20 +42,12 @@ public final class ObserverStonecutterScreenClient {
     private static boolean remoteResultAvailable;
     private static List<ObserverStonecutterScreenPayloads.RecipeState> remoteRecipes = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
     private static final int RECIPE_COLUMNS = 4;
     private static final int RECIPE_ROWS = 3;
     private static final int RECIPE_CELL_WIDTH = 16;
     private static final int RECIPE_CELL_HEIGHT = 18;
-    private static final Identifier BACKGROUND =
-            Identifier.withDefaultNamespace("textures/gui/container/stonecutter.png");
-    private static final Identifier SCROLLER = Identifier.withDefaultNamespace("container/stonecutter/scroller");
-    private static final Identifier SCROLLER_DISABLED =
-            Identifier.withDefaultNamespace("container/stonecutter/scroller_disabled");
-    private static final Identifier RECIPE = Identifier.withDefaultNamespace("container/stonecutter/recipe");
-    private static final Identifier RECIPE_SELECTED =
-            Identifier.withDefaultNamespace("container/stonecutter/recipe_selected");
 
     private ObserverStonecutterScreenClient() {}
 
@@ -73,8 +64,8 @@ public final class ObserverStonecutterScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -160,7 +151,7 @@ public final class ObserverStonecutterScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverStonecutterScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
@@ -173,25 +164,42 @@ public final class ObserverStonecutterScreenClient {
         remoteResultAvailable = payload.resultAvailable();
         remoteRecipes = List.copyOf(payload.recipes());
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeStonecutterMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeStonecutterMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverStonecutterScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverStonecutterScreen(
+                        new StonecutterMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Stonecutter" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverStonecutterScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            screen.getMenu().slotsChanged(screen.getMenu().container);
+            if (remoteSelectedRecipeIndex >= 0
+                    && remoteSelectedRecipeIndex < screen.getMenu().getNumberOfVisibleRecipes()) {
+                screen.getMenu().clickMenuButton(minecraft.player, remoteSelectedRecipeIndex);
+            }
+            StonecutterScreenAccessor accessor = (StonecutterScreenAccessor) (Object) screen;
+            accessor.totem$setScrollOffs(remoteScrollOffset);
+            accessor.totem$setStartIndex(remoteStartIndex);
+            accessor.totem$setDisplayRecipes(remoteDisplayRecipes);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeStonecutterMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverStonecutterScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -208,77 +216,16 @@ public final class ObserverStonecutterScreenClient {
         remoteSlots = List.of();
     }
 
-    private static ItemStack itemStack(ObserverNativeScreenPayloads.SlotState slot) {
-        if (slot.itemId().isBlank() || slot.count() <= 0) return ItemStack.EMPTY;
-        try {
-            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(slot.itemId()));
-            if (item == null) return ItemStack.EMPTY;
-            ItemStack stack = new ItemStack(item, Math.max(1, slot.count()));
-            if (slot.damage() > 0 && stack.isDamageableItem()) stack.setDamageValue(slot.damage());
-            return stack;
-        } catch (RuntimeException error) { return ItemStack.EMPTY; }
-    }
-
-    private static final class NativeStonecutterMirrorScreen extends ObserverMirrorScreen {
-        private NativeStonecutterMirrorScreen() { super(Component.literal("Observer Stonecutter")); }
-        @Override public boolean isPauseScreen() { return false; }
+    private static final class ObserverStonecutterScreen extends StonecutterScreen implements ObserverReadOnlyScreen {
+        private ObserverStonecutterScreen(StonecutterMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                          Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
         @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
+            if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving();
         }
         @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = 176, ph = 166, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, left, top, 0.0F, 0.0F,
-                    pw, ph, 256, 256);
-            Identifier scroller = remoteDisplayRecipes && remoteRecipeCount > RECIPE_COLUMNS * RECIPE_ROWS
-                    ? SCROLLER : SCROLLER_DISABLED;
-            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, scroller, left + 119,
-                    top + 15 + (int) (41.0F * remoteScrollOffset), 12, 15);
-            if (remoteDisplayRecipes) {
-                int end = Math.min(remoteRecipeCount, remoteStartIndex + RECIPE_COLUMNS * RECIPE_ROWS);
-                for (int recipeIndex = remoteStartIndex; recipeIndex < end; recipeIndex++) {
-                    ObserverStonecutterScreenPayloads.RecipeState recipe = recipeAt(recipeIndex);
-                    if (recipe == null) continue;
-                    int local = recipeIndex - remoteStartIndex;
-                    int x = left + 52 + (local % RECIPE_COLUMNS) * RECIPE_CELL_WIDTH;
-                    int y = top + 14 + (local / RECIPE_COLUMNS) * RECIPE_CELL_HEIGHT;
-                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
-                            recipeIndex == remoteSelectedRecipeIndex ? RECIPE_SELECTED : RECIPE,
-                            x, y + 1, RECIPE_CELL_WIDTH, RECIPE_CELL_HEIGHT);
-                    ItemStack output = itemStack(recipe);
-                    if (!output.isEmpty()) graphics.item(output, x, y + 2);
-                }
-            }
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int sx = left + slot.x(), sy = top + slot.y();
-                ItemStack stack = ObserverStonecutterScreenClient.itemStack(slot);
-                if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
-            }
+            super.extractRenderState(graphics, mouseX, mouseY, partialTick);
             extractedFrames++;
-        }
-
-        private static ObserverStonecutterScreenPayloads.RecipeState recipeAt(int index) {
-            if (index >= 0 && index < remoteRecipes.size() && remoteRecipes.get(index).index() == index) {
-                return remoteRecipes.get(index);
-            }
-            for (var recipe : remoteRecipes) if (recipe.index() == index) return recipe;
-            return null;
-        }
-
-        private static ItemStack itemStack(ObserverStonecutterScreenPayloads.RecipeState recipe) {
-            if (recipe.outputItemId().isBlank() || recipe.outputCount() <= 0) return ItemStack.EMPTY;
-            try {
-                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(recipe.outputItemId()));
-                if (item == null) return ItemStack.EMPTY;
-                ItemStack stack = new ItemStack(item, recipe.outputCount());
-                if (recipe.outputDamage() > 0 && stack.isDamageableItem()) {
-                    stack.setDamageValue(recipe.outputDamage());
-                }
-                return stack;
-            } catch (RuntimeException error) {
-                return ItemStack.EMPTY;
-            }
         }
     }
 }

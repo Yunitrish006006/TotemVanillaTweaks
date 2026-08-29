@@ -8,12 +8,12 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.11.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.12.jar'))
 def observerIntegrationJars = [
         remnant   : file(providers.gradleProperty('totemRemnantJar')
                 .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.15.jar')),
         automata  : file(providers.gradleProperty('totemAutomataJar')
-                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.16.jar')),
+                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.17.jar')),
         nexus     : file(providers.gradleProperty('totemNexusJar')
                 .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.5.jar')),
         villagers : file(providers.gradleProperty('totemVillagersJar')
@@ -33,7 +33,9 @@ sourceSets {
         // Compile the test-only driver against production code, while keeping its
         // classes/resources in a distinct Fabric local-mod classpath group.
         compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
+        compileClasspath += files(observerIntegrationJars.values())
         runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
+        runtimeClasspath += files(observerIntegrationJars.values())
     }
     integrationGametest {
         java.setSrcDirs(['src/integrationGametest/java'])
@@ -179,6 +181,12 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
 tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
     dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
     classpath(sourceSets.e2e.output)
+    classpath(files(observerIntegrationJars.values()))
+    doFirst {
+        observerIntegrationJars.each { module, jarFile ->
+            if (!jarFile.isFile()) throw new GradleException("Missing pinned Observer E2E JAR for ${module}: ${jarFile}")
+        }
+    }
 }
 
 // Produce immutable direct-launch inputs from the current run-task classpaths.
@@ -245,6 +253,11 @@ tasks.register('prepareE2eClientLaunchInputs') {
                     || !classpath.contains(sourceSets.e2e.output.classesDirs.singleFile.absolutePath)
                     || !classpath.contains(totemCoreJar.absolutePath)) {
                 throw new GradleException("${runTask.name} is missing main, E2E, or pinned TotemCore classpath entries")
+            }
+            observerIntegrationJars.each { module, jarFile ->
+                if (!jarFile.isFile() || !classpath.contains(jarFile.absolutePath)) {
+                    throw new GradleException("${runTask.name} is missing pinned Observer owner JAR for ${module}: ${jarFile}")
+                }
             }
             if (expectedClasspath != null && expectedClasspath != classpath) {
                 throw new GradleException('Target and Observer direct-launch classpaths must be identical')

@@ -2,7 +2,6 @@ package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
-import dev.totem.vanillatweaks.client.ObserverNexusScreenClient;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusScreenPayloads;
 import net.fabricmc.api.ClientModInitializer;
@@ -19,7 +18,6 @@ import java.util.UUID;
 
 /** Runs map -> friends -> registration Nexus semantics across the real three-JVM Observer path. */
 public final class ObserverNexusE2eBridge implements ClientModInitializer {
-    private static final Class<?> NEXUS = ObserverNexusScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
     private static final UUID SOURCE = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -67,9 +65,10 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             mapRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier);
         }
         if (observerRequested && !mapSeen
-                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier)) {
-            if (getListSize("remoteMapEntries") != 2 || !DESTINATION.equals(getObject(NEXUS, "remoteSelectedId"))) {
-                fail("Nexus map E2E entries/selection mismatch");
+                && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier)) {
+            var payload = (dev.totem.nexus.network.SpaceUnitMapPayload) observerPayload(minecraft.gui.screen());
+            if (!"Home v2".equals(payload.sourceName())) {
+                fail("Nexus map production Screen did not apply the later snapshot");
                 return;
             }
             ensureNoGenericFallback("map");
@@ -83,10 +82,11 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             friendsRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_FRIENDS, friendsRenderBarrier);
         }
         if (mapSaved && !friendsSeen
-                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
+                && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
                         friendsRenderBarrier)) {
-            if (getListSize("remoteFriendEntries") != 2 || !FRIEND.equals(getObject(NEXUS, "remoteSelectedId"))) {
-                fail("Nexus friends E2E entries/selection mismatch");
+            var payload = (dev.totem.nexus.network.SpaceUnitFriendsPayload) observerPayload(minecraft.gui.screen());
+            if (payload.entries().size() != 1 || !"Friend v2".equals(payload.entries().getFirst().name())) {
+                fail("Nexus friends production Screen did not apply the later snapshot");
                 return;
             }
             ensureNoGenericFallback("friends");
@@ -103,13 +103,12 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             );
         }
         if (friendsSaved && !registrationSeen
-                && mirrorVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
+                && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_REGISTRATION,
                         registrationRenderBarrier)) {
-            if (getInt(NEXUS, "remoteRegistrationTier") != 3
-                    || getInt(NEXUS, "remoteResonancePercent") != 84
-                    || getInt(NEXUS, "remoteCompletenessPercent") != 92
-                    || getInt(NEXUS, "remoteWearPercent") != 7) {
-                fail("Nexus registration E2E state mismatch");
+            var payload = (dev.totem.nexus.network.SpaceUnitRegistrationPreviewPayload)
+                    observerPayload(minecraft.gui.screen());
+            if (payload.tier() != 4) {
+                fail("Nexus registration production Screen did not apply the later snapshot");
                 return;
             }
             ensureNoGenericFallback("registration");
@@ -120,11 +119,13 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                     "observer-native-nexus-registration-saved.txt", 3);
         }
 
-        if (registrationSaved && !observerClosed && !getBoolean(NEXUS, "remoteOpen")
+        if (registrationSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "nexus", "registration", 1)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-nexus-closed.txt",
-                    "Nexus semantic mirror closed after Target close state.\n");
+                    "Nexus semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -137,22 +138,28 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 return;
             }
             targetStage = 1;
-            ClientPlayNetworking.send(mapState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusMap(++targetSequence, "Home v1"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusMap(++targetSequence, "Home v2"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "map", 1L));
             ObserverE2eCommon.marker("target-native-nexus-map-state-sent.txt",
                     "Target sent Nexus map semantic state.\n");
         } else if (targetStage == 1 && markerExists("observer-native-nexus-map-saved.txt")) {
             targetStage = 2;
-            ClientPlayNetworking.send(friendsState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusFriends(++targetSequence, "Friend v1"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusFriends(++targetSequence, "Friend v2"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "friends", 2L));
             ObserverE2eCommon.marker("target-native-nexus-friends-state-sent.txt",
                     "Target sent Nexus friends semantic state.\n");
         } else if (targetStage == 2 && markerExists("observer-native-nexus-friends-saved.txt")) {
             targetStage = 3;
-            ClientPlayNetworking.send(registrationState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusRegistration(++targetSequence, 3));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusRegistration(++targetSequence, 4));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "registration", 3L));
             ObserverE2eCommon.marker("target-native-nexus-registration-state-sent.txt",
                     "Target sent Nexus registration semantic state.\n");
         } else if (targetStage == 3 && markerExists("observer-native-nexus-registration-saved.txt")) {
             targetStage = 4;
-            ClientPlayNetworking.send(ObserverNexusScreenPayloads.closed(++targetSequence));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close("nexus", "registration", ++targetSequence));
             ObserverE2eCommon.marker("target-native-nexus-close-sent.txt",
                     "Target sent Nexus semantic close state.\n");
         }
@@ -197,29 +204,45 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
     }
 
     private static RenderBarrier observeVariant(String variant, RenderBarrier current) {
-        if (!getBoolean(NEXUS, "remoteOpen")
-                || !variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))) {
+        if (!dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive("nexus", variant, 2)) {
             return current;
         }
         long sequence = ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS);
         if (sequence <= 0L || (current != null && current.sequence() == sequence)) {
             return current;
         }
-        return new RenderBarrier(sequence, getLong(NEXUS, "extractedFrames"));
+        return new RenderBarrier(sequence,
+                dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.activeSnapshotRenderBaseline());
     }
 
-    private static boolean mirrorVisibleAfterRender(
+    private static boolean observerScreenVisibleAfterRender(
             Minecraft minecraft,
             String variant,
             RenderBarrier barrier
     ) {
-        return barrier != null
-                && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeNexusMirrorScreen")
-                && getBoolean(NEXUS, "remoteOpen")
-                && variant.equals(String.valueOf(getObject(NEXUS, "remoteVariant")))
+        String expected = switch (variant) {
+            case "map" -> "dev.totem.nexus.client.NexusSpaceUnitMapScreen";
+            case "friends" -> "dev.totem.nexus.client.NexusSpaceUnitFriendsScreen";
+            case "registration" -> "dev.totem.nexus.client.NexusSpaceUnitRegistrationPreviewScreen";
+            default -> "";
+        };
+        return barrier != null && minecraft.gui.screen() != null
+                && minecraft.gui.screen().getClass().getName().equals(expected)
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS) == barrier.sequence()
-                && getLong(NEXUS, "extractedFrames") > barrier.frameBaseline();
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.renderGeneration()
+                > barrier.frameBaseline();
+    }
+
+    private static Object observerPayload(Object screen) {
+        try {
+            var method = screen.getClass().getDeclaredMethod("observerPayload");
+            method.setAccessible(true);
+            return method.invoke(screen);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Nexus production Screen did not expose Observer payload", error);
+        }
     }
 
     private static void ensureNoGenericFallback(String variant) {
@@ -278,10 +301,6 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
     private static Object getObject(Class<?> owner, String name) {
         try { return field(owner, name).get(null); }
         catch (IllegalAccessException error) { throw new RuntimeException(error); }
-    }
-    private static int getListSize(String name) {
-        Object value = getObject(NEXUS, name);
-        return value instanceof List<?> list ? list.size() : -1;
     }
     private static void setBoolean(Class<?> owner, String name, boolean value) {
         try { field(owner, name).setBoolean(null, value); }

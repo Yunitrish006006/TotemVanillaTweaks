@@ -338,8 +338,8 @@ if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest 
 fi
 if ! grep -Fq 'production_screenshot_count="$(find "$production_screenshots" -maxdepth 1 -type f -name '\''*.png'\'' | wc -l)"' \
     <<< "$production_step" \
-    || ! grep -Fq 'if [[ "$production_screenshot_count" != 30 ]]; then' <<< "$production_step"; then
-  fail 'Production Client GameTest CI step must require exactly 30 persisted screenshots'
+    || ! grep -Fq 'if [[ "$production_screenshot_count" != 31 ]]; then' <<< "$production_step"; then
+  fail 'Production Client GameTest CI step must require exactly 31 persisted screenshots'
 fi
 if grep -Eq 'continue-on-error|runProductionClientGameTest[^\n]*(\|\|[[:space:]]*true|--exclude-task|[[:space:]]-x[[:space:]])' \
     <<< "$production_step"; then
@@ -432,8 +432,8 @@ while IFS= read -r entrypoint; do
   add_unique 'fabric-client-gametest manifest' client_entrypoints "$entrypoint"
 done < <(jq -r '.entrypoints["fabric-client-gametest"][]' "$client_manifest")
 assert_same_set 'fabric-client-gametest manifest' client_sources client_entrypoints
-if (( ${#client_sources[@]} != 25 )); then
-  fail "Observer Client GameTest baseline must remain 25 tests; found ${#client_sources[@]}"
+if (( ${#client_sources[@]} != 26 )); then
+  fail "Observer Client GameTest baseline must remain 26 tests; found ${#client_sources[@]}"
 fi
 
 # Production extractor evidence is stronger than a relay screenshot: each row
@@ -444,7 +444,7 @@ production_extractor_families=(
   container_slots furnace crafting anvil enchanting merchant brewing smithing
   stonecutter grindstone loom cartography beacon crafter book sign advancements stats
   remnant_backpack automata_copper_golem nexus villagers_woodcutter
-  nexus_death_node_admin locksmith_management
+  nexus_death_node_admin locksmith_management horse_inventory
 )
 declare -A expected_production_extractors=()
 declare -A actual_production_extractors=()
@@ -504,15 +504,20 @@ for integration_workflow in "$workflow" "$production_workflow" "$publish_workflo
   if [[ "$integration_build_count" != 1 || "$integration_runtime_count" != 1 ]]; then
     fail "$(basename "$integration_workflow") must build pinned optional modules and run exactly one cross-module gate; found build=$integration_build_count runtime=$integration_runtime_count"
   fi
+  if [[ "$(grep -Fc 'build/owner-present-integration-screenshots/*.png' "$integration_workflow" || true)" != 1 \
+      || "$(grep -Fc 'if [[ "$count" != 8 ]]; then' "$integration_workflow" || true)" != 1 \
+      || "$(grep -Fc 'Expected exactly 8 owner-present screenshots; found $count.' "$integration_workflow" || true)" != 1 ]]; then
+    fail "$(basename "$integration_workflow") must separately count and upload exactly eight owner-present screenshots"
+  fi
 done
 for checkout in \
-  'TotemCore 82b21944b1e4865f5d34f13febc5049d936a636f 0.7.11' \
+  'TotemCore e9dc2975cca37210f9d3bab2df4830e81af77295 0.7.12' \
   'TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8' \
-  'TotemRemnant a8eb55ae53f3c6488775467127bab4d972c52a49 0.2.15' \
-  'TotemAutomata 59b80206768466a4ac96f89e1343849abaa82dd3 0.1.16' \
-  'TotemNexus a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb 0.3.5' \
-  'TotemVillagers d0d287e2df831a44b4b2cab28bbc98e396368cda 0.1.32' \
-  'TotemLocksmith 9080ac2c37807b539c5d309fe833edb660834f3b 0.1.5'; do
+  'TotemRemnant 954ac6667384b65f45d513d5e9e9d8efd9627266 0.2.15' \
+  'TotemAutomata 0fb0833f264a1b2026e8784ca1f412cae2bf690d 0.1.17' \
+  'TotemNexus d88107984f54aa34c094d297ce647cf45068a132 0.3.5' \
+  'TotemVillagers 1cca1c7b404be4c4f409f48cdf486e42f8d249a0 0.1.32' \
+  'TotemLocksmith 3c62c42e38b356bf3a834078796dbc8c40f7ad5f 0.1.5'; do
   if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then
     fail "cross-module integration build script is missing exact checkout $checkout"
   fi
@@ -539,35 +544,21 @@ if ! grep -Fq 'remapJar --no-daemon --stacktrace' <<< "$remnant_build_step" \
   fail 'pinned Remnant split-environment checkout must use remapJar for its build/libs production artifact'
 fi
 
-# Every local semantic reconstruction uses one exact marker base. This prevents
-# an Observer that is itself a target from retransmitting a mirror into a nested
-# or multi-observer session, and prevents future families from reviving a
-# hand-maintained class exclusion list.
+# Every local semantic reconstruction uses the TotemCore read-only marker. This
+# prevents nested retransmission and permanently rejects hand-drawn mirrors.
 ui_client="$main_client_source_dir/ObserverUiClient.java"
-mirror_base="$main_client_source_dir/ObserverMirrorScreen.java"
-if ! grep -Fq 'ObserverMirrorScreen.isMirror(screen)' "$ui_client"; then
-  fail 'ObserverUiClient metadata capture must centrally exclude ObserverMirrorScreen'
+if ! grep -Fq 'ObserverOwnedScreenCoordinator.isReadOnlyObserverScreen(screen)' "$ui_client"; then
+  fail 'ObserverUiClient metadata capture must centrally exclude read-only observer screens'
 fi
-if grep -Eq 'Observer[A-Za-z0-9]+ScreenClient\.isNativeMirrorScreen\(screen\)' "$ui_client"; then
+if grep -Eq 'Observer[A-Za-z0-9]+ScreenClient\.isNativeObserverScreen\(screen\)' "$ui_client"; then
   fail 'ObserverUiClient must not use a hand-maintained mirror class exclusion list'
 fi
-if ! grep -Fq 'abstract class ObserverMirrorScreen extends Screen' "$mirror_base"; then
-  fail 'ObserverMirrorScreen must remain the exact base type for local mirrors'
+if grep -RhEq 'class[[:space:]]+[A-Za-z0-9_]*(Mirror|Lookalike)Screen[[:space:]]+extends' \
+    "$main_client_source_dir"; then
+  fail 'Observer production source must not contain hand-drawn Mirror/Lookalike Screen classes'
 fi
-if ! grep -Fq 'class NativeObserverScreen extends ObserverMirrorScreen' \
-    "$main_client_source_dir/ObserverNativeScreenClient.java"; then
-  fail 'generic/container/furnace mirrors must inherit the central mirror base'
-fi
-mirror_count=0
-while IFS= read -r declaration; do
-  mirror_count=$((mirror_count + 1))
-  if [[ ! "$declaration" =~ extends[[:space:]]+(ObserverMirrorScreen|NativeObserverScreen) ]]; then
-    fail "Observer mirror does not inherit the central marker: $declaration"
-  fi
-done < <(grep -RhE 'class[[:space:]]+[A-Za-z0-9_]*MirrorScreen[[:space:]]+extends[[:space:]]+[A-Za-z0-9_]+' \
-  "$main_client_source_dir" | grep -vE 'abstract class ObserverMirrorScreen' | sort)
-if (( mirror_count != 26 )); then
-  fail "Observer mirror marker baseline must remain 26 concrete classes; found $mirror_count"
+if ! grep -Rhq 'implements[[:space:]].*ObserverReadOnlyScreen' "$main_client_source_dir"; then
+  fail 'Mojang observer reconstructions must implement ObserverReadOnlyScreen'
 fi
 if ! grep -Fq 'String unsent = "/login client-only-secret"' \
     "$client_source_dir/ObserverVanillaProductionSenderClientGameTest.java" \
@@ -619,8 +610,8 @@ while IFS= read -r entrypoint; do
 done < <(jq -r '.entrypoints.client[]' "$e2e_manifest")
 assert_same_set 'E2E main manifest' e2e_main_expected e2e_main_entrypoints
 assert_same_set 'E2E client manifest' e2e_client_expected e2e_client_entrypoints
-if (( ${#bridge_classes[@]} != 22 )); then
-  fail "Observer E2E bridge baseline must remain 22 bridges; found ${#bridge_classes[@]}"
+if (( ${#bridge_classes[@]} != 23 )); then
+  fail "Observer E2E bridge baseline must remain 23 bridges; found ${#bridge_classes[@]}"
 fi
 
 declare -A regular_bridge_slugs=()
@@ -672,8 +663,8 @@ for class in "${!bridge_classes[@]}"; do
     'observer-native-[a-z0-9-]+-closed\.txt' "$closed"
   assert_workflow_evidence "$class" "$ready" "$state" "$ok" "$saved" "$png" "$close" "$closed"
 done
-if (( regular_bridge_count != 20 )); then
-  fail "Observer regular lifecycle baseline must remain 20 bridges; found $regular_bridge_count"
+if (( regular_bridge_count != 21 )); then
+  fail "Observer regular lifecycle baseline must remain 21 bridges; found $regular_bridge_count"
 fi
 
 # Crafting intentionally reuses the generic Inventory/container proof. The
@@ -783,7 +774,8 @@ for variant in map friends registration; do
 done
 if ! grep -Fq 'private record RenderBarrier(long sequence, long frameBaseline)' "$nexus_source" \
     || ! grep -Fq 'ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS) == barrier.sequence()' "$nexus_source" \
-    || ! grep -Fq 'getLong(NEXUS, "extractedFrames") > barrier.frameBaseline()' "$nexus_source"; then
+    || ! grep -Fq 'ObserverOwnedScreenCoordinator.renderGeneration()' "$nexus_source" \
+    || ! grep -Fq '> barrier.frameBaseline()' "$nexus_source"; then
   fail 'ObserverNexusE2eBridge screenshots must wait for a frame rendered after each received sequence'
 fi
 if [[ ! -v "client_sources[$client_package.ObserverNexusClientGameTest]" ]]; then

@@ -2,6 +2,8 @@ package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.TotemVanillaTweaks;
 import dev.totem.vanillatweaks.mixin.client.AbstractRecipeBookScreenAccessor;
+import dev.totem.vanillatweaks.mixin.client.AbstractContainerScreenMenuAccessor;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.mixin.client.RecipeBookComponentAccessor;
 import dev.totem.vanillatweaks.mixin.client.RecipeBookPageAccessor;
 import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
@@ -21,13 +23,13 @@ import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
 import net.minecraft.client.gui.screens.recipebook.SearchRecipeBookCategory;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffectUtil;
@@ -40,30 +42,12 @@ import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.ToIntFunction;
 
 /** Target adapter and Observer-side reconstruction for player/crafting-table crafting screens. */
 public final class ObserverNativeCraftingScreenClient {
     private static final long SNAPSHOT_INTERVAL_NANOS = 100_000_000L;
     private static final int DEFAULT_CONTENT_WIDTH = 176;
     private static final int DEFAULT_CONTENT_HEIGHT = 166;
-    private static final int HEADER_GAP = 8;
-    private static final Identifier INVENTORY_BACKGROUND = Identifier.withDefaultNamespace(
-            "textures/gui/container/inventory.png");
-    private static final Identifier CRAFTING_TABLE_BACKGROUND = Identifier.withDefaultNamespace(
-            "textures/gui/container/crafting_table.png");
-    private static final Identifier RECIPE_BOOK_BACKGROUND = Identifier.withDefaultNamespace(
-            "textures/gui/recipe_book.png");
-    private static final Identifier RECIPE_BOOK_TAB_SELECTED = Identifier.withDefaultNamespace(
-            "recipe_book/tab_selected");
-    private static final Identifier RECIPE_BOOK_FILTER_ENABLED = Identifier.withDefaultNamespace(
-            "recipe_book/filter_enabled");
-    private static final Identifier RECIPE_BOOK_FILTER_DISABLED = Identifier.withDefaultNamespace(
-            "recipe_book/filter_disabled");
-    private static final Identifier EFFECT_BACKGROUND =
-            Identifier.withDefaultNamespace("container/inventory/effect_background");
-    private static final Identifier EFFECT_BACKGROUND_AMBIENT =
-            Identifier.withDefaultNamespace("container/inventory/effect_background_ambient");
 
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
@@ -91,7 +75,7 @@ public final class ObserverNativeCraftingScreenClient {
     private static List<ObserverCraftingScreenPayloads.EffectState> remoteActiveEffects = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
 
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverNativeCraftingScreenClient() {
@@ -109,8 +93,8 @@ public final class ObserverNativeCraftingScreenClient {
         return screen instanceof InventoryScreen || screen instanceof CraftingScreen;
     }
 
-    static boolean isNativeMirrorScreen(Screen screen) {
-        return screen instanceof NativeCraftingMirrorScreen;
+    static boolean isNativeObserverScreen(Screen screen) {
+        return screen instanceof ObserverInventoryScreen || screen instanceof ObserverCraftingTableScreen;
     }
 
     static boolean hasStructuredRemoteScreen() {
@@ -121,86 +105,24 @@ public final class ObserverNativeCraftingScreenClient {
         return extractedFrames;
     }
 
-    /** Fits the remote title and crafting mode onto one vanilla-style header row. */
-    static CraftingHeaderLayout craftingHeaderLayout(
-            String title,
-            String mode,
-            int contentWidth,
-            ToIntFunction<String> widthOf
-    ) {
-        String safeTitle = title == null ? "" : title;
-        String safeMode = mode == null ? "" : mode;
-        int availableWidth = Math.max(0, contentWidth);
-        int titleWidth = widthOf.applyAsInt(safeTitle);
-        int modeWidth = widthOf.applyAsInt(safeMode);
-
-        if (titleWidth + HEADER_GAP + modeWidth <= availableWidth) {
-            return new CraftingHeaderLayout(safeTitle, titleWidth, safeMode,
-                    availableWidth - modeWidth, modeWidth, HEADER_GAP, availableWidth);
-        }
-
-        int ellipsisWidth = widthOf.applyAsInt("…");
-        int gap = availableWidth >= ellipsisWidth * 2 + HEADER_GAP ? HEADER_GAP : 0;
-        int textWidth = Math.max(0, availableWidth - gap);
-        int titleBudget = textWidth / 2;
-        int modeBudget = textWidth - titleBudget;
-        if (titleWidth < titleBudget) {
-            modeBudget += titleBudget - titleWidth;
-            titleBudget = titleWidth;
-        } else if (modeWidth < modeBudget) {
-            titleBudget += modeBudget - modeWidth;
-            modeBudget = modeWidth;
-        }
-
-        String fittedTitle = fitHeaderText(safeTitle, titleBudget, widthOf);
-        String fittedMode = fitHeaderText(safeMode, modeBudget, widthOf);
-        int fittedTitleWidth = widthOf.applyAsInt(fittedTitle);
-        int fittedModeWidth = widthOf.applyAsInt(fittedMode);
-        int modeX = availableWidth - fittedModeWidth;
-        return new CraftingHeaderLayout(fittedTitle, fittedTitleWidth, fittedMode,
-                modeX, fittedModeWidth, gap, availableWidth);
-    }
-
-    private static String fitHeaderText(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        if (text.isEmpty() || maxWidth <= 0) {
-            return "";
-        }
-        if (widthOf.applyAsInt(text) <= maxWidth) {
-            return text;
-        }
-
-        String ellipsis = "…";
-        if (widthOf.applyAsInt(ellipsis) > maxWidth) {
-            return "";
-        }
-
-        int low = 0;
-        int high = text.codePointCount(0, text.length());
-        while (low < high) {
-            int middle = (low + high + 1) / 2;
-            int end = text.offsetByCodePoints(0, middle);
-            if (widthOf.applyAsInt(text.substring(0, end) + ellipsis) <= maxWidth) {
-                low = middle;
-            } else {
-                high = middle - 1;
+    /** Render hook used by vanilla EffectsInInventory; never reads the Observer player's effects. */
+    public static java.util.Collection<MobEffectInstance> activeEffectsFor(
+            Screen screen, java.util.Collection<MobEffectInstance> localEffects) {
+        if (!(screen instanceof ObserverInventoryScreen) || !remoteOpen) return localEffects;
+        if (!remoteActiveEffectsVisible) return List.of();
+        List<MobEffectInstance> effects = new ArrayList<>(remoteActiveEffects.size());
+        for (var state : remoteActiveEffects) {
+            try {
+                BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(state.effectId())).ifPresent(holder ->
+                        effects.add(new MobEffectInstance(holder, state.durationTicks(), state.amplifier(),
+                                state.ambient(), state.visible(), state.showIcon())));
+            } catch (RuntimeException invalidId) {
+                TotemVanillaTweaks.LOGGER.debug("Ignoring invalid remote effect id {}", state.effectId());
             }
         }
-        return text.substring(0, text.offsetByCodePoints(0, low)) + ellipsis;
+        return List.copyOf(effects);
     }
 
-    static record CraftingHeaderLayout(
-            String title,
-            int titleWidth,
-            String mode,
-            int modeX,
-            int modeWidth,
-            int gap,
-            int availableWidth
-    ) {
-        boolean fits() {
-            return titleWidth <= modeX - gap && modeX >= 0 && modeX + modeWidth <= availableWidth;
-        }
-    }
 
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) {
@@ -212,11 +134,11 @@ public final class ObserverNativeCraftingScreenClient {
 
         if (!ObserverNativeClient.observerSessionActive()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
         if (remoteOpen) {
-            ensureMirror();
+            ensureObserverScreen();
         }
     }
 
@@ -334,61 +256,6 @@ public final class ObserverNativeCraftingScreenClient {
         return "";
     }
 
-    /** Converts bounded semantic tab ids into player-facing text without exposing registry/debug syntax. */
-    static String recipeBookTabLabel(String tabId) {
-        String safeId = tabId == null ? "" : tabId.trim().toLowerCase(java.util.Locale.ROOT);
-        String path = safeId.startsWith("search:")
-                ? safeId.substring("search:".length())
-                : safeId.substring(Math.max(0, safeId.indexOf(':') + 1));
-        String translationKey = switch (path) {
-            case "crafting" -> "container.crafting";
-            case "furnace" -> "container.furnace";
-            case "blast_furnace" -> "container.blast_furnace";
-            case "smoker" -> "container.smoker";
-            case "crafting_building_blocks", "furnace_blocks", "blast_furnace_blocks" ->
-                    "itemGroup.buildingBlocks";
-            case "crafting_redstone" -> "itemGroup.redstone";
-            case "crafting_equipment", "smithing" -> "itemGroup.tools";
-            case "furnace_food", "smoker_food", "campfire" -> "itemGroup.foodAndDrink";
-            case "crafting_misc", "furnace_misc", "blast_furnace_misc", "stonecutter" ->
-                    "itemGroup.ingredients";
-            default -> "";
-        };
-        if (!translationKey.isEmpty()) {
-            return Component.translatable(translationKey).getString();
-        }
-        if (path.isBlank()) {
-            return Component.translatable("itemGroup.search").getString();
-        }
-        String[] words = path.replace('-', '_').split("_+");
-        StringBuilder label = new StringBuilder();
-        for (String word : words) {
-            if (word.isBlank()) continue;
-            if (!label.isEmpty()) label.append(' ');
-            int first = word.offsetByCodePoints(0, 1);
-            label.append(word.substring(0, first).toUpperCase(java.util.Locale.ROOT));
-            label.append(word.substring(first));
-        }
-        return label.isEmpty() ? Component.translatable("itemGroup.search").getString() : label.toString();
-    }
-
-    private static List<ItemStack> recipeBookTabIcons(String tabId) {
-        String safeId = tabId == null ? "" : tabId.toLowerCase(java.util.Locale.ROOT);
-        String path = safeId.startsWith("search:")
-                ? safeId.substring("search:".length())
-                : safeId.substring(Math.max(0, safeId.indexOf(':') + 1));
-        return switch (path) {
-            case "crafting", "furnace", "blast_furnace", "smoker" -> List.of(new ItemStack(Items.COMPASS));
-            case "crafting_building_blocks", "furnace_blocks", "blast_furnace_blocks" ->
-                    List.of(new ItemStack(Items.BRICKS));
-            case "crafting_redstone" -> List.of(new ItemStack(Items.REDSTONE));
-            case "crafting_equipment", "smithing" ->
-                    List.of(new ItemStack(Items.IRON_AXE), new ItemStack(Items.GOLDEN_SWORD));
-            case "furnace_food", "smoker_food", "campfire" -> List.of(new ItemStack(Items.PORKCHOP));
-            case "stonecutter" -> List.of(new ItemStack(Items.STONECUTTER));
-            default -> List.of(new ItemStack(Items.COMPASS));
-        };
-    }
 
     private static void closeTarget(boolean canSend) {
         if (!targetOpen) {
@@ -454,7 +321,7 @@ public final class ObserverNativeCraftingScreenClient {
         }
         if (!payload.open()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
 
@@ -480,34 +347,48 @@ public final class ObserverNativeCraftingScreenClient {
         remoteActiveEffectsVisible = payload.activeEffectsVisible();
         remoteActiveEffects = List.copyOf(payload.activeEffects());
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
-        if (!(minecraft.gui.screen() instanceof NativeCraftingMirrorScreen)) {
-            suppressMirrorStop = true;
+        boolean playerInventory = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(remoteVariant);
+        boolean correct = playerInventory ? minecraft.gui.screen() instanceof ObserverInventoryScreen
+                : minecraft.gui.screen() instanceof ObserverCraftingTableScreen;
+        if (!correct) {
+            suppressObserverScreenStop = true;
             try {
-                minecraft.setScreenAndShow(new NativeCraftingMirrorScreen());
+                if (playerInventory) minecraft.setScreenAndShow(new ObserverInventoryScreen(
+                        (net.minecraft.world.entity.player.Player) ObserverObservedPlayerIdentity.resolve(minecraft.player)));
+                else {
+                    var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                    minecraft.setScreenAndShow(new ObserverCraftingTableScreen(new CraftingMenu(-1, inventory),
+                            inventory, Component.literal(remoteTitle.isBlank() ? "Crafting" : remoteTitle)));
+                }
             } finally {
-                suppressMirrorStop = false;
+                suppressObserverScreenStop = false;
             }
+        }
+        if (minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            applyRecipeBookState(screen);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeCraftingMirrorScreen)) {
+        if (!(minecraft.gui.screen() instanceof ObserverInventoryScreen
+                || minecraft.gui.screen() instanceof ObserverCraftingTableScreen)) {
             return;
         }
-        suppressMirrorStop = true;
+        suppressObserverScreenStop = true;
         try {
             minecraft.setScreenAndShow(null);
         } finally {
-            suppressMirrorStop = false;
+            suppressObserverScreenStop = false;
         }
     }
 
@@ -559,6 +440,49 @@ public final class ObserverNativeCraftingScreenClient {
         return Math.max(min, Math.min(max, value));
     }
 
+    private static void applyRecipeBookState(AbstractRecipeBookScreen<?> screen) {
+        AbstractRecipeBookScreenAccessor screenAccessor = (AbstractRecipeBookScreenAccessor) screen;
+        screenAccessor.totem$setWidthTooNarrow(remoteRecipeBookWidthTooNarrow);
+        RecipeBookComponent<?> component = screenAccessor.totem$getRecipeBookComponent();
+        if (component == null) return;
+        RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) component;
+        componentAccessor.totem$setVisible(remoteRecipeBookVisible);
+        componentAccessor.totem$setWidthTooNarrow(remoteRecipeBookWidthTooNarrow);
+        if (!remoteRecipeBookVisible) {
+            // Vanilla intentionally leaves RecipeBookPage uninitialized while hidden.
+            // Do not force local recipe state into existence for an Observer-only mirror.
+            return;
+        }
+        RecipeBookPage page = componentAccessor.totem$getRecipeBookPage();
+        if (page != null && ((RecipeBookPageAccessor) page).totem$getMinecraft() == null) {
+            // Use vanilla's production widget initialization, without toggling the local
+            // player's recipe-book setting or sending a settings packet to the server.
+            componentAccessor.totem$initVisuals();
+        }
+        if (componentAccessor.totem$getFilterButton() != null) {
+            componentAccessor.totem$getFilterButton().setValue(remoteRecipeBookFiltering);
+        }
+        if (componentAccessor.totem$getSearchBox() != null) {
+            // The wire carries only whether a query exists, never either client's draft text.
+            componentAccessor.totem$getSearchBox().setValue(remoteRecipeBookSearchActive ? "…" : "");
+        }
+        RecipeBookTabButton selected = null;
+        for (RecipeBookTabButton tab : componentAccessor.totem$getTabButtons()) {
+            boolean matches = recipeBookTabId(tab.getCategory()).equals(remoteSelectedRecipeBookTab);
+            if (matches) { tab.select(); selected = tab; }
+            else tab.unselect();
+        }
+        if (selected != null) componentAccessor.totem$setSelectedTab(selected);
+        page = componentAccessor.totem$getRecipeBookPage();
+        if (page != null) {
+            // Recipe identities are intentionally absent from the protocol. Clear Observer-local unlocks.
+            page.updateCollections(List.of(), remoteRecipeBookFiltering, false);
+            RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+            pageAccessor.totem$setCurrentPage(remoteRecipeBookPage);
+            pageAccessor.totem$setTotalPages(remoteRecipeBookPageCount);
+        }
+    }
+
     private record TargetSnapshot(int contentWidth, int contentHeight, int mouseX, int mouseY,
                                   List<ObserverNativeScreenPayloads.SlotState> slots) {
     }
@@ -569,157 +493,27 @@ public final class ObserverNativeCraftingScreenClient {
                 new RecipeBookSnapshot(false, false, false, false, "", 0, 0);
     }
 
-    private static final class NativeCraftingMirrorScreen extends ObserverMirrorScreen {
-        private NativeCraftingMirrorScreen() {
-            super(Component.literal("Observer Crafting"));
+    private static final class ObserverInventoryScreen extends InventoryScreen implements ObserverReadOnlyScreen {
+        private ObserverInventoryScreen(net.minecraft.world.entity.player.Player player) {
+            super(player);
+            var detached = ObserverVanillaScreenSupport.detachedInventory();
+            ((AbstractContainerScreenMenuAccessor) (Object) this)
+                    .totem$setMenu(new InventoryMenu(detached, true, player));
         }
-
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
+    }
 
-        @Override
-        public boolean isPauseScreen() {
-            return false;
-        }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            boolean playerInventory = ObserverCraftingScreenPayloads.VARIANT_PLAYER_2X2.equals(remoteVariant);
-            int contentWidth = DEFAULT_CONTENT_WIDTH;
-            int contentHeight = DEFAULT_CONTENT_HEIGHT;
-            int left = remoteRecipeBookVisible && !remoteRecipeBookWidthTooNarrow
-                    ? 177 + (width - contentWidth - 200) / 2
-                    : (width - contentWidth) / 2;
-            int top = (height - contentHeight) / 2;
-
-            Identifier background = playerInventory ? INVENTORY_BACKGROUND : CRAFTING_TABLE_BACKGROUND;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, background, left, top, 0.0F, 0.0F,
-                    contentWidth, contentHeight, 256, 256);
-
-            boolean showContainerContents = !(remoteRecipeBookVisible && remoteRecipeBookWidthTooNarrow);
-            if (showContainerContents) {
-                for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                    int slotX = left + slot.x();
-                    int slotY = top + slot.y();
-                    ItemStack stack = itemStack(slot);
-                    if (stack.isEmpty() && playerInventory) {
-                        Identifier empty = emptyInventorySlotSprite(slot.index());
-                        if (empty != null) {
-                            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, empty, slotX, slotY, 16, 16);
-                        }
-                    }
-                    if (!stack.isEmpty()) {
-                        graphics.item(stack, slotX, slotY);
-                        graphics.itemDecorations(this.minecraft.font, stack, slotX, slotY);
-                    }
-                }
-            }
-
-            if (remoteRecipeBookVisible) {
-                int bookX = (width - 147) / 2 - (remoteRecipeBookWidthTooNarrow ? 0 : 86);
-                graphics.blit(RenderPipelines.GUI_TEXTURED, RECIPE_BOOK_BACKGROUND, bookX, top,
-                        1.0F, 1.0F, 147, 166, 256, 256);
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, RECIPE_BOOK_TAB_SELECTED,
-                        bookX - 32, top + 3, 35, 27);
-                List<ItemStack> tabIcons = recipeBookTabIcons(remoteSelectedRecipeBookTab);
-                if (tabIcons.size() > 1) {
-                    graphics.fakeItem(tabIcons.get(0), bookX - 31, top + 8);
-                    graphics.fakeItem(tabIcons.get(1), bookX - 20, top + 8);
-                } else {
-                    graphics.fakeItem(tabIcons.getFirst(), bookX - 25, top + 8);
-                }
-                String search = remoteRecipeBookSearchActive
-                        ? Component.translatable("itemGroup.search").getString()
-                        : Component.translatable("gui.recipebook.search_hint").getString();
-                graphics.text(font, fitHeaderText(search, 77, font::width), bookX + 27, top + 17,
-                        0xFFFFFFFF, true);
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
-                        remoteRecipeBookFiltering ? RECIPE_BOOK_FILTER_ENABLED : RECIPE_BOOK_FILTER_DISABLED,
-                        bookX + 110, top + 12, 26, 16);
-                String tab = recipeBookTabLabel(remoteSelectedRecipeBookTab);
-                graphics.text(font, fitHeaderText(tab, 92, font::width), bookX + 26, top + 34,
-                        0xFFFFFFFF, true);
-                if (remoteRecipeBookPageCount > 0) {
-                    String page = (remoteRecipeBookPage + 1) + "/" + remoteRecipeBookPageCount;
-                    graphics.centeredText(font, page, bookX + 73, top + 143, 0xFF404040);
-                }
-            }
-
-            if (remoteActiveEffectsVisible && playerInventory && !remoteActiveEffects.isEmpty()) {
-                extractEffects(graphics, left + contentWidth + 2, top);
-            }
-
-            int cursorX = left + remoteMouseX;
-            int cursorY = top + remoteMouseY;
-            if (cursorX >= 0 && cursorX < width && cursorY >= 0 && cursorY < height) {
-                graphics.fill(cursorX - 4, cursorY, cursorX + 5, cursorY + 1, 0xFFFFFFFF);
-                graphics.fill(cursorX, cursorY - 4, cursorX + 1, cursorY + 5, 0xFFFFFFFF);
-            }
-            extractedFrames++;
-        }
-
-        private static Identifier emptyInventorySlotSprite(int slotIndex) {
-            return switch (slotIndex) {
-                case 5 -> InventoryMenu.EMPTY_ARMOR_SLOT_HELMET;
-                case 6 -> InventoryMenu.EMPTY_ARMOR_SLOT_CHESTPLATE;
-                case 7 -> InventoryMenu.EMPTY_ARMOR_SLOT_LEGGINGS;
-                case 8 -> InventoryMenu.EMPTY_ARMOR_SLOT_BOOTS;
-                case 45 -> InventoryMenu.EMPTY_ARMOR_SLOT_SHIELD;
-                default -> null;
-            };
-        }
-
-        private void extractEffects(GuiGraphicsExtractor graphics, int x, int top) {
-            int available = Math.max(32, width - x);
-            int panelWidth = available >= 120 ? Math.min(available - 7, 120) : 32;
-            int spacing = remoteActiveEffects.size() > 5
-                    ? Math.max(1, 132 / (remoteActiveEffects.size() - 1)) : 33;
-            int y = top;
-            for (ObserverCraftingScreenPayloads.EffectState effect : remoteActiveEffects) {
-                var resolved = resolveEffect(effect.effectId());
-                if (resolved == null) continue;
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
-                        effect.ambient() ? EFFECT_BACKGROUND_AMBIENT : EFFECT_BACKGROUND,
-                        x, y, panelWidth, 32);
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, Hud.getMobEffectSprite(resolved),
-                        x + 7, y + 7, 18, 18);
-                if (panelWidth > 32) {
-                    MobEffectInstance instance = new MobEffectInstance(resolved, effect.durationTicks(),
-                            effect.amplifier(), effect.ambient(), effect.visible(), effect.showIcon());
-                    Component name = effectName(instance);
-                    Component duration = MobEffectUtil.formatDuration(instance, 1.0F,
-                            minecraft.level == null ? 20.0F : minecraft.level.tickRateManager().tickrate());
-                    int textWidth = panelWidth - 39;
-                    graphics.text(font, fitHeaderText(name.getString(), textWidth, font::width),
-                            x + 32, y + 7, 0xFFFFFFFF, false);
-                    graphics.text(font, fitHeaderText(duration.getString(), textWidth, font::width),
-                            x + 32, y + 16, 0xFF808080, false);
-                }
-                y += spacing;
-            }
-        }
-
-        private static Component effectName(MobEffectInstance effect) {
-            var name = effect.getEffect().value().getDisplayName().copy();
-            if (effect.getAmplifier() >= 1 && effect.getAmplifier() <= 9) {
-                name.append(" ").append(Component.translatable("potion.potency." + effect.getAmplifier()));
-            }
-            return name;
-        }
-
-        private static net.minecraft.core.Holder<MobEffect> resolveEffect(String effectId) {
-            try {
-                MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(Identifier.parse(effectId));
-                return effect == null ? null : BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);
-            } catch (RuntimeException error) {
-                return null;
-            }
+    private static final class ObserverCraftingTableScreen extends CraftingScreen implements ObserverReadOnlyScreen {
+        private ObserverCraftingTableScreen(CraftingMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                            Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

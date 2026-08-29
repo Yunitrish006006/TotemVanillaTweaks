@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.gametest;
 
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverStatsScreenClient;
+import dev.totem.vanillatweaks.mixin.client.StatsScreenAccessor;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -29,8 +30,10 @@ public final class ObserverStatsClientGameTest implements FabricClientGameTest {
                 accept(ObserverStatsScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeStatsMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverStatsScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
+            context.waitFor(minecraft -> minecraft.gui.screen() != null
+                    && !((StatsScreenAccessor) (Object) minecraft.gui.screen()).totem$isLoading(), 100);
             if (!"items".equals(getString("remoteActiveTab"))
                     || getDouble("remoteScrollAmount") != 20.0D
                     || !"used".equals(getString("remoteItemSortColumn"))

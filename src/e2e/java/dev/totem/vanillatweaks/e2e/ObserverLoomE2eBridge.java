@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.LoomScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -63,6 +65,12 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
                 fail("Loom E2E semantic state mismatch");
                 return;
             }
+            LoomScreen screen = (LoomScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 3)
+                    || screen.getMenu().getSelectablePatterns().isEmpty()) {
+                fail("Loom production Menu did not apply relayed banner, dye, result, and patterns");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Loom semantic relay");
                 return;
@@ -73,7 +81,7 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(LOOM, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-loom-closed.txt", "Loom semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-loom-closed.txt", "Loom semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -134,10 +142,13 @@ public final class ObserverLoomE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeLoomMirrorScreen")
+                && minecraft.gui.screen() instanceof LoomScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(LOOM, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverLoomScreenPayloads.FAMILY_ID) > 0L
-                && getLong(LOOM, "extractedFrames") > 0L;
+                && getLong(LOOM, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverLoomScreenPayloads.FAMILY_ID,
+                        getLong(LOOM, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

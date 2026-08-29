@@ -9,6 +9,9 @@ import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
+import dev.totem.vanillatweaks.network.ObserverRemoteCursorPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
@@ -18,10 +21,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 
 /** Server-authoritative structured-state and semantic-screen relay for Observer View. */
 public final class ObserverNativeSessionManager {
     private static final UUID EMPTY_TARGET = new UUID(0L, 0L);
+    /** Exact off-screen sentinel used by production menus for inactive capacity slots. */
+    static final int HIDDEN_SLOT_COORDINATE = -10_000;
     private static final Map<UUID, UUID> TARGET_BY_OBSERVER = new HashMap<>();
     private static final Map<UUID, Long> SCREEN_CAPABILITIES_BY_OBSERVER = new HashMap<>();
     private static final Map<UUID, Long> LAST_SEQUENCE_BY_TARGET = new HashMap<>();
@@ -32,6 +38,7 @@ public final class ObserverNativeSessionManager {
     private static final Map<UUID, Long> LAST_ANVIL_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_ENCHANTING_SEQUENCE_BY_TARGET = new HashMap<>();
     private static final Map<UUID, Long> LAST_REMNANT_BACKPACK_SEQUENCE_BY_TARGET = new HashMap<>();
+    private static final Map<UUID, Set<ObserverOwnedScreenPayloads.ProviderIdentity>> OWNED_PROVIDERS_BY_PLAYER = new HashMap<>();
 
     private ObserverNativeSessionManager() {}
 
@@ -69,6 +76,57 @@ public final class ObserverNativeSessionManager {
         UUID targetId = TARGET_BY_OBSERVER.remove(observerId);
         SCREEN_CAPABILITIES_BY_OBSERVER.remove(observerId);
         if (targetId != null) updateTargetControl(server, targetId);
+    }
+
+    public static void acceptOwnedProviderSet(ServerPlayer player, ObserverOwnedScreenPayloads.ProviderSet payload) {
+        Set<ObserverOwnedScreenPayloads.ProviderIdentity> accepted = validateOwnedProviderSet(payload);
+        if (accepted == null) return;
+        UUID playerId = player.getUUID();
+        OWNED_PROVIDERS_BY_PLAYER.put(playerId, Set.copyOf(accepted));
+        UUID targetId = TARGET_BY_OBSERVER.get(playerId);
+        if (targetId == null) return;
+        long capabilities = negotiatedScreenCapabilities(player);
+        SCREEN_CAPABILITIES_BY_OBSERVER.put(playerId, capabilities);
+        ServerPlayer target = player.level().getServer().getPlayerList().getPlayer(targetId);
+        if (target != null && ServerPlayNetworking.canSend(player, ObserverNativePayloads.NativeSession.TYPE)) {
+            ServerPlayNetworking.send(player, new ObserverNativePayloads.NativeSession(true, targetId,
+                    target.getGameProfile().name(), ObserverNativePayloads.PROTOCOL_VERSION, capabilities));
+        }
+        updateTargetControl(player.level().getServer(), targetId);
+    }
+
+    static Set<ObserverOwnedScreenPayloads.ProviderIdentity> validateOwnedProviderSet(
+            ObserverOwnedScreenPayloads.ProviderSet payload) {
+        if (payload.protocolVersion() != ObserverOwnedScreenPayloads.PROTOCOL_VERSION) return null;
+        java.util.LinkedHashSet<ObserverOwnedScreenPayloads.ProviderIdentity> accepted = new java.util.LinkedHashSet<>();
+        java.util.HashSet<String> families = new java.util.HashSet<>();
+        for (ObserverOwnedScreenPayloads.ProviderIdentity provider : payload.providers()) {
+            if (!ObserverOwnedScreenProtocols.accepts(provider.familyId(), provider.protocolVersion())
+                    || ObserverOwnedScreenRelayManager.capability(provider.familyId()) == 0L
+                    || !families.add(provider.familyId()) || !accepted.add(provider)) return null;
+        }
+        return Set.copyOf(accepted);
+    }
+
+    public static void clearOwnedProviderSet(UUID playerId) {
+        OWNED_PROVIDERS_BY_PLAYER.remove(playerId);
+    }
+
+    /** Read-only session query used by relays; internal map ownership stays here. */
+    static List<UUID> observerIdsForTarget(UUID targetId, long requiredCapability) {
+        java.util.ArrayList<UUID> result = new java.util.ArrayList<>();
+        for (Map.Entry<UUID, UUID> entry : TARGET_BY_OBSERVER.entrySet()) {
+            if (targetId.equals(entry.getValue()) && ObserverNativeScreenPayloads.supports(
+                    SCREEN_CAPABILITIES_BY_OBSERVER.getOrDefault(entry.getKey(), 0L), requiredCapability)) {
+                result.add(entry.getKey());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public static boolean ownedProviderAdvertises(ServerPlayer observer, String familyId, int protocolVersion) {
+        return OWNED_PROVIDERS_BY_PLAYER.getOrDefault(observer.getUUID(), Set.of())
+                .contains(new ObserverOwnedScreenPayloads.ProviderIdentity(familyId, protocolVersion));
     }
 
     public static void refreshTargetControl(MinecraftServer server, UUID targetId) {
@@ -341,10 +399,12 @@ public final class ObserverNativeSessionManager {
                 && mouseX >= -2048 && mouseX <= 2048 && mouseY >= -2048 && mouseY <= 2048;
     }
 
-    private static boolean validSlots(List<ObserverNativeScreenPayloads.SlotState> slots) {
+    static boolean validSlots(List<ObserverNativeScreenPayloads.SlotState> slots) {
         if (slots.size() > ObserverNativeScreenPayloads.MAX_SLOTS) return false;
         for (ObserverNativeScreenPayloads.SlotState slot : slots) {
-            if (slot.index() < 0 || slot.x() < -64 || slot.x() > 512 || slot.y() < -64 || slot.y() > 512
+            boolean hidden = slot.x() == HIDDEN_SLOT_COORDINATE && slot.y() == HIDDEN_SLOT_COORDINATE;
+            boolean visible = slot.x() >= -64 && slot.x() <= 512 && slot.y() >= -64 && slot.y() <= 512;
+            if (slot.index() < 0 || (!hidden && !visible)
                     || slot.count() < 0 || slot.count() > 127 || slot.damage() < 0) return false;
         }
         return true;
@@ -374,7 +434,10 @@ public final class ObserverNativeSessionManager {
         if (ServerPlayNetworking.canSend(observer, ObserverMerchantScreenPayloads.MerchantRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_MERCHANT;
         if (ServerPlayNetworking.canSend(observer, ObserverAnvilScreenPayloads.AnvilRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_ANVIL;
         if (ServerPlayNetworking.canSend(observer, ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING;
-        if (ServerPlayNetworking.canSend(observer, ObserverRemnantBackpackPayloads.BackpackRelay.TYPE)) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
+        if (ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
+                && ownedProviderAdvertises(observer, ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK,
+                ObserverOwnedScreenProtocols.expected(ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK))) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
+        if (ServerPlayNetworking.canSend(observer, ObserverRemoteCursorPayloads.Relay.TYPE)) capabilities |= ObserverRemoteCursorPayloads.CAPABILITY;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }
 
@@ -406,6 +469,8 @@ public final class ObserverNativeSessionManager {
     }
 
     private static void clearTargetSequences(UUID targetId) {
+        ObserverOwnedScreenRelayManager.clearTarget(targetId);
+        ObserverRemoteCursorRelayManager.clearTarget(targetId);
         LAST_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_SCREEN_SEQUENCE_BY_TARGET.remove(targetId);
         LAST_BOOK_SEQUENCE_BY_TARGET.remove(targetId);

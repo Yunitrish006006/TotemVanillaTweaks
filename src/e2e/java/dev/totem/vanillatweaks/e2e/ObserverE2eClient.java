@@ -312,7 +312,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (observerContainerRequested && !observerContainerSeen
-                && isNativeContainerMirror(screen)
+                && isNativeContainerObserverScreen(screen)
                 && screenGetBoolean("remoteContainerOpen")
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNativeScreenPayloads.FAMILY_CONTAINER_SLOTS) > 0L
@@ -337,7 +337,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
 
         if (observerContainerScreenshotSaved && !observerGenericRequested
                 && !screenGetBoolean("remoteContainerOpen")
-                && !isNativeContainerMirror(minecraft.gui.screen())) {
+                && !isNativeContainerObserverScreen(minecraft.gui.screen())) {
             observerGenericRequested = true;
             ObserverE2eCommon.marker(
                     "observer-ready-for-generic-screen.txt",
@@ -346,7 +346,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (observerGenericRequested && !observerGenericSeen
-                && isNativeGenericMirror(minecraft.gui.screen())
+                && isNativeGenericObserverScreen(minecraft.gui.screen())
                 && screenGetBoolean("remoteGenericOpen")
                 && screenGetLong("genericExtractedFrames") > 0L) {
             observerGenericSeen = true;
@@ -378,7 +378,7 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
 
         if (observerStopRequested && !observerSessionActive) {
-            if (isNativeMirror(minecraft.gui.screen())) {
+            if (isNativeObserverScreen(minecraft.gui.screen())) {
                 return;
             }
             ObserverE2eCommon.marker(
@@ -433,16 +433,18 @@ public final class ObserverE2eClient implements ClientModInitializer {
         }
     }
 
-    private static boolean isNativeContainerMirror(Screen screen) {
-        return screen != null && screen.getClass().getName().contains("NativeContainerMirrorScreen");
+    private static boolean isNativeContainerObserverScreen(Screen screen) {
+        return screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>
+                && screen instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
     }
 
-    private static boolean isNativeGenericMirror(Screen screen) {
-        return screen != null && screen.getClass().getName().contains("NativeGenericMirrorScreen");
+    private static boolean isNativeGenericObserverScreen(Screen screen) {
+        return screen != null && screen.getClass().getSimpleName().equals("ObserverMetadataScreen")
+                && screen instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
     }
 
-    private static boolean isNativeMirror(Screen screen) {
-        return isNativeContainerMirror(screen) || isNativeGenericMirror(screen);
+    private static boolean isNativeObserverScreen(Screen screen) {
+        return isNativeContainerObserverScreen(screen) || isNativeGenericObserverScreen(screen);
     }
 
     private static boolean markerExists(String name) {

@@ -117,7 +117,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
             }
         });
         context.waitFor(minecraft -> minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeCraftingMirrorScreen"), 100);
+                && minecraft.gui.screen().getClass().getName().contains("ObserverInventoryScreen"), 100);
         context.waitFor(minecraft -> getStaticLong(
                 ObserverNativeCraftingScreenClient.class, "extractedFrames") > 0L, 100);
         persistForCi(context.takeScreenshot("observer-ui-native-player-inventory-screen"),
@@ -152,7 +152,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                     "net.minecraft.client.gui.screens.inventory.InventoryScreen", "Unnegotiated Container Metadata");
         });
         context.waitFor(minecraft -> minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeGenericMirrorScreen"), 100);
+                && minecraft.gui.screen().getClass().getName().contains("ObserverMetadataScreen"), 100);
         context.waitTicks(2);
         persistForCi(context.takeScreenshot("observer-ui-native-generic-screen"),
                 "observer-ui-native-generic-screen.png");
@@ -182,7 +182,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                     new Class<?>[]{ObserverNativeScreenPayloads.FurnaceRelay.class}, open);
         });
         context.waitFor(minecraft -> minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeFurnaceMirrorScreen"), 100);
+                && minecraft.gui.screen().getClass().getName().contains("ObserverFurnaceScreen"), 100);
         context.waitFor(minecraft -> getStaticLong(ObserverNativeScreenClient.class, "furnaceExtractedFrames") > 0L, 100);
         persistForCi(context.takeScreenshot("observer-ui-native-furnace-screen"),
                 "observer-ui-native-furnace-screen.png");
@@ -212,7 +212,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                     new Class<?>[]{ObserverBookScreenPayloads.BookRelay.class}, open);
         });
         context.waitFor(minecraft -> minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeBookMirrorScreen"), 100);
+                && minecraft.gui.screen().getClass().getName().contains("ObserverBookViewScreen"), 100);
         context.waitFor(minecraft -> getStaticLong(ObserverNativeBookScreenClient.class, "extractedFrames") > 0L, 100);
         persistForCi(context.takeScreenshot("observer-ui-native-book-screen"), "observer-ui-native-book-screen.png");
 
@@ -248,7 +248,7 @@ public final class ObserverUiClientGameTest implements FabricClientGameTest {
                     new Class<?>[]{ObserverCraftingScreenPayloads.CraftingRelay.class}, open);
         });
         context.waitFor(minecraft -> minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeCraftingMirrorScreen"), 100);
+                && minecraft.gui.screen().getClass().getName().contains("ObserverCraftingTableScreen"), 100);
         context.waitFor(minecraft -> getStaticLong(ObserverNativeCraftingScreenClient.class, "extractedFrames") > 0L, 100);
         persistForCi(context.takeScreenshot("observer-ui-native-crafting-screen"),
                 "observer-ui-native-crafting-screen.png");

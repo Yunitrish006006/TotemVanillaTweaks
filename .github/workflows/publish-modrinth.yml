@@ -221,7 +221,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemAutomata
-          ref: 59b80206768466a4ac96f89e1343849abaa82dd3
+          ref: f70969454c82474d27fdcbabb98685596d037ae6
           path: .lockstep/TotemAutomata
           persist-credentials: false
 
@@ -265,11 +265,31 @@ jobs:
           xvfb-run -a ./gradlew \
             -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.11.jar" \
             -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.15.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.16.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.17.jar" \
             -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.5.jar" \
             -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.32.jar" \
             -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.5.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
+
+      - name: Verify release cross-module integration screenshots
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          integration_screenshots="${GITHUB_WORKSPACE}/build/owner-present-integration-screenshots"
+          count="$(find "$integration_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
+          if [[ "$count" != 8 ]]; then
+            echo "Expected exactly 8 owner-present screenshots; found $count." >&2
+            exit 1
+          fi
+
+      - name: Upload release cross-module integration screenshots
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-owner-present-release-screenshots
+          path: build/owner-present-integration-screenshots/*.png
+          if-no-files-found: error
 
       - name: Build release JAR
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'

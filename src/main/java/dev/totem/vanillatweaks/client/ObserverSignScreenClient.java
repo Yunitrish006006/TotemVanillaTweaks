@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.mixin.client.AbstractSignEditScreenAccessor;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -10,7 +11,13 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.client.gui.screens.inventory.HangingSignEditScreen;
+import net.minecraft.client.gui.screens.inventory.SignEditScreen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.HangingSignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
 
 import java.util.ArrayList;
@@ -32,8 +39,9 @@ public final class ObserverSignScreenClient {
     private static String remoteColor = "";
     private static boolean remoteGlowing;
     private static List<String> remoteLines = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
+    private static long suppressedRemovalPackets;
 
     private ObserverSignScreenClient() {}
 
@@ -50,8 +58,8 @@ public final class ObserverSignScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -72,10 +80,11 @@ public final class ObserverSignScreenClient {
     private static ObserverSignScreenPayloads.SignState captureTargetState(
             AbstractSignEditScreen screen, long sequence) {
         AbstractSignEditScreenAccessor accessor = (AbstractSignEditScreenAccessor) screen;
-        String[] source = accessor.totem$getMessages();
         List<String> lines = new ArrayList<>(ObserverSignScreenPayloads.LINE_COUNT);
-        for (int i = 0; i < ObserverSignScreenPayloads.LINE_COUNT; i++)
-            lines.add(source != null && i < source.length && source[i] != null ? source[i] : "");
+        // Sign editor messages are unsent local drafts. Preserve only the
+        // production screen shape/style; private draft text never enters the
+        // Observer transport.
+        for (int i = 0; i < ObserverSignScreenPayloads.LINE_COUNT; i++) lines.add("");
         SignText text = accessor.totem$getText();
         String color = text == null || text.getColor() == null ? "" : text.getColor().getName();
         boolean glowing = text != null && text.hasGlowingText();
@@ -104,7 +113,7 @@ public final class ObserverSignScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverSignScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
@@ -114,25 +123,30 @@ public final class ObserverSignScreenClient {
         remoteColor = payload.color();
         remoteGlowing = payload.glowing();
         remoteLines = List.copyOf(payload.lines());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeSignMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeSignMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        boolean hanging = "hanging_sign".equals(remoteVariant);
+        boolean correct = hanging ? minecraft.gui.screen() instanceof ObserverHangingSignScreen
+                : minecraft.gui.screen() instanceof ObserverSignScreen;
+        if (!correct) {
+            suppressObserverScreenStop = true;
+            try { minecraft.setScreenAndShow(createSignScreen(hanging)); }
+            finally { suppressObserverScreenStop = false; }
         }
+        if (minecraft.gui.screen() instanceof AbstractSignEditScreen screen) applySignState(screen);
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeSignMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverSignScreen
+                || minecraft.gui.screen() instanceof ObserverHangingSignScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -146,33 +160,60 @@ public final class ObserverSignScreenClient {
         remoteLines = List.of();
     }
 
-    private static final class NativeSignMirrorScreen extends ObserverMirrorScreen {
-        private NativeSignMirrorScreen() { super(Component.literal("Observer Sign")); }
-        @Override public boolean isPauseScreen() { return false; }
-        @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
+    private static Screen createSignScreen(boolean hanging) {
+        SignBlockEntity sign = hanging
+                ? new HangingSignBlockEntity(BlockPos.ZERO, Blocks.OAK_HANGING_SIGN.defaultBlockState())
+                : new SignBlockEntity(BlockPos.ZERO, Blocks.OAK_SIGN.defaultBlockState());
+        // Keep the synthetic block entity detached. Calling setText() here would invoke
+        // markUpdated() and touch a client level; the semantic text is applied directly
+        // to the production screen state immediately after it is constructed instead.
+        return hanging ? new ObserverHangingSignScreen(sign, remoteFrontText)
+                : new ObserverSignScreen(sign, remoteFrontText);
+    }
+
+    private static SignText signText() {
+        SignText text = new SignText().setColor(DyeColor.byName(remoteColor, DyeColor.BLACK))
+                .setHasGlowingText(remoteGlowing);
+        for (int i = 0; i < ObserverSignScreenPayloads.LINE_COUNT; i++) {
+            text = text.setMessage(i, Component.literal(i < remoteLines.size() ? remoteLines.get(i) : ""));
         }
-        @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int boardWidth = "hanging_sign".equals(remoteVariant) ? 190 : 160;
-            int boardHeight = "hanging_sign".equals(remoteVariant) ? 94 : 110;
-            int left = (width - boardWidth) / 2;
-            int top = (height - boardHeight) / 2;
-            graphics.fill(left - 4, top - 28, left + boardWidth + 4, top + boardHeight + 8, 0xCC202020);
-            graphics.text(font, remoteTitle.isBlank() ? "Edit Sign" : remoteTitle, left, top - 22, 0xFFFFFFFF, false);
-            graphics.text(font, (remoteFrontText ? "Front" : "Back") + " · "
-                    + (remoteColor.isBlank() ? "default" : remoteColor) + (remoteGlowing ? " · glowing" : ""),
-                    left, top - 10, 0xFFCCCCCC, false);
-            graphics.fill(left, top, left + boardWidth, top + boardHeight, "hanging_sign".equals(remoteVariant) ? 0xFF9A6B35 : 0xFFA97843);
-            for (int i = 0; i < ObserverSignScreenPayloads.LINE_COUNT; i++) {
-                int y = top + 18 + i * 18;
-                if (i == remoteCurrentLine) graphics.fill(left + 8, y - 3, left + boardWidth - 8, y + 11, 0x55FFFFFF);
-                String line = i < remoteLines.size() ? remoteLines.get(i) : "";
-                int x = left + Math.max(10, (boardWidth - font.width(line)) / 2);
-                graphics.text(font, line, x, y, remoteGlowing ? 0xFFFFFFFF : 0xFF202020, false);
-            }
-            extractedFrames++;
+        return text;
+    }
+
+    private static void applySignState(AbstractSignEditScreen screen) {
+        AbstractSignEditScreenAccessor accessor = (AbstractSignEditScreenAccessor) screen;
+        String[] messages = accessor.totem$getMessages();
+        for (int i = 0; i < messages.length; i++) messages[i] = i < remoteLines.size() ? remoteLines.get(i) : "";
+        accessor.totem$setLine(Math.clamp(remoteCurrentLine, 0, ObserverSignScreenPayloads.LINE_COUNT - 1));
+        accessor.totem$setText(signText());
+    }
+
+
+    private static final class ObserverSignScreen extends SignEditScreen implements ObserverReadOnlyScreen {
+        private ObserverSignScreen(SignBlockEntity sign, boolean front) { super(sign, front, false); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void tick() { }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void removed() {
+            if (minecraft != null) minecraft.textInputManager().stopTextInput();
+            suppressedRemovalPackets++;
+        }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
+        }
+    }
+
+    private static final class ObserverHangingSignScreen extends HangingSignEditScreen implements ObserverReadOnlyScreen {
+        private ObserverHangingSignScreen(SignBlockEntity sign, boolean front) { super(sign, front, false); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void tick() { }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void removed() {
+            if (minecraft != null) minecraft.textInputManager().stopTextInput();
+            suppressedRemovalPackets++;
+        }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

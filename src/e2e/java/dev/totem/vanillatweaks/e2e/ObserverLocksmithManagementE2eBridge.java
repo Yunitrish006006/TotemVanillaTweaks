@@ -1,7 +1,6 @@
 package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import dev.totem.vanillatweaks.client.ObserverLocksmithManagementScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.network.ObserverLocksmithManagementPayloads;
 import net.fabricmc.api.ClientModInitializer;
@@ -18,7 +17,6 @@ import java.util.UUID;
 
 /** Runs TotemLocksmith management semantics across the real three-JVM Observer path. */
 public final class ObserverLocksmithManagementE2eBridge implements ClientModInitializer {
-    private static final Class<?> LOCKSMITH = ObserverLocksmithManagementScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
     private static final UUID LOCK_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
@@ -59,20 +57,12 @@ public final class ObserverLocksmithManagementE2eBridge implements ClientModInit
         }
 
         if (observerRequested && !observerSeen && mirrorVisible(minecraft)) {
-            if (!getBoolean(LOCKSMITH, "remoteOwnerActor")
-                    || getBoolean(LOCKSMITH, "remoteManagerActor")
-                    || !getBoolean(LOCKSMITH, "remotePhysicalKeysRequired")
-                    || getInt(LOCKSMITH, "remoteAccessModeOrdinal") != 1
-                    || getInt(LOCKSMITH, "remoteAutomationModeOrdinal") != 1
-                    || getInt(LOCKSMITH, "remoteLogicalContainerCount") != 6
-                    || getInt(LOCKSMITH, "remoteConnectorCount") != 2
-                    || !"members".equals(getString(LOCKSMITH, "remoteTab"))
-                    || !"Sky".equals(getString(LOCKSMITH, "remoteOwnerName"))
-                    || !LOCK_ID.equals(getUuid(LOCKSMITH, "remoteLockId"))
-                    || getListSize(LOCKSMITH, "remoteMembers") != 2
-                    || getListSize(LOCKSMITH, "remoteKeys") != 2
-                    || getListSize(LOCKSMITH, "remoteCandidates") != 1) {
-                fail("Locksmith management E2E semantic state mismatch");
+            var screen = (dev.totem.locksmith.client.LocksmithManagementScreen) minecraft.gui.screen();
+            var snapshot = screen.observerSnapshot();
+            if (snapshot.revision() != 18L || snapshot.ownerActor() || snapshot.managerActor()
+                    || !snapshot.physicalKeysRequired() || snapshot.members().size() != 1
+                    || snapshot.keys().size() != 1 || snapshot.candidates().size() != 1) {
+                fail("Locksmith production Screen did not apply the sanitized later snapshot");
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
@@ -86,11 +76,13 @@ public final class ObserverLocksmithManagementE2eBridge implements ClientModInit
                     ObserverLocksmithManagementE2eBridge::saveScreenshot);
         }
 
-        if (observerSaved && !observerClosed && !getBoolean(LOCKSMITH, "remoteOpen")
+        if (observerSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "locksmith_management", "", 1)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-locksmith-management-closed.txt",
-                    "TotemLocksmith management semantic mirror closed.\n");
+                    "TotemLocksmith management semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -103,12 +95,16 @@ public final class ObserverLocksmithManagementE2eBridge implements ClientModInit
                 return;
             }
             targetStage = 1;
-            ClientPlayNetworking.send(openState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.locksmith(++targetSequence, 17L));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.locksmith(++targetSequence, 18L));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor(
+                    "locksmith_management", "", 1L));
             ObserverE2eCommon.marker("target-native-locksmith-management-state-sent.txt",
                     "Target sent TotemLocksmith management semantic state.\n");
         } else if (targetStage == 1 && markerExists("observer-native-locksmith-management-saved.txt")) {
             targetStage = 2;
-            ClientPlayNetworking.send(ObserverLocksmithManagementPayloads.closed(++targetSequence));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close(
+                    "locksmith_management", "", ++targetSequence));
             ObserverE2eCommon.marker("target-native-locksmith-management-close-sent.txt",
                     "Target sent TotemLocksmith management close state.\n");
         }
@@ -150,11 +146,12 @@ public final class ObserverLocksmithManagementE2eBridge implements ClientModInit
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeLocksmithManagementMirrorScreen")
-                && getBoolean(LOCKSMITH, "remoteOpen")
+                && minecraft.gui.screen().getClass().getName().equals("dev.totem.locksmith.client.LocksmithManagementScreen")
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverLocksmithManagementPayloads.FAMILY_ID) > 0L
-                && getLong(LOCKSMITH, "extractedFrames") > 0L;
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRenderedActiveSnapshot();
     }
 
     private static void saveScreenshot(NativeImage image) {

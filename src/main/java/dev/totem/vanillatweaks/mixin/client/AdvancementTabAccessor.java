@@ -9,4 +9,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface AdvancementTabAccessor {
     @Accessor("scrollX") double totem$getScrollX();
     @Accessor("scrollY") double totem$getScrollY();
+    @Accessor("scrollX") void totem$setScrollX(double value);
+    @Accessor("scrollY") void totem$setScrollY(double value);
 }

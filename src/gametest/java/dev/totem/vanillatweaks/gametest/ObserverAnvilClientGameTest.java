@@ -52,7 +52,7 @@ public final class ObserverAnvilClientGameTest implements FabricClientGameTest {
             });
 
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeAnvilMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverAnvilScreen"), 100);
             context.waitFor(minecraft -> getStaticLong(ObserverNativeAnvilScreenClient.class, "extractedFrames") > 0L, 100);
             if (!"Observer Blade".equals(getStaticObject(ObserverNativeAnvilScreenClient.class, "remoteItemName"))) {
                 throw new AssertionError("Anvil rename field was not reconstructed");

@@ -8,6 +8,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -68,8 +70,13 @@ public final class ObserverSignE2eBridge implements ClientModInitializer {
             Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), ObserverSignE2eBridge::saveScreenshot);
         }
         if (observerSaved && !observerClosed && !getBoolean(SIGN, "remoteOpen") && minecraft.gui.screen() == null) {
+            if (getLong(SIGN, "suppressedRemovalPackets") < 1L) {
+                fail("Observer Sign removal did not suppress the sign-update packet path");
+                return;
+            }
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-sign-closed.txt", "Sign semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-sign-closed.txt",
+                    "Sign semantic screen closed; removed() suppressed ServerboundSignUpdatePacket.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -100,10 +107,13 @@ public final class ObserverSignE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeSignMirrorScreen")
+                && minecraft.gui.screen() instanceof AbstractSignEditScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(SIGN, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverSignScreenPayloads.FAMILY_ID) > 0L
-                && getLong(SIGN, "extractedFrames") > 0L;
+                && getLong(SIGN, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverSignScreenPayloads.FAMILY_ID,
+                        getLong(SIGN, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

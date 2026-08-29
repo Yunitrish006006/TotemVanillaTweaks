@@ -2,7 +2,6 @@ package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
-import dev.totem.vanillatweaks.client.ObserverRemnantBackpackScreenClient;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import net.fabricmc.api.ClientModInitializer;
@@ -19,7 +18,6 @@ import java.util.List;
 
 /** Inserts a real cross-JVM Remnant backpack semantic relay phase after enchanting and before Stop. */
 public final class ObserverRemnantBackpackE2eBridge implements ClientModInitializer {
-    private static final Class<?> BACKPACK = ObserverRemnantBackpackScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
 
@@ -56,21 +54,20 @@ public final class ObserverRemnantBackpackE2eBridge implements ClientModInitiali
 
         if (observerRequested && !observerSeen
                 && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeRemnantBackpackMirrorScreen")
-                && getBoolean(BACKPACK, "remoteOpen")
+                && minecraft.gui.screen().getClass().getName().equals("dev.totem.remnant.client.screen.BackpackScreen")
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK) > 0L
-                && getLong(BACKPACK, "extractedFrames") > 0L) {
-            if (getInt(BACKPACK, "remoteRowCount") != 8
-                    || getInt(BACKPACK, "remoteVisibleRows") != 6
-                    || getInt(BACKPACK, "remoteFirstVisibleRow") != 2
-                    || getInt(BACKPACK, "remoteUpgradeSlotCount") != 4) {
-                fail("Remnant backpack E2E viewport state mismatch");
-                return;
-            }
-            if (!getBoolean(BACKPACK, "remoteCraftingEnabled")
-                    || !getBoolean(BACKPACK, "remoteEnderAccessVisible")) {
-                fail("Remnant backpack E2E upgrade state mismatch");
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRenderedActiveSnapshot()) {
+            var screen = (dev.totem.remnant.client.screen.BackpackScreen) minecraft.gui.screen();
+            if (screen.getMenu().getRowCount() != 8 || screen.getMenu().upgradeSlotCount() != 4
+                    || screen.getMenu().getItems().get(18).getCount() != 13
+                    || screen.getMenu().getCarried().getCount() != 5
+                    || screen.getMenu().getCarried().get(net.minecraft.core.component.DataComponents.CUSTOM_NAME) == null
+                    || !"Remote Cursor Diamond".equals(screen.getMenu().getCarried()
+                    .get(net.minecraft.core.component.DataComponents.CUSTOM_NAME).getString())) {
+                fail("Remnant backpack production Screen did not apply the later snapshot");
                 return;
             }
             if (getBoolean(GENERIC, "remoteContainerOpen")) {
@@ -83,11 +80,13 @@ public final class ObserverRemnantBackpackE2eBridge implements ClientModInitiali
             saveScreenshot(minecraft, "observer-native-remnant-backpack.png");
         }
 
-        if (observerSeen && observerSaved && !observerClosed && !getBoolean(BACKPACK, "remoteOpen")
+        if (observerSeen && observerSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "remnant_backpack", "", 1)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-remnant-backpack-closed.txt",
-                    "Remnant backpack semantic mirror closed after Target close state.\n");
+                    "Remnant backpack semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -100,13 +99,15 @@ public final class ObserverRemnantBackpackE2eBridge implements ClientModInitiali
                 return;
             }
             targetOpened = true;
-            ClientPlayNetworking.send(openState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.remnant(++targetSequence, 12));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.remnant(++targetSequence, 13));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.namedCursor("remnant_backpack", "", 1L));
             ObserverE2eCommon.marker("target-native-remnant-backpack-state-sent.txt",
                     "Target sent Remnant backpack semantic state through the dedicated server.\n");
         }
         if (targetOpened && !targetClosed && markerExists("observer-native-remnant-backpack-saved.txt")) {
             targetClosed = true;
-            ClientPlayNetworking.send(closeState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close("remnant_backpack", "", ++targetSequence));
             ObserverE2eCommon.marker("target-native-remnant-backpack-close-sent.txt",
                     "Target sent Remnant backpack semantic close state.\n");
         }

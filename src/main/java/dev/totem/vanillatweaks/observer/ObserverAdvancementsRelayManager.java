@@ -62,7 +62,8 @@ public final class ObserverAdvancementsRelayManager {
         Set<String> roots = new HashSet<>();
         for (var tab : p.tabs()) {
             if (!boundedNonBlank(tab.rootId(), 256) || !roots.add(tab.rootId())
-                    || !bounded(tab.title(), 512) || !bounded(tab.iconItemId(), 256)) return false;
+                    || !bounded(tab.title(), 512) || !bounded(tab.iconItemId(), 256)
+                    || !bounded(tab.backgroundTextureId(), 256)) return false;
         }
         if (!p.selectedRootId().isEmpty() && !roots.contains(p.selectedRootId())) return false;
 

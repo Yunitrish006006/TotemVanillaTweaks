@@ -2,7 +2,6 @@ package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
-import dev.totem.vanillatweaks.client.ObserverNexusDeathNodeAdminScreenClient;
 import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -18,7 +17,6 @@ import java.util.UUID;
 
 /** Runs TotemNexus death-node administration semantics across the real three-JVM Observer path. */
 public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInitializer {
-    private static final Class<?> ADMIN = ObserverNexusDeathNodeAdminScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
     private static final UUID NODE_A = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -56,20 +54,11 @@ public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInit
                     "Target may send Nexus death-node admin semantic state.\n");
         }
         if (observerRequested && !observerSeen && mirrorVisible(minecraft)) {
-            if (!getBoolean(ADMIN, "remoteAdministratorView")
-                    || !getBoolean(ADMIN, "remoteTruncated")
-                    || !getBoolean(ADMIN, "remoteConfirmationActive")
-                    || getInt(ADMIN, "remotePage") != 1
-                    || getInt(ADMIN, "remoteTotalEntries") != 42
-                    || getInt(ADMIN, "remoteScrollIndex") != 1
-                    || !"Steve".equals(getString(ADMIN, "remoteOwnerQuery"))
-                    || !"minecraft:overworld".equals(getString(ADMIN, "remoteDimensionQuery"))
-                    || !"active".equals(getString(ADMIN, "remoteStatusFilter"))
-                    || !"recent".equals(getString(ADMIN, "remoteTimeFilter"))
-                    || !"purge".equals(getString(ADMIN, "remoteConfirmationAction"))
-                    || !NODE_B.equals(getUuid(ADMIN, "remoteSelectedNodeId"))
-                    || getListSize(ADMIN, "remoteEntries") != 3) {
-                fail("Nexus death-node admin E2E semantic state mismatch");
+            var payload = (dev.totem.nexus.network.DeathNodeAdminPayload) observerPayload(minecraft.gui.screen());
+            if (payload.totalEntries() != 43 || !payload.administratorView()
+                    || payload.confirmationNodeId() == null || payload.confirmationToken() == null
+                    || !"purge".equals(payload.confirmationAction())) {
+                fail("Nexus death-node admin production Screen did not apply the later snapshot");
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
@@ -81,10 +70,12 @@ public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInit
                     "Observer rendered Nexus death-node admin semantic state.\n");
             Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), ObserverNexusDeathNodeAdminE2eBridge::saveScreenshot);
         }
-        if (observerSaved && !observerClosed && !getBoolean(ADMIN, "remoteOpen") && minecraft.gui.screen() == null) {
+        if (observerSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "nexus_death_node_admin", "", 1) && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-nexus-death-node-admin-closed.txt",
-                    "Nexus death-node admin semantic mirror closed.\n");
+                    "Nexus death-node admin semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -97,12 +88,16 @@ public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInit
                 return;
             }
             targetStage = 1;
-            ClientPlayNetworking.send(openState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.deathAdmin(++targetSequence, 42));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.deathAdmin(++targetSequence, 43));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor(
+                    "nexus_death_node_admin", "", 1L));
             ObserverE2eCommon.marker("target-native-nexus-death-node-admin-state-sent.txt",
                     "Target sent Nexus death-node admin semantic state.\n");
         } else if (targetStage == 1 && markerExists("observer-native-nexus-death-node-admin-saved.txt")) {
             targetStage = 2;
-            ClientPlayNetworking.send(ObserverNexusDeathNodeAdminPayloads.closed(++targetSequence));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close(
+                    "nexus_death_node_admin", "", ++targetSequence));
             ObserverE2eCommon.marker("target-native-nexus-death-node-admin-close-sent.txt",
                     "Target sent Nexus death-node admin close state.\n");
         }
@@ -131,11 +126,22 @@ public final class ObserverNexusDeathNodeAdminE2eBridge implements ClientModInit
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeDeathNodeAdminMirrorScreen")
-                && getBoolean(ADMIN, "remoteOpen")
+                && minecraft.gui.screen().getClass().getName().equals("dev.totem.nexus.client.NexusDeathNodeAdminScreen")
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNexusDeathNodeAdminPayloads.FAMILY_ID) > 0L
-                && getLong(ADMIN, "extractedFrames") > 0L;
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRenderedActiveSnapshot();
+    }
+
+    private static Object observerPayload(Object screen) {
+        try {
+            var method = screen.getClass().getDeclaredMethod("observerPayload");
+            method.setAccessible(true);
+            return method.invoke(screen);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Death Admin production Screen did not expose Observer payload", error);
+        }
     }
 
     private static void saveScreenshot(NativeImage image) {

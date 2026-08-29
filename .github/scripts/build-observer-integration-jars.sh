@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 lockstep_root="${OBSERVER_LOCKSTEP_ROOT:-$repo_root/.lockstep}"
 core="$lockstep_root/TotemCore"
-core_jar="$core/build/libs/totem-core-0.7.11.jar"
+core_jar="$core/build/libs/totem-core-0.7.12.jar"
 wrapper="$core/gradlew"
 
 assert_checkout() {
@@ -43,17 +43,17 @@ assert_production_jar() {
         '.id == $mod_id and .version == $version' >/dev/null
 }
 
-assert_checkout TotemCore 82b21944b1e4865f5d34f13febc5049d936a636f 0.7.11
+assert_checkout TotemCore e9dc2975cca37210f9d3bab2df4830e81af77295 0.7.12
 assert_checkout TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8
-assert_checkout TotemRemnant a8eb55ae53f3c6488775467127bab4d972c52a49 0.2.15
-assert_checkout TotemAutomata 59b80206768466a4ac96f89e1343849abaa82dd3 0.1.16
-assert_checkout TotemNexus a1f00f4e70fcdbe9ee098c21ed0c997bdb130bcb 0.3.5
-assert_checkout TotemVillagers d0d287e2df831a44b4b2cab28bbc98e396368cda 0.1.32
-assert_checkout TotemLocksmith 9080ac2c37807b539c5d309fe833edb660834f3b 0.1.5
+assert_checkout TotemRemnant 954ac6667384b65f45d513d5e9e9d8efd9627266 0.2.15
+assert_checkout TotemAutomata 0fb0833f264a1b2026e8784ca1f412cae2bf690d 0.1.17
+assert_checkout TotemNexus d88107984f54aa34c094d297ce647cf45068a132 0.3.5
+assert_checkout TotemVillagers 1cca1c7b404be4c4f409f48cdf486e42f8d249a0 0.1.32
+assert_checkout TotemLocksmith 3c62c42e38b356bf3a834078796dbc8c40f7ad5f 0.1.5
 
 chmod +x "$wrapper"
 "$wrapper" -p "$core" jar --no-daemon --stacktrace
-assert_production_jar "$core_jar" totem-core 0.7.11
+assert_production_jar "$core_jar" totem-core 0.7.12
 
 "$wrapper" -p "$lockstep_root/TotemExcavation" \
   -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace
@@ -70,8 +70,8 @@ assert_production_jar "$remnant_jar" totem-remnant 0.2.15
   -PtotemExcavationJar="$excavation_jar" \
   -PincludeTotemExcavationRuntime=false jar --no-daemon --stacktrace
 assert_production_jar \
-  "$lockstep_root/TotemAutomata/build/libs/totem-automata-0.1.16.jar" \
-  totem-automata 0.1.16
+  "$lockstep_root/TotemAutomata/build/libs/totem-automata-0.1.17.jar" \
+  totem-automata 0.1.17
 
 "$wrapper" -p "$lockstep_root/TotemNexus" \
   -PtotemCoreJar="$core_jar" jar --no-daemon --stacktrace

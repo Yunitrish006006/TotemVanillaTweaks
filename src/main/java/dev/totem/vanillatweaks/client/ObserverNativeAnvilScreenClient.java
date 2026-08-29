@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.TotemVanillaTweaks;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.mixin.client.AnvilScreenAccessor;
 import dev.totem.vanillatweaks.network.ObserverAnvilScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
@@ -41,7 +42,7 @@ public final class ObserverNativeAnvilScreenClient {
     private static boolean remoteResultAvailable;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
 
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverNativeAnvilScreenClient() {}
@@ -54,8 +55,8 @@ public final class ObserverNativeAnvilScreenClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeAnvilScreenClient::tick);
     }
 
-    static boolean isNativeMirrorScreen(Screen screen) {
-        return screen instanceof NativeAnvilMirrorScreen;
+    static boolean isNativeObserverScreen(Screen screen) {
+        return screen instanceof ObserverAnvilScreen;
     }
 
     static boolean hasStructuredRemoteScreen() {
@@ -76,10 +77,10 @@ public final class ObserverNativeAnvilScreenClient {
 
         if (!ObserverNativeClient.observerSessionActive()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
-        if (remoteOpen) ensureMirror();
+        if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -103,8 +104,10 @@ public final class ObserverNativeAnvilScreenClient {
             long sequence
     ) {
         AnvilMenu menu = anvilScreen.getMenu();
-        EditBox nameField = ((AnvilScreenAccessor) anvilScreen).totem$getNameField();
-        String itemName = nameField == null ? "" : nameField.getValue();
+        // The rename box is an unsent local draft until the target takes the
+        // output. Keep the native Anvil screen, but never put that draft on
+        // the Observer transport.
+        String itemName = "";
         int levelCost = Math.max(0, menu.getCost());
         boolean resultAvailable = !menu.getSlot(AnvilMenu.RESULT_SLOT).getItem().isEmpty();
         boolean tooExpensive = resultAvailable && levelCost >= 40 && !minecraft.player.getAbilities().instabuild;
@@ -167,7 +170,7 @@ public final class ObserverNativeAnvilScreenClient {
                         payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
 
@@ -180,25 +183,36 @@ public final class ObserverNativeAnvilScreenClient {
         remoteTooExpensive = payload.tooExpensive();
         remoteResultAvailable = payload.resultAvailable();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeAnvilMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeAnvilMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverAnvilScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverAnvilScreen(new AnvilMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Anvil" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverAnvilScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            screen.getMenu().setData(0, remoteLevelCost);
+            screen.getMenu().setItemName(remoteItemName);
+            EditBox name = ((AnvilScreenAccessor) (Object) screen).totem$getNameField();
+            if (name != null && !name.getValue().equals(remoteItemName)) name.setValue(remoteItemName);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeAnvilMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverAnvilScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -226,71 +240,14 @@ public final class ObserverNativeAnvilScreenClient {
         }
     }
 
-    private static final class NativeAnvilMirrorScreen extends ObserverMirrorScreen {
-        private NativeAnvilMirrorScreen() { super(Component.literal("Observer Anvil")); }
 
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
-        }
-
-        @Override
-        public boolean isPauseScreen() { return false; }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int panelWidth = Math.min(230, Math.max(200, width - 28));
-            int panelHeight = 150;
-            int left = (width - panelWidth) / 2;
-            int top = (height - panelHeight) / 2;
-            graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xEE202020);
-            graphics.fill(left + 4, top + 4, left + panelWidth - 4, top + 24, 0xFF303030);
-            String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
-            graphics.text(this.minecraft.font, title, left + 10, top + 10, 0xFFFFFFFF, true);
-
-            graphics.fill(left + 10, top + 32, left + panelWidth - 10, top + 51, 0xFF111111);
-            graphics.text(this.minecraft.font, remoteItemName.isBlank() ? " " : remoteItemName,
-                    left + 15, top + 38, 0xFFFFFFFF, false);
-
-            drawSlot(graphics, AnvilMenu.INPUT_SLOT, left + 28, top + 70);
-            graphics.text(this.minecraft.font, "+", left + 56, top + 76, 0xFFBDBDBD, false);
-            drawSlot(graphics, AnvilMenu.ADDITIONAL_SLOT, left + 72, top + 70);
-            graphics.text(this.minecraft.font, "→", left + 103, top + 76, 0xFFFFFFFF, false);
-            drawSlot(graphics, AnvilMenu.RESULT_SLOT, left + 123, top + 70);
-
-            String cost;
-            int costColor;
-            if (!remoteResultAvailable) {
-                cost = "No result";
-                costColor = 0xFF9E9E9E;
-            } else if (remoteTooExpensive) {
-                cost = "Too Expensive!";
-                costColor = 0xFFFF6B6B;
-            } else {
-                cost = "Cost: " + remoteLevelCost + " level" + (remoteLevelCost == 1 ? "" : "s");
-                costColor = 0xFF80E27E;
-            }
-            graphics.text(this.minecraft.font, cost, left + 10, top + 108, costColor, false);
-            graphics.text(this.minecraft.font, "anvil semantic / framebuffer-free", left + 10,
-                    top + panelHeight - 16, 0xFF888888, false);
-            extractedFrames++;
-        }
-
-        private void drawSlot(GuiGraphicsExtractor graphics, int slotIndex, int x, int y) {
-            graphics.fill(x - 1, y - 1, x + 18, y + 18, 0xFF555555);
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                if (slot.index() != slotIndex) continue;
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) {
-                    graphics.item(stack, x, y);
-                    graphics.itemDecorations(this.minecraft.font, stack, x, y);
-                }
-                return;
-            }
+    private static final class ObserverAnvilScreen extends AnvilScreen implements ObserverReadOnlyScreen {
+        private ObserverAnvilScreen(AnvilMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                    Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

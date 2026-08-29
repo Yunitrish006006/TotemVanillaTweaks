@@ -46,7 +46,7 @@ public final class ObserverLoomClientGameTest implements FabricClientGameTest {
                 }
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeLoomMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverLoomScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!getBoolean("remoteDisplayPatterns") || getBoolean("remoteHasMaxPatterns")
                     || !getBoolean("remoteResultAvailable")

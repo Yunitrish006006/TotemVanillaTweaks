@@ -1,7 +1,6 @@
 package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import dev.totem.vanillatweaks.client.ObserverAutomataCopperGolemScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.network.ObserverAutomataCopperGolemPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
@@ -18,7 +17,6 @@ import java.util.List;
 
 /** Inserts a real cross-JVM Automata Copper Golem semantic phase after Remnant Backpack and before Stop. */
 public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInitializer {
-    private static final Class<?> AUTOMATA = ObserverAutomataCopperGolemScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
 
@@ -55,30 +53,19 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
 
         if (observerRequested && !observerSeen
                 && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeAutomataCopperGolemMirrorScreen")
-                && getBoolean(AUTOMATA, "remoteOpen")
+                && minecraft.gui.screen().getClass().getName().equals("dev.totem.automata.client.CopperGolemMenuScreen")
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNativeScreenPayloads.FAMILY_AUTOMATA_COPPER_GOLEM) > 0L
-                && getLong(AUTOMATA, "extractedFrames") > 0L) {
-            if (!"sorting".equals(String.valueOf(getObject(AUTOMATA, "remoteMode")))
-                    || !"bindings".equals(String.valueOf(getObject(AUTOMATA, "remoteTab")))) {
-                fail("Automata Copper Golem E2E mode/tab mismatch");
-                return;
-            }
-            if (!getBoolean(AUTOMATA, "remoteApiKeyConfigured")) {
-                fail("Automata Copper Golem configured-key semantic flag missing");
-                return;
-            }
-            if (!ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteApiUrl"))
-                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteModel"))
-                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteGatheringPrompt"))
-                    || !ObserverAutomataCopperGolemPayloads.TOKEN_CONFIGURED.equals(getObject(AUTOMATA, "remoteBindingPrompt"))
-                    || !ObserverAutomataCopperGolemPayloads.TOKEN_VALID.equals(getObject(AUTOMATA, "remoteCacheValueText"))) {
-                fail("Automata Copper Golem privacy-token semantic state mismatch");
-                return;
-            }
-            if (hasStringApiKeyField()) {
-                fail("Observer Automata client retained API-key text field");
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRenderedActiveSnapshot()) {
+            var screen = (dev.totem.automata.client.CopperGolemMenuScreen) minecraft.gui.screen();
+            var snapshot = screen.observerCaptureSource().orElse(null);
+            if (snapshot == null || snapshot.revision() != 2 || !"sorting".equals(snapshot.mode())
+                    || !"searching".equals(snapshot.activity())
+                    || !snapshot.llmApiUrl().isEmpty() || !snapshot.llmApiKey().isEmpty()
+                    || !snapshot.llmModel().isEmpty() || !snapshot.gatheringLlmPrompt().isEmpty()) {
+                fail("Automata production Screen did not apply the redacted later snapshot");
                 return;
             }
             if (getBoolean(GENERIC, "remoteContainerOpen")) {
@@ -91,11 +78,13 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
             saveScreenshot(minecraft, "observer-native-automata-copper-golem.png");
         }
 
-        if (observerSeen && observerSaved && !observerClosed && !getBoolean(AUTOMATA, "remoteOpen")
+        if (observerSeen && observerSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "automata_copper_golem", "", 1)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-automata-copper-golem-closed.txt",
-                    "Automata Copper Golem semantic mirror closed after Target close state.\n");
+                    "Automata Copper Golem semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -108,13 +97,16 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
                 return;
             }
             targetOpened = true;
-            ClientPlayNetworking.send(openState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.automata(++targetSequence, 1));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.automata(++targetSequence, 2));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("automata_copper_golem", "", 1L));
             ObserverE2eCommon.marker("target-native-automata-copper-golem-state-sent.txt",
                     "Target sent Automata Copper Golem semantic state through the dedicated server.\n");
         }
         if (targetOpened && !targetClosed && markerExists("observer-native-automata-copper-golem-saved.txt")) {
             targetClosed = true;
-            ClientPlayNetworking.send(closeState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close(
+                    "automata_copper_golem", "", ++targetSequence));
             ObserverE2eCommon.marker("target-native-automata-copper-golem-close-sent.txt",
                     "Target sent Automata Copper Golem semantic close state.\n");
         }
@@ -186,13 +178,6 @@ public final class ObserverAutomataCopperGolemE2eBridge implements ClientModInit
                 -1, 0, false, false, false, false, false, "", 0, 0, false, "", 0, 0, 0, "", 0,
                 "", false, "", 0, "", "", "", null, null, List.of(), false, 0, 0,
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
-    }
-
-    private static boolean hasStringApiKeyField() {
-        for (Field field : AUTOMATA.getDeclaredFields()) {
-            if (field.getName().toLowerCase().contains("apikey") && field.getType() == String.class) return true;
-        }
-        return false;
     }
 
     private static void saveScreenshot(Minecraft minecraft, String name) {

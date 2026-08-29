@@ -23,9 +23,12 @@ final class ObserverStructuredScreenPolicyTest {
     @Test
     void genericContainersAreSuppressedOnlyWhenTheirAdapterWasNegotiated() {
         String inventory = "net.minecraft.client.gui.screens.inventory.InventoryScreen";
-        assertTrue(ObserverStructuredScreenPolicy.suppressGenericMetadata(
+        String chest = "net.minecraft.client.gui.screens.inventory.ContainerScreen";
+        assertFalse(ObserverStructuredScreenPolicy.suppressGenericMetadata(
                 inventory, ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS));
-        assertFalse(ObserverStructuredScreenPolicy.suppressGenericMetadata(inventory, 0L));
+        assertTrue(ObserverStructuredScreenPolicy.suppressGenericMetadata(
+                chest, ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS));
+        assertFalse(ObserverStructuredScreenPolicy.suppressGenericMetadata(chest, 0L));
         assertFalse(ObserverStructuredScreenPolicy.suppressGenericMetadata(
                 "example.missing.UnknownScreen", Long.MAX_VALUE));
     }

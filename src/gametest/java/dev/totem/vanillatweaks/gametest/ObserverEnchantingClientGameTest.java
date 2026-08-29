@@ -54,7 +54,7 @@ public final class ObserverEnchantingClientGameTest implements FabricClientGameT
             });
 
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeEnchantingMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverEnchantmentScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (getInt("remotePlayerLevel") != 30 || getInt("remoteLapisCount") != 12) {
                 throw new AssertionError("Enchanting resource state was not reconstructed");

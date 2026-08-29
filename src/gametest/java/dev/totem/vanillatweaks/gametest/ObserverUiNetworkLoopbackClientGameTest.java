@@ -2,18 +2,24 @@ package dev.totem.vanillatweaks.gametest;
 
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
 import dev.totem.vanillatweaks.client.ObserverUiClient;
+import dev.totem.vanillatweaks.network.ObserverAnvilScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverAdvancementsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBeaconScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverBookScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCrafterScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverCraftingScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
-import dev.totem.vanillatweaks.network.ObserverLocksmithManagementPayloads;
+import dev.totem.vanillatweaks.network.ObserverHorseScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
-import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
+import dev.totem.vanillatweaks.network.ObserverRemoteCursorPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
@@ -55,8 +61,15 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverNativePayloads.NativeControl.TYPE, "NativeControl v4");
                 assertCanSend(player, ObserverNativePayloads.NativeSession.TYPE, "NativeSession v4");
                 assertCanSend(player, ObserverNativePayloads.NativeViewRelay.TYPE, "NativeViewRelay v4");
+                assertCanSend(player, ObserverOwnedScreenPayloads.Relay.TYPE, "OwnedScreenRelay v1");
+                assertCanSend(player, ObserverRemoteCursorPayloads.Relay.TYPE, "RemoteCursorRelay v2");
                 assertCanSend(player, ObserverNativeScreenPayloads.ContainerRelay.TYPE, "ContainerRelay v2");
                 assertCanSend(player, ObserverNativeScreenPayloads.FurnaceRelay.TYPE, "FurnaceRelay v1");
+                assertCanSend(player, ObserverBookScreenPayloads.BookRelay.TYPE, "BookRelay v1");
+                assertCanSend(player, ObserverCraftingScreenPayloads.CraftingRelay.TYPE, "CraftingRelay v1");
+                assertCanSend(player, ObserverMerchantScreenPayloads.MerchantRelay.TYPE, "MerchantRelay v1");
+                assertCanSend(player, ObserverAnvilScreenPayloads.AnvilRelay.TYPE, "AnvilRelay v1");
+                assertCanSend(player, ObserverEnchantingScreenPayloads.EnchantingRelay.TYPE, "EnchantingRelay v1");
                 assertCanSend(player, ObserverBrewingScreenPayloads.BrewingRelay.TYPE, "BrewingRelay v1");
                 assertCanSend(player, ObserverSmithingScreenPayloads.SmithingRelay.TYPE, "SmithingRelay v1");
                 assertCanSend(player, ObserverStonecutterScreenPayloads.StonecutterRelay.TYPE, "StonecutterRelay v1");
@@ -66,10 +79,9 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 assertCanSend(player, ObserverBeaconScreenPayloads.BeaconRelay.TYPE, "BeaconRelay v1");
                 assertCanSend(player, ObserverSignScreenPayloads.SignRelay.TYPE, "SignRelay v1");
                 assertCanSend(player, ObserverCrafterScreenPayloads.CrafterRelay.TYPE, "CrafterRelay v1");
-                assertCanSend(player, ObserverNexusDeathNodeAdminPayloads.AdminRelay.TYPE, "NexusDeathNodeAdminRelay v1");
-                assertCanSend(player, ObserverLocksmithManagementPayloads.ManagementRelay.TYPE, "LocksmithManagementRelay v1");
                 assertCanSend(player, ObserverAdvancementsScreenPayloads.AdvancementsRelay.TYPE, "AdvancementsRelay v1");
                 assertCanSend(player, ObserverStatsScreenPayloads.StatsRelay.TYPE, "StatsRelay v1");
+                assertCanSend(player, ObserverHorseScreenPayloads.HorseRelay.TYPE, "HorseRelay v1");
                 assertCanSend(player, ObserverPayloads.ScreenRelay.TYPE, "ScreenRelay");
                 assertNoFramebufferPayloadTypes();
 
@@ -79,7 +91,13 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                 return id;
             });
 
-            long expectedCapabilities = ObserverNativeScreenPayloads.KNOWN_CAPABILITIES
+            long expectedCapabilities = ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS
+                    | ObserverNativeScreenPayloads.CAPABILITY_FURNACE
+                    | ObserverNativeScreenPayloads.CAPABILITY_BOOK
+                    | ObserverNativeScreenPayloads.CAPABILITY_CRAFTING
+                    | ObserverNativeScreenPayloads.CAPABILITY_MERCHANT
+                    | ObserverNativeScreenPayloads.CAPABILITY_ANVIL
+                    | ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING
                     | ObserverBrewingScreenPayloads.CAPABILITY
                     | ObserverSmithingScreenPayloads.CAPABILITY
                     | ObserverStonecutterScreenPayloads.CAPABILITY
@@ -89,10 +107,10 @@ public final class ObserverUiNetworkLoopbackClientGameTest implements FabricClie
                     | ObserverBeaconScreenPayloads.CAPABILITY
                     | ObserverSignScreenPayloads.CAPABILITY
                     | ObserverCrafterScreenPayloads.CAPABILITY
-                    | ObserverNexusDeathNodeAdminPayloads.CAPABILITY
-                    | ObserverLocksmithManagementPayloads.CAPABILITY
                     | ObserverAdvancementsScreenPayloads.CAPABILITY
-                    | ObserverStatsScreenPayloads.CAPABILITY;
+                    | ObserverStatsScreenPayloads.CAPABILITY
+                    | ObserverRemoteCursorPayloads.CAPABILITY
+                    | ObserverHorseScreenPayloads.CAPABILITY;
             context.waitFor(minecraft -> nativeGetBoolean("observerSessionActive")
                     && nativeGetBoolean("targetStateEnabled")
                     && nativeGetInt("observerProtocolVersion") == ObserverNativePayloads.PROTOCOL_VERSION

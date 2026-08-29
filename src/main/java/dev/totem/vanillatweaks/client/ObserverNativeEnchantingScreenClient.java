@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.TotemVanillaTweaks;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -37,10 +38,16 @@ public final class ObserverNativeEnchantingScreenClient {
     private static int remoteLapisCount;
     private static List<ObserverEnchantingScreenPayloads.OptionState> remoteOptions = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverNativeEnchantingScreenClient() {}
+
+    /** Render hook used by the genuine EnchantmentScreen instead of Observer-local XP. */
+    public static int playerLevelFor(Screen screen, int localPlayerLevel) {
+        return screen instanceof ObserverEnchantmentScreen && remoteOpen
+                ? remotePlayerLevel : localPlayerLevel;
+    }
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(
@@ -60,10 +67,10 @@ public final class ObserverNativeEnchantingScreenClient {
 
         if (!ObserverNativeClient.observerSessionActive()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
-        if (remoteOpen) ensureMirror();
+        if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -157,7 +164,7 @@ public final class ObserverNativeEnchantingScreenClient {
                         payload.targetId(), payload.sequence())) return;
         if (!payload.open()) {
             clearRemote();
-            closeMirror();
+            closeObserverScreen();
             return;
         }
 
@@ -169,25 +176,38 @@ public final class ObserverNativeEnchantingScreenClient {
         remoteLapisCount = payload.lapisCount();
         remoteOptions = List.copyOf(payload.options());
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeEnchantingMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeEnchantingMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverEnchantmentScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverEnchantmentScreen(new EnchantmentMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Enchanting" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverEnchantmentScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
+            for (var option : remoteOptions) {
+                if (option.index() < 0 || option.index() >= 3) continue;
+                screen.getMenu().costs[option.index()] = option.cost();
+                screen.getMenu().enchantClue[option.index()] = option.enchantClue();
+                screen.getMenu().levelClue[option.index()] = option.levelClue();
+            }
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeEnchantingMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverEnchantmentScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -214,57 +234,14 @@ public final class ObserverNativeEnchantingScreenClient {
         }
     }
 
-    private static final class NativeEnchantingMirrorScreen extends ObserverMirrorScreen {
-        private NativeEnchantingMirrorScreen() { super(Component.literal("Observer Enchanting")); }
 
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            }
-            super.onClose();
-        }
-
-        @Override
-        public boolean isPauseScreen() { return false; }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int panelWidth = 220;
-            int panelHeight = 150;
-            int left = (width - panelWidth) / 2;
-            int top = (height - panelHeight) / 2;
-            graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xEE202020);
-            String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
-            graphics.text(font, title, left + 10, top + 9, 0xFFFFFFFF, true);
-            graphics.text(font, "Level " + remotePlayerLevel + "  Lapis " + remoteLapisCount,
-                    left + 10, top + 24, 0xFFBDBDBD, false);
-
-            int optionTop = top + 42;
-            for (ObserverEnchantingScreenPayloads.OptionState option : remoteOptions) {
-                int y = optionTop + option.index() * 28;
-                graphics.fill(left + 52, y, left + panelWidth - 10, y + 23,
-                        option.affordable() ? 0xFF3A4A32 : 0xFF3A3030);
-                String cost = option.cost() <= 0 ? "Unavailable" : "Cost " + option.cost() + "  Lapis " + (option.index() + 1);
-                graphics.text(font, cost, left + 59, y + 4, 0xFFFFFFFF, false);
-                String clue = option.enchantClue() < 0 ? "No clue" : "Clue #" + option.enchantClue() + " Lv " + option.levelClue();
-                graphics.text(font, clue, left + 59, y + 13, 0xFFAAAAAA, false);
-            }
-
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                if (slot.index() > 1) continue;
-                int x = left + 18;
-                int y = top + 49 + slot.index() * 34;
-                graphics.fill(x, y, x + 20, y + 20, 0xFF555555);
-                graphics.fill(x + 1, y + 1, x + 19, y + 19, 0xFF171717);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) {
-                    graphics.item(stack, x + 2, y + 2);
-                    graphics.itemDecorations(font, stack, x + 2, y + 2);
-                }
-            }
-            extractedFrames++;
+    private static final class ObserverEnchantmentScreen extends EnchantmentScreen implements ObserverReadOnlyScreen {
+        private ObserverEnchantmentScreen(EnchantmentMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                          Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

@@ -67,7 +67,7 @@ public final class ObserverMerchantClientGameTest implements FabricClientGameTes
             });
 
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeMerchantMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverMerchantScreen"), 100);
             context.waitFor(minecraft -> getStaticLong(ObserverNativeMerchantScreenClient.class, "extractedFrames") > 0L, 100);
             if (!"vanilla_merchant".equals(getStaticObject(ObserverNativeMerchantScreenClient.class, "remoteVariant"))) {
                 throw new AssertionError("Merchant variant was not reconstructed");

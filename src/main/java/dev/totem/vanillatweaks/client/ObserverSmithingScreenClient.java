@@ -4,6 +4,7 @@ import dev.totem.vanillatweaks.TotemVanillaTweaks;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
@@ -15,6 +16,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -46,7 +48,7 @@ public final class ObserverSmithingScreenClient {
     private static boolean remoteRecipeError;
     private static boolean remoteResultAvailable;
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverSmithingScreenClient() {}
@@ -161,8 +163,8 @@ public final class ObserverSmithingScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -234,32 +236,39 @@ public final class ObserverSmithingScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverSmithingScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
         remoteRecipeError = payload.recipeError();
         remoteResultAvailable = payload.resultAvailable();
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeSmithingMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeSmithingMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverSmithingScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverSmithingScreen(new SmithingMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Smithing Table" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverSmithingScreen screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeSmithingMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverSmithingScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -281,38 +290,14 @@ public final class ObserverSmithingScreenClient {
         } catch (RuntimeException error) { return ItemStack.EMPTY; }
     }
 
-    private static final class NativeSmithingMirrorScreen extends ObserverMirrorScreen {
-        private NativeSmithingMirrorScreen() { super(Component.literal("Observer Smithing Table")); }
-        @Override public boolean isPauseScreen() { return false; }
-        @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
-        }
-        @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = 176, ph = 166, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.fill(left, top, left + pw, top + ph, 0xFFE3E3E3);
-            graphics.fill(left + 3, top + 3, left + pw - 3, top + ph - 3, 0xFFC6C6C6);
-            graphics.text(font, remoteTitle.isBlank() ? "Smithing Table" : remoteTitle, left + 8, top + 6, 0xFF404040, false);
-            SmithingLabelLayout labels = smithingLabelLayout(
-                    remoteRecipeError, remoteResultAvailable, pw - 98 - 8, pw - 16, font::width);
-            graphics.text(font, labels.status(), left + 98, top + 26,
-                    remoteRecipeError ? 0xFFB00020 : 0xFF404040, false);
-            for (int input = 0; input < INPUT_MARKERS.length; input++) {
-                String marker = INPUT_MARKERS[input];
-                graphics.text(font, marker,
-                        left + centeredInputMarkerX(input, font.width(marker)),
-                        top + INPUT_MARKER_Y, 0xFF555555, false);
-            }
-            graphics.text(font, labels.legend(), left + 8, top + INPUT_LEGEND_Y, 0xFF555555, false);
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int sx = left + slot.x(), sy = top + slot.y();
-                graphics.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF666666);
-                graphics.fill(sx, sy, sx + 16, sy + 16, 0xFF202020);
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
-            }
-            extractedFrames++;
+
+    private static final class ObserverSmithingScreen extends SmithingScreen implements ObserverReadOnlyScreen {
+        private ObserverSmithingScreen(SmithingMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                       Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float tick){
+            super.extractRenderState(graphics,x,y,tick); extractedFrames++;
         }
     }
 }

@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Gives TotemAutomata Copper Golem semantics priority over generic screen adapters. */
 @Mixin(value = ObserverNativeScreenClient.class, remap = false)
@@ -34,11 +33,6 @@ public abstract class ObserverNativeScreenClientAutomataPriorityMixin {
         closeTargetContainer(ObserverNativeClient.targetSupportsScreen(
                 ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS));
         ci.cancel();
-    }
-
-    @Inject(method = "isStructuredTargetScreen", at = @At("HEAD"), cancellable = true)
-    private static void totem$markAutomataStructured(Screen screen, CallbackInfoReturnable<Boolean> cir) {
-        if (supportsAutomata(screen)) cir.setReturnValue(true);
     }
 
     private static boolean supportsAutomata(Screen screen) {

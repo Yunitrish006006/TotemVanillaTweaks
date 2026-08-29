@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -55,11 +57,14 @@ public final class ObserverEnchantingE2eBridge implements ClientModInitializer {
 
         if (observerRequested && !observerSeen
                 && minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeEnchantingMirrorScreen")
+                && minecraft.gui.screen() instanceof EnchantmentScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(ENCHANTING, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverNativeScreenPayloads.FAMILY_ENCHANTING) > 0L
-                && getLong(ENCHANTING, "extractedFrames") > 0L) {
+                && getLong(ENCHANTING, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverNativeScreenPayloads.FAMILY_ENCHANTING,
+                        getLong(ENCHANTING, "extractedFrames"))) {
             if (getInt(ENCHANTING, "remotePlayerLevel") != 30 || getInt(ENCHANTING, "remoteLapisCount") != 12) {
                 fail("Enchanting E2E resource state mismatch");
                 return;
@@ -70,6 +75,11 @@ public final class ObserverEnchantingE2eBridge implements ClientModInitializer {
             if (options.size() != 3 || options.get(0).cost() != 5 || options.get(2).cost() != 30
                     || options.get(2).levelClue() != 4 || !options.get(2).affordable()) {
                 fail("Enchanting E2E offer state mismatch");
+                return;
+            }
+            EnchantmentScreen screen = (EnchantmentScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1)) {
+                fail("Enchanting production Menu did not apply relayed item and lapis slots");
                 return;
             }
             if (getBoolean(GENERIC, "remoteContainerOpen")) {
@@ -86,7 +96,7 @@ public final class ObserverEnchantingE2eBridge implements ClientModInitializer {
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-enchanting-closed.txt",
-                    "Enchanting semantic mirror closed after Target close state.\n");
+                    "Enchanting semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }

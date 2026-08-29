@@ -31,7 +31,7 @@ public final class ObserverSmithingClientGameTest implements FabricClientGameTes
                 accept(ObserverSmithingScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeSmithingMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverSmithingScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (getBoolean("remoteRecipeError") || !getBoolean("remoteResultAvailable")
                     || getListSize("remoteSlots") != 40) {

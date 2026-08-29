@@ -10,11 +10,27 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
+import net.minecraft.client.gui.screens.inventory.BlastFurnaceScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.DispenserScreen;
+import net.minecraft.client.gui.screens.inventory.FurnaceScreen;
+import net.minecraft.client.gui.screens.inventory.HopperScreen;
+import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
+import net.minecraft.client.gui.screens.inventory.SmokerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
+import net.minecraft.world.inventory.BlastFurnaceMenu;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.DispenserMenu;
+import net.minecraft.world.inventory.FurnaceMenu;
+import net.minecraft.world.inventory.HopperMenu;
+import net.minecraft.world.inventory.ShulkerBoxMenu;
+import net.minecraft.world.inventory.SmokerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -69,7 +85,7 @@ public final class ObserverNativeScreenClient {
     private static String remoteGenericTitle = "";
     private static int genericScreenTicks;
 
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
     private static long furnaceExtractedFrames;
     private static long genericExtractedFrames;
@@ -89,39 +105,24 @@ public final class ObserverNativeScreenClient {
         ClientTickEvents.END_CLIENT_TICK.register(ObserverNativeScreenClient::tick);
     }
 
-    static boolean isStructuredTargetScreen(Screen screen) {
-        if (screen != null
-                && REMNANT_BACKPACK_SCREEN_CLASS.equals(screen.getClass().getName())
-                && ObserverNativeClient.targetSupportsScreen(
-                        ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK)) {
-            return true;
-        }
-        if (screen instanceof AbstractFurnaceScreen<?>
-                && ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_FURNACE)) {
-            return true;
-        }
-        return ObserverNativeClient.targetSupportsScreen(ObserverNativeScreenPayloads.CAPABILITY_CONTAINER_SLOTS)
-                && screen instanceof AbstractContainerScreen<?>;
-    }
-
     static boolean hasStructuredRemoteScreen() {
         return (remoteFurnaceOpen || remoteContainerOpen) && ObserverNativeClient.observerSessionActive();
     }
 
-    static boolean isNativeContainerMirror(Screen screen) {
-        return screen instanceof NativeContainerMirrorScreen;
+    static boolean isNativeContainerObserverScreen(Screen screen) {
+        return screen instanceof NativeContainerObserverScreen;
     }
 
-    static boolean isNativeFurnaceMirror(Screen screen) {
-        return screen instanceof NativeFurnaceMirrorScreen;
+    static boolean isNativeFurnaceObserverScreen(Screen screen) {
+        return screen instanceof NativeFurnaceObserverScreen;
     }
 
-    static boolean isNativeGenericMirror(Screen screen) {
-        return screen instanceof NativeGenericMirrorScreen;
+    static boolean isNativeGenericObserverScreen(Screen screen) {
+        return screen instanceof ObserverMetadataScreen;
     }
 
-    static boolean isNativeMirrorScreen(Screen screen) {
-        return isNativeContainerMirror(screen) || isNativeFurnaceMirror(screen) || isNativeGenericMirror(screen);
+    static boolean isNativeObserverScreen(Screen screen) {
+        return isNativeContainerObserverScreen(screen) || isNativeFurnaceObserverScreen(screen) || isNativeGenericObserverScreen(screen);
     }
 
     static long extractedFrames() {
@@ -248,7 +249,7 @@ public final class ObserverNativeScreenClient {
         }
 
         if (!ObserverNativeClient.observerSessionActive()) {
-            if (remoteFurnaceOpen || remoteContainerOpen || remoteGenericOpen || isNativeMirrorScreen(minecraft.gui.screen())) {
+            if (remoteFurnaceOpen || remoteContainerOpen || remoteGenericOpen || isNativeObserverScreen(minecraft.gui.screen())) {
                 clearRemoteFurnace();
                 clearRemoteContainer();
                 clearRemoteGeneric();
@@ -294,7 +295,8 @@ public final class ObserverNativeScreenClient {
             return;
         }
 
-        if (supportsContainer && screen instanceof AbstractContainerScreen<?> containerScreen) {
+        if (supportsContainer && screen instanceof AbstractContainerScreen<?> containerScreen
+                && isExactGenericContainerScreen(screen)) {
             closeTargetFurnace(supportsFurnace);
             tickTargetContainer(minecraft, containerScreen);
             return;
@@ -302,6 +304,16 @@ public final class ObserverNativeScreenClient {
 
         closeTargetFurnace(supportsFurnace);
         closeTargetContainer(supportsContainer);
+    }
+
+    private static boolean isExactGenericContainerScreen(Screen screen) {
+        return screen != null && switch (screen.getClass().getName()) {
+            case "net.minecraft.client.gui.screens.inventory.ContainerScreen",
+                    "net.minecraft.client.gui.screens.inventory.HopperScreen",
+                    "net.minecraft.client.gui.screens.inventory.DispenserScreen",
+                    "net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen" -> true;
+            default -> false;
+        };
     }
 
     private static void tickTargetContainer(
@@ -554,8 +566,9 @@ public final class ObserverNativeScreenClient {
         if (!remoteContainerOpen || remoteFurnaceOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
-        if (!(minecraft.gui.screen() instanceof NativeContainerMirrorScreen)) {
-            replaceNativeScreen(new NativeContainerMirrorScreen());
+        if (!(minecraft.gui.screen() instanceof NativeContainerObserverScreen)) replaceNativeScreen(createContainerScreen());
+        if (minecraft.gui.screen() instanceof AbstractContainerScreen<?> screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteSlots);
         }
     }
 
@@ -564,8 +577,17 @@ public final class ObserverNativeScreenClient {
         if (!remoteFurnaceOpen || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
-        if (!(minecraft.gui.screen() instanceof NativeFurnaceMirrorScreen)) {
-            replaceNativeScreen(new NativeFurnaceMirrorScreen());
+        if (!(minecraft.gui.screen() instanceof NativeFurnaceObserverScreen)
+                || !minecraft.gui.screen().getClass().getName().contains(expectedFurnaceScreenName())) {
+            replaceNativeScreen(createFurnaceScreen());
+        }
+        if (minecraft.gui.screen() instanceof AbstractFurnaceScreen<?> screen) {
+            ObserverVanillaScreenSupport.applyMenu(screen.getMenu(), remoteFurnaceSlots);
+            int fuelTotal = 100;
+            screen.getMenu().setData(0, Math.round(remoteFuelProgress * fuelTotal));
+            screen.getMenu().setData(1, fuelTotal);
+            screen.getMenu().setData(2, Math.round(remoteCookProgress * 100));
+            screen.getMenu().setData(3, 100);
         }
     }
 
@@ -575,30 +597,30 @@ public final class ObserverNativeScreenClient {
                 || !ObserverNativeClient.observerSessionActive()) {
             return;
         }
-        if (!(minecraft.gui.screen() instanceof NativeGenericMirrorScreen)) {
-            replaceNativeScreen(new NativeGenericMirrorScreen());
+        if (!(minecraft.gui.screen() instanceof ObserverMetadataScreen)) {
+            replaceNativeScreen(new ObserverMetadataScreen());
         }
     }
 
     private static void replaceNativeScreen(Screen next) {
-        suppressMirrorStop = true;
+        suppressObserverScreenStop = true;
         try {
             Minecraft.getInstance().setScreenAndShow(next);
         } finally {
-            suppressMirrorStop = false;
+            suppressObserverScreenStop = false;
         }
     }
 
     private static void closeNativeScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!isNativeMirrorScreen(minecraft.gui.screen())) {
+        if (!isNativeObserverScreen(minecraft.gui.screen())) {
             return;
         }
-        suppressMirrorStop = true;
+        suppressObserverScreenStop = true;
         try {
             minecraft.setScreenAndShow(null);
         } finally {
-            suppressMirrorStop = false;
+            suppressObserverScreenStop = false;
         }
     }
 
@@ -634,7 +656,7 @@ public final class ObserverNativeScreenClient {
         genericScreenTicks = 0;
     }
 
-    private static ItemStack itemStack(ObserverNativeScreenPayloads.SlotState slot) {
+    static ItemStack itemStack(ObserverNativeScreenPayloads.SlotState slot) {
         if (slot.itemId().isBlank() || slot.count() <= 0) {
             return ItemStack.EMPTY;
         }
@@ -651,50 +673,6 @@ public final class ObserverNativeScreenClient {
         } catch (RuntimeException error) {
             TotemVanillaTweaks.LOGGER.debug("Ignoring invalid Observer item id {}", slot.itemId());
             return ItemStack.EMPTY;
-        }
-    }
-
-    private static void renderSlots(
-            NativeObserverScreen screen,
-            GuiGraphicsExtractor graphics,
-            int left,
-            int top,
-            int contentWidth,
-            int contentHeight,
-            List<ObserverNativeScreenPayloads.SlotState> slots
-    ) {
-        for (ObserverNativeScreenPayloads.SlotState slot : slots) {
-            int slotX = left + slot.x();
-            int slotY = top + slot.y();
-            if (slotX < left - 2 || slotY < top - 2
-                    || slotX + 18 > left + contentWidth + 2
-                    || slotY + 18 > top + contentHeight + 2) {
-                continue;
-            }
-            graphics.fill(slotX, slotY, slotX + 18, slotY + 18, 0xFF555555);
-            graphics.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, 0xFF171717);
-            ItemStack stack = itemStack(slot);
-            if (!stack.isEmpty()) {
-                graphics.item(stack, slotX + 1, slotY + 1);
-                graphics.itemDecorations(Minecraft.getInstance().font, stack, slotX + 1, slotY + 1);
-            }
-        }
-    }
-
-    private static void renderCursor(
-            GuiGraphicsExtractor graphics,
-            int left,
-            int top,
-            int mouseX,
-            int mouseY,
-            int width,
-            int height
-    ) {
-        int cursorX = left + mouseX;
-        int cursorY = top + mouseY;
-        if (cursorX >= 0 && cursorX < width && cursorY >= 0 && cursorY < height) {
-            graphics.fill(cursorX - 4, cursorY, cursorX + 5, cursorY + 1, 0xFFFFFFFF);
-            graphics.fill(cursorX, cursorY - 4, cursorX + 1, cursorY + 5, 0xFFFFFFFF);
         }
     }
 
@@ -715,134 +693,109 @@ public final class ObserverNativeScreenClient {
     ) {
     }
 
-    private abstract static class NativeObserverScreen extends ObserverMirrorScreen {
-        private NativeObserverScreen(Component title) {
-            super(title);
-        }
-
-        @Override
-        public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) {
-                ClientPlayNetworking.send(new ObserverPayloads.Stop());
+    private static Screen createContainerScreen() {
+        Inventory inventory = ObserverVanillaScreenSupport.detachedInventory();
+        Component title = Component.literal(remoteTitle.isBlank() ? "Container" : remoteTitle);
+        return switch (remoteScreenClass) {
+            case "net.minecraft.client.gui.screens.inventory.HopperScreen" ->
+                    new ObserverHopperScreen(new HopperMenu(-1, inventory, new SimpleContainer(5)), inventory, title);
+            case "net.minecraft.client.gui.screens.inventory.DispenserScreen" ->
+                    new ObserverDispenserScreen(new DispenserMenu(-1, inventory, new SimpleContainer(9)), inventory, title);
+            case "net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen" ->
+                    new ObserverShulkerScreen(new ShulkerBoxMenu(-1, inventory, new SimpleContainer(27)), inventory, title);
+            default -> {
+                int containerSlots = Math.max(9, remoteSlots.size() - 36);
+                int rows = Math.clamp((containerSlots + 8) / 9, 1, 6);
+                yield new ObserverContainerScreen(new ChestMenu(switch (rows) {
+                    case 1 -> net.minecraft.world.inventory.MenuType.GENERIC_9x1;
+                    case 2 -> net.minecraft.world.inventory.MenuType.GENERIC_9x2;
+                    case 3 -> net.minecraft.world.inventory.MenuType.GENERIC_9x3;
+                    case 4 -> net.minecraft.world.inventory.MenuType.GENERIC_9x4;
+                    case 5 -> net.minecraft.world.inventory.MenuType.GENERIC_9x5;
+                    default -> net.minecraft.world.inventory.MenuType.GENERIC_9x6;
+                }, -1, inventory, new SimpleContainer(rows * 9), rows), inventory, title);
             }
-            super.onClose();
-        }
-
-        @Override
-        public boolean isPauseScreen() {
-            return false;
-        }
+        };
     }
 
-    private static final class NativeContainerMirrorScreen extends NativeObserverScreen {
-        private NativeContainerMirrorScreen() {
-            super(Component.literal("Observer Container"));
-        }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-
-            int contentWidth = clamp(remoteContentWidth, 64, Math.max(64, width - 24));
-            int contentHeight = clamp(remoteContentHeight, 64, Math.max(64, height - 24));
-            int left = (width - contentWidth) / 2;
-            int top = (height - contentHeight) / 2;
-            graphics.fill(left - 7, top - 18, left + contentWidth + 7, top + contentHeight + 7, 0xEE202020);
-            graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
-
-            String title = remoteTitle.isBlank() ? remoteScreenClass : remoteTitle;
-            graphics.text(this.minecraft.font, title, left, top - 14, 0xFFFFFFFF, true);
-            String mode = "Protocol-native container";
-            graphics.text(
-                    this.minecraft.font,
-                    mode,
-                    left + contentWidth - this.minecraft.font.width(mode),
-                    top - 14,
-                    0xFF9E9E9E,
-                    false
-            );
-
-            renderSlots(this, graphics, left, top, contentWidth, contentHeight, remoteSlots);
-            renderCursor(graphics, left, top, remoteMouseX, remoteMouseY, width, height);
-            extractedFrames++;
-        }
+    private static String expectedFurnaceScreenName() {
+        if (remoteFurnaceClass.endsWith("BlastFurnaceScreen")) return "ObserverBlastFurnaceScreen";
+        if (remoteFurnaceClass.endsWith("SmokerScreen")) return "ObserverSmokerScreen";
+        return "ObserverFurnaceScreen";
     }
 
-    private static final class NativeFurnaceMirrorScreen extends NativeObserverScreen {
-        private NativeFurnaceMirrorScreen() {
-            super(Component.literal("Observer Furnace"));
-        }
-
-        @Override
-        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-
-            int contentWidth = clamp(remoteFurnaceContentWidth, 64, Math.max(64, width - 24));
-            int contentHeight = clamp(remoteFurnaceContentHeight, 64, Math.max(64, height - 24));
-            int left = (width - contentWidth) / 2;
-            int top = (height - contentHeight) / 2;
-            graphics.fill(left - 7, top - 18, left + contentWidth + 7, top + contentHeight + 7, 0xEE202020);
-            graphics.fill(left - 5, top - 16, left + contentWidth + 5, top - 3, 0xFF303030);
-
-            String title = remoteFurnaceTitle.isBlank() ? remoteFurnaceClass : remoteFurnaceTitle;
-            FurnaceHeaderLayout header = furnaceHeaderLayout(title, contentWidth, this.minecraft.font::width);
-            graphics.text(
-                    this.minecraft.font,
-                    header.title(),
-                    left,
-                    top - 14,
-                    0xFFFFFFFF,
-                    true
-            );
-            graphics.text(
-                    this.minecraft.font,
-                    header.mode(),
-                    left + header.modeX(),
-                    top - 14,
-                    0xFF9E9E9E,
-                    false
-            );
-
-            renderSlots(this, graphics, left, top, contentWidth, contentHeight, remoteFurnaceSlots);
-
-            int progressX = left + Math.min(contentWidth - 38, 79);
-            int progressY = top + 34;
-            int cookWidth = Math.round(24.0F * remoteCookProgress);
-            graphics.fill(progressX, progressY, progressX + 24, progressY + 6, 0xFF3A3A3A);
-            if (cookWidth > 0) {
-                graphics.fill(progressX, progressY, progressX + cookWidth, progressY + 6, 0xFFE0A040);
-            }
-
-            int fuelX = left + Math.min(contentWidth - 58, 56);
-            int fuelBottom = top + 53;
-            int fuelHeight = Math.round(14.0F * remoteFuelProgress);
-            graphics.fill(fuelX, fuelBottom - 14, fuelX + 6, fuelBottom, 0xFF3A3A3A);
-            if (fuelHeight > 0) {
-                graphics.fill(fuelX, fuelBottom - fuelHeight, fuelX + 6, fuelBottom, 0xFFFF8A3D);
-            }
-
-            String cookText = "Cook " + Math.round(remoteCookProgress * 100.0F) + "%";
-            String fuelText = (remoteFurnaceLit ? "Lit " : "Fuel ") + Math.round(remoteFuelProgress * 100.0F) + "%";
-            graphics.text(this.minecraft.font, cookText, left + 8, top + contentHeight - 25, 0xFFCFCFCF, false);
-            graphics.text(this.minecraft.font, fuelText, left + 8, top + contentHeight - 13, 0xFFCFCFCF, false);
-
-            renderCursor(
-                    graphics,
-                    left,
-                    top,
-                    remoteFurnaceMouseX,
-                    remoteFurnaceMouseY,
-                    width,
-                    height
-            );
-            furnaceExtractedFrames++;
-        }
+    private static Screen createFurnaceScreen() {
+        Inventory inventory = ObserverVanillaScreenSupport.detachedInventory();
+        Component title = Component.literal(remoteFurnaceTitle.isBlank() ? "Furnace" : remoteFurnaceTitle);
+        if (remoteFurnaceClass.endsWith("BlastFurnaceScreen"))
+            return new ObserverBlastFurnaceScreen(new BlastFurnaceMenu(-1, inventory), inventory, title);
+        if (remoteFurnaceClass.endsWith("SmokerScreen"))
+            return new ObserverSmokerScreen(new SmokerMenu(-1, inventory), inventory, title);
+        return new ObserverFurnaceScreen(new FurnaceMenu(-1, inventory), inventory, title);
     }
 
-    private static final class NativeGenericMirrorScreen extends NativeObserverScreen {
-        private NativeGenericMirrorScreen() {
+    private interface NativeContainerObserverScreen { }
+    private interface NativeFurnaceObserverScreen { }
+
+    private static void closeObserverScreen() {
+        if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving();
+    }
+
+    private static final class ObserverContainerScreen extends ContainerScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeContainerObserverScreen {
+        private ObserverContainerScreen(ChestMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g,int x,int y,float tick){super.extractRenderState(g,x,y,tick);extractedFrames++;}
+    }
+    private static final class ObserverHopperScreen extends HopperScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeContainerObserverScreen {
+        private ObserverHopperScreen(HopperMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+    }
+    private static final class ObserverDispenserScreen extends DispenserScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeContainerObserverScreen {
+        private ObserverDispenserScreen(DispenserMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+    }
+    private static final class ObserverShulkerScreen extends ShulkerBoxScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeContainerObserverScreen {
+        private ObserverShulkerScreen(ShulkerBoxMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+    }
+    private static final class ObserverFurnaceScreen extends FurnaceScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeFurnaceObserverScreen {
+        private ObserverFurnaceScreen(FurnaceMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+        @Override public void extractRenderState(GuiGraphicsExtractor g,int x,int y,float tick){super.extractRenderState(g,x,y,tick);furnaceExtractedFrames++;}
+    }
+    private static final class ObserverBlastFurnaceScreen extends BlastFurnaceScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeFurnaceObserverScreen {
+        private ObserverBlastFurnaceScreen(BlastFurnaceMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+    }
+    private static final class ObserverSmokerScreen extends SmokerScreen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen, NativeFurnaceObserverScreen {
+        private ObserverSmokerScreen(SmokerMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+        @Override public void onClose() { closeObserverScreen(); }
+    }
+
+    /** Explicit metadata-only unsupported state; it is not a semantic lookalike. */
+    private static final class ObserverMetadataScreen extends Screen
+            implements dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen {
+        private ObserverMetadataScreen() {
             super(Component.literal("Observer Remote Screen"));
         }
+
+        @Override public boolean totem$isObserverReadOnly() { return true; }
+
+        @Override public void onClose() { closeObserverScreen(); }
 
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {

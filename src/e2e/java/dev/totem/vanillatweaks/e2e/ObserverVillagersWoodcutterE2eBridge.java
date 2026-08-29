@@ -2,7 +2,6 @@ package dev.totem.vanillatweaks.e2e;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
-import dev.totem.vanillatweaks.client.ObserverVillagersWoodcutterScreenClient;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
 import net.fabricmc.api.ClientModInitializer;
@@ -19,7 +18,6 @@ import java.util.List;
 
 /** Runs TotemVillagers Woodcutter semantics across the real three-JVM Observer path. */
 public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInitializer {
-    private static final Class<?> WOODCUTTER = ObserverVillagersWoodcutterScreenClient.class;
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
 
@@ -54,12 +52,10 @@ public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInit
         }
 
         if (observerRequested && !observerSeen && mirrorVisible(minecraft)) {
-            if (getInt(WOODCUTTER, "remoteSelectedRecipeIndex") != 1
-                    || getInt(WOODCUTTER, "remoteRecipeCount") != 3
-                    || getInt(WOODCUTTER, "remoteRequiredInputCount") != 2
-                    || !getBoolean(WOODCUTTER, "remoteHasInputItem")
-                    || getListSize(WOODCUTTER, "remoteSlots") != 38) {
-                fail("Woodcutter E2E semantic state mismatch");
+            var screen = (dev.totem.villagers.client.WoodcutterScreen) minecraft.gui.screen();
+            if (screen.getMenu().recipeCount() != 3 || screen.getMenu().requiredInputCount() != 3
+                    || screen.getMenu().getItems().getFirst().getCount() != 3) {
+                fail("Woodcutter production Screen did not apply the later snapshot");
                 return;
             }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
@@ -72,11 +68,13 @@ public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInit
             Screenshot.takeScreenshot(minecraft.gameRenderer.mainRenderTarget(), image -> saveScreenshot(image));
         }
 
-        if (observerSaved && !observerClosed && !getBoolean(WOODCUTTER, "remoteOpen")
+        if (observerSaved && !observerClosed
+                && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "villagers_woodcutter", "", 1)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-villagers-woodcutter-closed.txt",
-                    "Woodcutter semantic mirror closed after Target close state.\n");
+                    "Woodcutter semantic view closed after Target close state.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -89,12 +87,16 @@ public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInit
                 return;
             }
             targetStage = 1;
-            ClientPlayNetworking.send(openState());
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.villagers(++targetSequence, 2));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.villagers(++targetSequence, 3));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor(
+                    "villagers_woodcutter", "", 1L));
             ObserverE2eCommon.marker("target-native-villagers-woodcutter-state-sent.txt",
                     "Target sent TotemVillagers Woodcutter semantic state.\n");
         } else if (targetStage == 1 && markerExists("observer-native-villagers-woodcutter-saved.txt")) {
             targetStage = 2;
-            ClientPlayNetworking.send(ObserverVillagersWoodcutterPayloads.closed(++targetSequence));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close(
+                    "villagers_woodcutter", "", ++targetSequence));
             ObserverE2eCommon.marker("target-native-villagers-woodcutter-close-sent.txt",
                     "Target sent TotemVillagers Woodcutter semantic close state.\n");
         }
@@ -136,11 +138,12 @@ public final class ObserverVillagersWoodcutterE2eBridge implements ClientModInit
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeVillagersWoodcutterMirrorScreen")
-                && getBoolean(WOODCUTTER, "remoteOpen")
+                && minecraft.gui.screen().getClass().getName().equals("dev.totem.villagers.client.WoodcutterScreen")
+                && minecraft.gui.screen() instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen
                 && ObserverE2eSequenceEvidence.accepted(
                         ObserverVillagersWoodcutterPayloads.FAMILY_ID) > 0L
-                && getLong(WOODCUTTER, "extractedFrames") > 0L;
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
+                && dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRenderedActiveSnapshot();
     }
 
     private static void saveScreenshot(NativeImage image) {

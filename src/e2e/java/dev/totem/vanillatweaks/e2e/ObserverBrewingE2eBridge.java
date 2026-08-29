@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -57,6 +59,11 @@ public final class ObserverBrewingE2eBridge implements ClientModInitializer {
                 fail("Brewing E2E semantic state mismatch");
                 return;
             }
+            BrewingStandScreen screen = (BrewingStandScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 2, 3, 4)) {
+                fail("Brewing production Menu did not apply relayed bottle, ingredient, and fuel slots");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Brewing semantic relay");
                 return;
@@ -67,7 +74,7 @@ public final class ObserverBrewingE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(BREWING, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-brewing-closed.txt", "Brewing semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-brewing-closed.txt", "Brewing semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -113,10 +120,13 @@ public final class ObserverBrewingE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeBrewingMirrorScreen")
+                && minecraft.gui.screen() instanceof BrewingStandScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(BREWING, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverBrewingScreenPayloads.FAMILY_ID) > 0L
-                && getLong(BREWING, "extractedFrames") > 0L;
+                && getLong(BREWING, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverBrewingScreenPayloads.FAMILY_ID,
+                        getLong(BREWING, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

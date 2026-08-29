@@ -9,6 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
+import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
 import net.minecraft.client.Screenshot;
 
 import java.lang.reflect.Field;
@@ -59,6 +61,11 @@ public final class ObserverGrindstoneE2eBridge implements ClientModInitializer {
                 fail("Grindstone E2E semantic state mismatch");
                 return;
             }
+            GrindstoneScreen screen = (GrindstoneScreen) minecraft.gui.screen();
+            if (!ObserverE2eMenuAssertions.hasNonEmptySlots(screen, 0, 1, 2)) {
+                fail("Grindstone production Menu did not apply relayed input and result slots");
+                return;
+            }
             if (getBoolean(GENERIC, "remoteGenericOpen")) {
                 fail("Generic container relay competed with Grindstone semantic relay");
                 return;
@@ -69,7 +76,7 @@ public final class ObserverGrindstoneE2eBridge implements ClientModInitializer {
         }
         if (observerSaved && !observerClosed && !getBoolean(GRINDSTONE, "remoteOpen") && minecraft.gui.screen() == null) {
             observerClosed = true;
-            ObserverE2eCommon.marker("observer-native-grindstone-closed.txt", "Grindstone semantic mirror closed.\n");
+            ObserverE2eCommon.marker("observer-native-grindstone-closed.txt", "Grindstone semantic view closed.\n");
             setBoolean(DRIVER, "observerStopRequested", false);
         }
     }
@@ -113,10 +120,13 @@ public final class ObserverGrindstoneE2eBridge implements ClientModInitializer {
 
     private static boolean mirrorVisible(Minecraft minecraft) {
         return minecraft.gui.screen() != null
-                && minecraft.gui.screen().getClass().getName().contains("NativeGrindstoneMirrorScreen")
+                && minecraft.gui.screen() instanceof GrindstoneScreen
+                && minecraft.gui.screen() instanceof ObserverReadOnlyScreen
                 && getBoolean(GRINDSTONE, "remoteOpen")
                 && ObserverE2eSequenceEvidence.accepted(ObserverGrindstoneScreenPayloads.FAMILY_ID) > 0L
-                && getLong(GRINDSTONE, "extractedFrames") > 0L;
+                && getLong(GRINDSTONE, "extractedFrames") > 0L
+                && ObserverE2eRenderBarrier.passed(ObserverGrindstoneScreenPayloads.FAMILY_ID,
+                        getLong(GRINDSTONE, "extractedFrames"));
     }
 
     private static void saveScreenshot(NativeImage image) {

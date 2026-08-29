@@ -11,6 +11,7 @@
     "ObserverNativeScreenPayloadsExtensionCapabilityMixin",
     "ObserverNativeSessionManagerAdvancementsCapabilityMixin",
     "ObserverNativeSessionManagerStatsCapabilityMixin",
+    "ObserverNativeSessionManagerHorseCapabilityMixin",
     "ObserverNativeSessionManagerAutomataCapabilityMixin",
     "ObserverNativeSessionManagerBeaconCapabilityMixin",
     "ObserverNativeSessionManagerBrewingCapabilityMixin",
@@ -28,7 +29,12 @@
     "RecipeManagerMixin",
     "StructureTemplateMixin"
   ],
-  "client": [],
+  "client": [
+    "client.ObserverReadOnlyScreenCursorMixin",
+    "client.ObserverReadOnlyMouseFirewallMixin",
+    "client.ObserverReadOnlyKeyboardFirewallMixin",
+    "client.ObserverInventoryScreenIdentityMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

@@ -1,11 +1,13 @@
 package dev.totem.vanillatweaks.gametest;
 
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.client.ObserverBeaconScreenClient;
 import dev.totem.vanillatweaks.client.ObserverAdvancementsScreenClient;
 import dev.totem.vanillatweaks.client.ObserverBrewingScreenClient;
 import dev.totem.vanillatweaks.client.ObserverCartographyScreenClient;
 import dev.totem.vanillatweaks.client.ObserverCrafterScreenClient;
 import dev.totem.vanillatweaks.client.ObserverGrindstoneScreenClient;
+import dev.totem.vanillatweaks.client.ObserverHorseScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeAnvilScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeBookScreenClient;
 import dev.totem.vanillatweaks.client.ObserverNativeClient;
@@ -25,6 +27,7 @@ import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCrafterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverHorseScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
@@ -42,6 +45,8 @@ import dev.totem.vanillatweaks.observer.ObserverNativeSessionManager;
 import dev.totem.vanillatweaks.observer.ObserverSmithingRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverSignRelayManager;
 import dev.totem.vanillatweaks.observer.ObserverStatsRelayManager;
+import dev.totem.vanillatweaks.mixin.client.AbstractSignEditScreenAccessor;
+import dev.totem.vanillatweaks.mixin.client.AnvilScreenAccessor;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -65,13 +70,19 @@ import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
 import net.minecraft.client.gui.screens.inventory.FurnaceScreen;
 import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
 import net.minecraft.client.gui.screens.inventory.HangingSignEditScreen;
+import net.minecraft.client.gui.screens.inventory.HorseInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.LecternScreen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.gui.screens.inventory.SmithingScreen;
 import net.minecraft.client.gui.screens.inventory.SignEditScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.network.Filterable;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.BeaconMenu;
@@ -82,6 +93,7 @@ import net.minecraft.world.inventory.CrafterMenu;
 import net.minecraft.world.inventory.EnchantmentMenu;
 import net.minecraft.world.inventory.FurnaceMenu;
 import net.minecraft.world.inventory.GrindstoneMenu;
+import net.minecraft.world.inventory.HorseInventoryMenu;
 import net.minecraft.world.inventory.LecternMenu;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.SmithingMenu;
@@ -124,6 +136,7 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
                 verifySign(minecraft);
                 verifyAdvancements(minecraft);
                 verifyStats(minecraft);
+                verifyHorseInventory(minecraft);
                 verifyChatPrivacy(minecraft);
                 verifyNestedMirrorMetadata(minecraft);
                 minecraft.setScreenAndShow(null);
@@ -170,12 +183,16 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
         AnvilScreen screen = new AnvilScreen(menu, minecraft.player.getInventory(),
                 Component.literal("Production Anvil"));
         showSyntheticScreen(minecraft, screen, menu, "anvil");
+        ((AnvilScreenAccessor) screen).totem$getNameField().setValue("https://private.example/token");
         ObserverAnvilScreenPayloads.AnvilState state =
                 (ObserverAnvilScreenPayloads.AnvilState) invoke(
                         ObserverNativeAnvilScreenClient.class, "captureTargetState",
                         new Class<?>[]{Minecraft.class, AnvilScreen.class, long.class},
                         minecraft, screen, 103L);
         assertOrdinals(state.slots(), 39, "anvil");
+        if (!state.itemName().isEmpty()) {
+            throw new AssertionError("anvil production extractor leaked an unsent rename draft");
+        }
         assertValid(ObserverNativeSessionManager.class, "validAnvil",
                 ObserverAnvilScreenPayloads.AnvilState.class, state, "anvil");
         assertGenericSuppressed(minecraft, ObserverNativeScreenPayloads.CAPABILITY_ANVIL,
@@ -197,6 +214,29 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
                 ObserverEnchantingScreenPayloads.EnchantingState.class, state, "enchanting");
         assertGenericSuppressed(minecraft, ObserverNativeScreenPayloads.CAPABILITY_ENCHANTING,
                 EnchantmentScreen.class.getName(), "enchanting");
+    }
+
+    private static void verifyHorseInventory(Minecraft minecraft) {
+        AbstractHorse mount = EntityTypes.LLAMA.create(minecraft.level, EntitySpawnReason.LOAD);
+        if (mount == null) throw new AssertionError("horse_inventory test could not create mount");
+        UUID mountId = UUID.randomUUID();
+        mount.setUUID(mountId);
+        // HorseInventoryScreen's vanilla renderer requires an assigned id even for
+        // this detached source fixture. Keep it outside the tracked positive range.
+        mount.setId(-1 - (mountId.hashCode() & Integer.MAX_VALUE));
+        int columns = 3;
+        HorseInventoryMenu menu = new HorseInventoryMenu(125, minecraft.player.getInventory(),
+                new SimpleContainer(2 + columns * 3), mount, columns);
+        HorseInventoryScreen screen = new HorseInventoryScreen(menu, minecraft.player.getInventory(), mount, columns);
+        showSyntheticScreen(minecraft, screen, menu, "horse_inventory");
+        ObserverHorseScreenPayloads.HorseState state = (ObserverHorseScreenPayloads.HorseState) invoke(
+                ObserverHorseScreenClient.class, "captureTargetState",
+                new Class<?>[]{HorseInventoryScreen.class, long.class}, screen, 125L);
+        if (state == null || state.slots().size() != 47 || state.columns() != columns
+                || !"minecraft:llama".equals(state.entityType()))
+            throw new AssertionError("horse_inventory production extractor lost real mount/menu state");
+        assertGenericSuppressed(minecraft, ObserverHorseScreenPayloads.CAPABILITY,
+                HorseInventoryScreen.class.getName(), "horse_inventory");
     }
 
     private static void verifyMerchant(Minecraft minecraft) {
@@ -324,20 +364,24 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
             throw new AssertionError("book/view production extractor captured the wrong branch");
         }
 
+        WritableBookContent privateDraft = new WritableBookContent(List.of(
+                Filterable.passThrough("private prompt and API token")));
         BookEditScreen edit = new BookEditScreen(
                 minecraft.player, new ItemStack(Items.WRITABLE_BOOK), InteractionHand.MAIN_HAND,
-                WritableBookContent.EMPTY);
+                privateDraft);
         ObserverBookScreenPayloads.BookState editState = captureBook(minecraft, edit, 113L, "book/edit");
-        if (!ObserverBookScreenPayloads.VARIANT_WRITABLE.equals(editState.variant())) {
-            throw new AssertionError("book/edit production extractor captured the wrong branch");
+        if (!ObserverBookScreenPayloads.VARIANT_WRITABLE.equals(editState.variant())
+                || editState.pageCount() != 1 || !editState.pageText().isEmpty()) {
+            throw new AssertionError("book/edit production extractor leaked a writable-book draft");
         }
 
         BookSignScreen sign = new BookSignScreen(
                 edit, minecraft.player, InteractionHand.MAIN_HAND, List.of("Unsubmitted book page"));
         ObserverBookScreenPayloads.BookState signState = captureBook(minecraft, sign, 114L, "book/sign");
         if (!ObserverBookScreenPayloads.VARIANT_SIGNING.equals(signState.variant())
-                || signState.pageCount() != 1 || !signState.pageText().isEmpty()) {
-            throw new AssertionError("book/sign production extractor captured the wrong branch");
+                || signState.pageCount() != 1 || !signState.pageText().isEmpty()
+                || !signState.bookTitle().isEmpty() || !signState.author().isEmpty()) {
+            throw new AssertionError("book/sign production extractor leaked an unsent signing draft");
         }
 
         LecternScreen lectern = new LecternScreen(
@@ -372,6 +416,9 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
         SignBlockEntity sign = new SignBlockEntity(BlockPos.ZERO, Blocks.OAK_SIGN.defaultBlockState());
         SignEditScreen screen = new SignEditScreen(sign, true, false);
         showScreen(minecraft, screen, "sign");
+        String[] privateLines = ((AbstractSignEditScreenAccessor) screen).totem$getMessages();
+        privateLines[0] = "https://private.example/token";
+        privateLines[1] = "unsent command /login secret";
         ObserverSignScreenPayloads.SignState state =
                 (ObserverSignScreenPayloads.SignState) invoke(
                         ObserverSignScreenClient.class, "captureTargetState",
@@ -379,8 +426,9 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
                                 long.class}, screen, 114L);
         if (!ObserverSignScreenPayloads.SIGN_SCREEN_CLASS.equals(state.screenClass())
                 || !"sign".equals(state.variant()) || !state.frontText()
-                || state.lines().size() != ObserverSignScreenPayloads.LINE_COUNT) {
-            throw new AssertionError("sign production extractor did not capture the real SignEditScreen");
+                || state.lines().size() != ObserverSignScreenPayloads.LINE_COUNT
+                || state.lines().stream().anyMatch(line -> !line.isEmpty())) {
+            throw new AssertionError("sign production extractor leaked unsent editor text");
         }
         assertValid(ObserverSignRelayManager.class, "valid",
                 ObserverSignScreenPayloads.SignState.class, state, "sign");
@@ -472,8 +520,8 @@ public final class ObserverVanillaProductionSenderClientGameTest implements Fabr
                         ObserverNativeScreenPayloads.FAMILY_BOOK, ObserverBookScreenPayloads.VARIANT_WRITTEN,
                         BookViewScreen.class.getName(), "Nested mirror", 0, 1, "semantic", "", ""));
         Screen mirror = minecraft.gui.screen();
-        if (mirror == null || !mirror.getClass().getSimpleName().endsWith("MirrorScreen")) {
-            throw new AssertionError("nested Observer setup did not open a real local mirror");
+        if (!(mirror instanceof BookViewScreen) || !(mirror instanceof ObserverReadOnlyScreen)) {
+            throw new AssertionError("nested Observer setup did not open a read-only Mojang BookViewScreen");
         }
         assertClosedMetadata(mirror, "first observer hop");
 

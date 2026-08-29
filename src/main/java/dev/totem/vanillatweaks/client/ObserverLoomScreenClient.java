@@ -1,6 +1,7 @@
 package dev.totem.vanillatweaks.client;
 
 import dev.totem.vanillatweaks.mixin.client.LoomScreenAccessor;
+import dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
@@ -10,10 +11,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.LoomScreen;
-import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.object.banner.BannerFlagModel;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.Sheets;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -21,7 +18,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.LoomMenu;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.DyeColor;
@@ -42,14 +38,6 @@ public final class ObserverLoomScreenClient {
     static final int PATTERN_GRID_Y = 13;
     static final int PATTERN_GRID_BOTTOM = PATTERN_GRID_Y + PATTERN_ROWS * PATTERN_CELL_SIZE;
     static final int INVENTORY_SLOT_BORDER_TOP = 83;
-    private static final Identifier BACKGROUND = Identifier.withDefaultNamespace("textures/gui/container/loom.png");
-    private static final Identifier SCROLLER = Identifier.withDefaultNamespace("container/loom/scroller");
-    private static final Identifier SCROLLER_DISABLED =
-            Identifier.withDefaultNamespace("container/loom/scroller_disabled");
-    private static final Identifier PATTERN = Identifier.withDefaultNamespace("container/loom/pattern");
-    private static final Identifier PATTERN_SELECTED =
-            Identifier.withDefaultNamespace("container/loom/pattern_selected");
-    private static final Identifier ERROR = Identifier.withDefaultNamespace("container/loom/error");
     private static long nextTargetSequence;
     private static long lastSnapshotNanos;
     private static boolean targetOpen;
@@ -66,12 +54,12 @@ public final class ObserverLoomScreenClient {
     private static List<ObserverLoomScreenPayloads.PatternState> remotePatterns = List.of();
     private static List<ObserverLoomScreenPayloads.BannerLayerState> remoteResultLayers = List.of();
     private static List<ObserverNativeScreenPayloads.SlotState> remoteSlots = List.of();
-    private static boolean suppressMirrorStop;
+    private static boolean suppressObserverScreenStop;
     private static long extractedFrames;
 
     private ObserverLoomScreenClient() {}
 
-    /** Mirrors vanilla's bounded four-by-four Loom viewport. */
+    /** Matches vanilla's bounded four-by-four Loom viewport. */
     static LoomPatternViewport loomPatternViewport(int startRow, int patternCount) {
         int total = Math.max(0, patternCount);
         long requestedFirst = (long) Math.max(0, startRow) * PATTERN_COLUMNS;
@@ -97,8 +85,8 @@ public final class ObserverLoomScreenClient {
     private static void tick(Minecraft minecraft) {
         if (!ObserverNativeClient.targetStateEnabled() || minecraft.player == null || minecraft.level == null) closeTarget(false);
         else tickTarget(minecraft);
-        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeMirror(); }
-        else if (remoteOpen) ensureMirror();
+        if (!ObserverNativeClient.observerSessionActive()) { clearRemote(); closeObserverScreen(); }
+        else if (remoteOpen) ensureObserverScreen();
     }
 
     private static void tickTarget(Minecraft minecraft) {
@@ -177,7 +165,7 @@ public final class ObserverLoomScreenClient {
                 || !ObserverRemoteSequenceTracker.accept(
                         ObserverLoomScreenPayloads.FAMILY_ID,
                         payload.targetId(), payload.sequence())) return;
-        if (!payload.open()) { clearRemote(); closeMirror(); return; }
+        if (!payload.open()) { clearRemote(); closeObserverScreen(); return; }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         remoteOpen = true;
         remoteTitle = payload.title();
@@ -191,25 +179,45 @@ public final class ObserverLoomScreenClient {
         remotePatterns = List.copyOf(payload.patterns());
         remoteResultLayers = List.copyOf(payload.resultLayers());
         remoteSlots = List.copyOf(payload.slots());
-        ensureMirror();
+        ensureObserverScreen();
     }
 
-    private static void ensureMirror() {
+    private static void ensureObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!remoteOpen || !ObserverNativeClient.observerSessionActive()) return;
-        if (!(minecraft.gui.screen() instanceof NativeLoomMirrorScreen)) {
-            suppressMirrorStop = true;
-            try { minecraft.setScreenAndShow(new NativeLoomMirrorScreen()); }
-            finally { suppressMirrorStop = false; }
+        if (!(minecraft.gui.screen() instanceof ObserverLoomScreen)) {
+            suppressObserverScreenStop = true;
+            try {
+                var inventory = ObserverVanillaScreenSupport.detachedInventory();
+                minecraft.setScreenAndShow(new ObserverLoomScreen(new LoomMenu(-1, inventory), inventory,
+                        Component.literal(remoteTitle.isBlank() ? "Loom" : remoteTitle)));
+            }
+            finally { suppressObserverScreenStop = false; }
+        }
+        if (minecraft.gui.screen() instanceof ObserverLoomScreen screen) {
+            LoomMenu menu = screen.getMenu();
+            ObserverVanillaScreenSupport.applyMenu(menu, remoteSlots);
+            menu.slotsChanged(menu.getBannerSlot().container);
+            if (remoteSelectedPatternIndex >= 0
+                    && remoteSelectedPatternIndex < menu.getSelectablePatterns().size()) {
+                menu.clickMenuButton(minecraft.player, remoteSelectedPatternIndex);
+            }
+            ItemStack result = menu.getResultSlot().getItem();
+            if (!result.isEmpty()) result.set(DataComponents.BANNER_PATTERNS, bannerLayers(remoteResultLayers));
+            LoomScreenAccessor accessor = (LoomScreenAccessor) (Object) screen;
+            accessor.totem$setScrollOffs(remoteScrollOffset);
+            accessor.totem$setStartRow(remoteStartRow);
+            accessor.totem$setDisplayPatterns(remoteDisplayPatterns);
+            accessor.totem$setHasMaxPatterns(remoteHasMaxPatterns);
         }
     }
 
-    private static void closeMirror() {
+    private static void closeObserverScreen() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!(minecraft.gui.screen() instanceof NativeLoomMirrorScreen)) return;
-        suppressMirrorStop = true;
+        if (!(minecraft.gui.screen() instanceof ObserverLoomScreen)) return;
+        suppressObserverScreenStop = true;
         try { minecraft.setScreenAndShow(null); }
-        finally { suppressMirrorStop = false; }
+        finally { suppressObserverScreenStop = false; }
     }
 
     private static void clearRemote() {
@@ -227,104 +235,30 @@ public final class ObserverLoomScreenClient {
         remoteSlots = List.of();
     }
 
-    private static ItemStack itemStack(ObserverNativeScreenPayloads.SlotState slot) {
-        if (slot.itemId().isBlank() || slot.count() <= 0) return ItemStack.EMPTY;
-        try {
-            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(slot.itemId()));
-            if (item == null) return ItemStack.EMPTY;
-            ItemStack stack = new ItemStack(item, Math.max(1, slot.count()));
-            if (slot.damage() > 0 && stack.isDamageableItem()) stack.setDamageValue(slot.damage());
-            return stack;
-        } catch (RuntimeException error) { return ItemStack.EMPTY; }
-    }
-
-    private static final class NativeLoomMirrorScreen extends ObserverMirrorScreen {
-        private BannerFlagModel flag;
-
-        private NativeLoomMirrorScreen() { super(Component.literal("Observer Loom")); }
-        @Override protected void init() {
-            super.init();
-            flag = new BannerFlagModel(minecraft.getEntityModels().bakeLayer(ModelLayers.STANDING_BANNER_FLAG));
-        }
-        @Override public boolean isPauseScreen() { return false; }
+    private static final class ObserverLoomScreen extends LoomScreen implements ObserverReadOnlyScreen {
+        private ObserverLoomScreen(LoomMenu menu, net.minecraft.world.entity.player.Inventory inventory,
+                                   Component title) { super(menu, inventory, title); }
+        @Override public boolean totem$isObserverReadOnly() { return true; }
         @Override public void onClose() {
-            if (!suppressMirrorStop && ObserverNativeClient.observerSessionActive()) ClientPlayNetworking.send(new ObserverPayloads.Stop());
-            super.onClose();
+            if (!suppressObserverScreenStop) ObserverVanillaScreenSupport.stopObserving();
         }
         @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            graphics.fill(0, 0, width, height, 0x90000000);
-            int pw = 176, ph = 166, left = (width - pw) / 2, top = (height - ph) / 2;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, left, top, 0.0F, 0.0F,
-                    pw, ph, 256, 256);
-            Identifier scroller = remoteDisplayPatterns && remotePatterns.size() > PATTERN_COLUMNS * PATTERN_ROWS
-                    ? SCROLLER : SCROLLER_DISABLED;
-            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, scroller, left + 119,
-                    top + 13 + (int) (41.0F * remoteScrollOffset), 12, 15);
-
-            BannerPatternLayers resultLayers = bannerLayers(remoteResultLayers);
-            if (remoteResultAvailable && remoteResultBaseColorId >= 0 && flag != null) {
-                graphics.bannerPattern(flag, DyeColor.byId(remoteResultBaseColorId), resultLayers,
-                        left + 141, top + 8, left + 161, top + 48);
-            } else if (remoteHasMaxPatterns) {
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, ERROR, left + 138, top + 52, 26, 26);
-            }
-
-            if (remoteDisplayPatterns) {
-                LoomPatternViewport viewport = loomPatternViewport(remoteStartRow, remotePatterns.size());
-                for (int i = viewport.first(); i < viewport.lastExclusive(); i++) {
-                    int local = i - viewport.first(), col = local % PATTERN_COLUMNS, row = local / PATTERN_COLUMNS;
-                    int x = left + PATTERN_GRID_X + col * PATTERN_CELL_SIZE;
-                    int y = top + PATTERN_GRID_Y + row * PATTERN_CELL_SIZE;
-                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
-                            i == remoteSelectedPatternIndex ? PATTERN_SELECTED : PATTERN,
-                            x, y, PATTERN_CELL_SIZE, PATTERN_CELL_SIZE);
-                    extractPatternOnButton(graphics, x, y, remotePatterns.get(i));
-                }
-            }
-            for (ObserverNativeScreenPayloads.SlotState slot : remoteSlots) {
-                int sx = left + slot.x(), sy = top + slot.y();
-                ItemStack stack = itemStack(slot);
-                if (!stack.isEmpty()) { graphics.item(stack, sx, sy); graphics.itemDecorations(font, stack, sx, sy); }
-            }
+            super.extractRenderState(graphics, mouseX, mouseY, partialTick);
             extractedFrames++;
         }
+    }
 
-        private static void extractPatternOnButton(GuiGraphicsExtractor graphics, int x, int y,
-                                                   ObserverLoomScreenPayloads.PatternState pattern) {
-            Holder<BannerPattern> holder = patternHolder(pattern.assetId());
-            if (holder == null) return;
-            var sprite = graphics.getSprite(Sheets.getBannerSprite(holder));
-            float u0 = sprite.getU0();
-            float u1 = u0 + (sprite.getU1() - u0) * 21.0F / 64.0F;
-            float vRange = sprite.getV1() - sprite.getV0();
-            float v0 = sprite.getV0() + vRange / 64.0F;
-            float v1 = v0 + vRange * 40.0F / 64.0F;
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(x + 4.0F, y + 2.0F);
-            graphics.fill(0, 0, 5, 10, DyeColor.GRAY.getTextureDiffuseColor());
-            graphics.blit(sprite.atlasLocation(), 0, 0, 5, 10, u0, u1, v0, v1);
-            graphics.pose().popMatrix();
+    private static BannerPatternLayers bannerLayers(List<ObserverLoomScreenPayloads.BannerLayerState> layers) {
+        List<BannerPatternLayers.Layer> resolved = new ArrayList<>();
+        for (ObserverLoomScreenPayloads.BannerLayerState layer : layers) {
+            Holder<BannerPattern> holder = patternHolder(layer.assetId());
+            if (holder != null) resolved.add(new BannerPatternLayers.Layer(holder, DyeColor.byId(layer.dyeColorId())));
         }
+        return new BannerPatternLayers(List.copyOf(resolved));
+    }
 
-        private static BannerPatternLayers bannerLayers(
-                List<ObserverLoomScreenPayloads.BannerLayerState> layers) {
-            List<BannerPatternLayers.Layer> resolved = new ArrayList<>();
-            for (ObserverLoomScreenPayloads.BannerLayerState layer : layers) {
-                Holder<BannerPattern> holder = patternHolder(layer.assetId());
-                if (holder != null) {
-                    resolved.add(new BannerPatternLayers.Layer(holder, DyeColor.byId(layer.dyeColorId())));
-                }
-            }
-            return new BannerPatternLayers(List.copyOf(resolved));
-        }
-
-        private static Holder<BannerPattern> patternHolder(String assetId) {
-            try {
-                Identifier id = Identifier.parse(assetId);
-                return Holder.direct(new BannerPattern(id, ""));
-            } catch (RuntimeException error) {
-                return null;
-            }
-        }
+    private static Holder<BannerPattern> patternHolder(String assetId) {
+        try { return Holder.direct(new BannerPattern(Identifier.parse(assetId), "")); }
+        catch (RuntimeException error) { return null; }
     }
 }

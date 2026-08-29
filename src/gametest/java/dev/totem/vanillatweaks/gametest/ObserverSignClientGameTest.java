@@ -29,7 +29,7 @@ public final class ObserverSignClientGameTest implements FabricClientGameTest {
                 accept(ObserverSignScreenPayloads.relay(targetId, openState(1L)));
             });
             context.waitFor(minecraft -> minecraft.gui.screen() != null
-                    && minecraft.gui.screen().getClass().getName().contains("NativeSignMirrorScreen"), 100);
+                    && minecraft.gui.screen().getClass().getName().contains("ObserverHangingSignScreen"), 100);
             context.waitFor(minecraft -> getLong("extractedFrames") > 0L, 100);
             if (!"hanging_sign".equals(getString("remoteVariant")) || getBoolean("remoteFrontText")
                     || getInt("remoteCurrentLine") != 2 || !"black".equals(getString("remoteColor"))
@@ -43,6 +43,9 @@ public final class ObserverSignClientGameTest implements FabricClientGameTest {
                 applySession(false, new UUID(0L, 0L), 0L);
             });
             context.waitForScreen(null);
+            if (getLong("suppressedRemovalPackets") < 1L) {
+                throw new AssertionError("Observer Sign removal did not prove sign-update packet suppression");
+            }
         }
     }
 

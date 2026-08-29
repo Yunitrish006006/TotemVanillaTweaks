@@ -4,11 +4,11 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
 管理員用的 Spectator Observer View。
 
-目前候選版本為 **0.1.19 Beta**。模組支援 TotemCore **>=0.7.0 <0.8.0**；
-目前建議搭配已發布的 TotemCore **0.7.11**。
+目前的 module-owned Observer 開發分支需要 TotemCore **>=0.7.12 <0.8.0**；
+0.7.12 提供 owner provider、bounded semantic snapshot 與 remote cursor contract。
 
 > **0.1.19 Observer 更新：** protocol-native v4／screen protocol v2 現在有
-> 24 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
+> 25 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
 > 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
 > 以結構化資料本地重建。
 
@@ -17,7 +17,7 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
-2. TotemCore `0.7.x`（`>=0.7.0 <0.8.0`）
+2. TotemCore `0.7.12`（`>=0.7.12 <0.8.0`）
 3. TotemVanillaTweaks `0.1.19`
 
 | 項目 | 需求 |
@@ -26,7 +26,7 @@ Client 與 Server 都放入：
 | Fabric Loader | 0.19.3+ |
 | Java | 25+ |
 | Fabric API | 0.154.2+26.2 |
-| 必要 Totem 模組 | `totem-core >=0.7.0 <0.8.0` |
+| 必要 Totem 模組 | `totem-core >=0.7.12 <0.8.0` |
 
 Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
 提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。
@@ -46,12 +46,19 @@ Observer View 使用 **protocol-native v4**；semantic screen transport 使用
 capability negotiation 與 cleanup；Target Client 只傳送版本化的結構化玩家、HUD、
 container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI 重建觀察畫面。
 
-screen protocol v2 使用 stable screen-family capability mask。目前 main 共定義 24 個
+screen protocol v2 使用 stable screen-family capability mask。目前 main 共定義 25 個
 negotiated semantic family capability：
+
+> 下一版 Observer UI 架構要求原版 family 直接使用相符的 Minecraft Screen/Menu，
+> 合作模組 family 則由 owning module 透過 TotemCore provider 建立正式 Screen 的唯讀
+> 模式。TotemVanillaTweaks 不再擁有或維護手繪替代畫面；缺少或不相容的
+> provider 會明確標示不支援。獨立 remote cursor capability 使用 bit 24，
+> `horse_inventory` 使用 bit 25；下一個 capability 從 bit 26 開始。
 
 - 基礎與原版：`container_slots`、`furnace`、`book`、`crafting`、`merchant`、
   `anvil`、`enchanting`、`brewing`、`smithing`、`stonecutter`、`grindstone`、
-  `loom`、`cartography`、`beacon`、`sign`、`crafter`、`advancements`、`stats`。
+  `loom`、`cartography`、`beacon`、`sign`、`crafter`、`advancements`、`stats`、
+  `horse_inventory`。
 - Totem 整合：`remnant_backpack`、`automata_copper_golem`、`nexus`
   （map／friends／registration variants）、`nexus_death_node_admin`、
   `locksmith_management`、`villagers_woodcutter`。
@@ -59,9 +66,10 @@ negotiated semantic family capability：
 `container_slots` 仍負責可以由通用 `AbstractContainerScreen` 槽位資料充分表達的畫面；
 其餘 family 傳送各自需要的結構化狀態。Recipe Book 不另占 capability bit，而是由
 `crafting` family 傳送開關、寬度模式、過濾、「是否正在搜尋」、分頁與類別等語意狀態；
-玩家輸入的搜尋文字不會傳送。Death、Horse／Mount、Sleep、Chat 與 Social Interactions
-沒有獨立 family，會依通用容器能力或 metadata-only 規則處理。Chat metadata 也不包含
-玩家尚未送出的聊天或指令文字。
+玩家輸入的搜尋文字不會傳送。Death、Sleep、Chat 與 Social Interactions 依明確的
+metadata-only 規則處理。Chat metadata 不包含玩家尚未送出的聊天或指令文字；
+Discord 設定與 Nexus 改名／權限對話框同樣只傳去識別 metadata，不讀取 URL、金鑰、
+token、credentials 或輸入草稿。
 
 Server 會為每個 Observer 記錄 negotiated capability，把同一 Target 所需 capability 的
 聯集下發給 Target，再按每個 Observer 的 mask 個別過濾 semantic relay。若某個 screen
@@ -74,7 +82,7 @@ production 路徑已完全移除整張 framebuffer／PNG 傳輸，不再存在 `
 `/observeui` 會拒絕建立 session，而不是退回截圖傳輸；個別 semantic screen family
 不支援時則只降級該 GUI 為 metadata-only。
 
-目前支援的觀察面包含正常世界／HUD、上述 24 個 negotiated family、PauseScreen 的
+目前經測試的觀察面包含正常世界／HUD、上述 25 個 negotiated family、PauseScreen 的
 metadata reconstruction，以及 unsupported／unnegotiated Screen 的 metadata placeholder。
 完整架構與剩餘相容性工作見
 [`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。

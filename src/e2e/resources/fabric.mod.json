@@ -30,6 +30,7 @@
       "dev.totem.vanillatweaks.e2e.ObserverPauseScreenE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverAdvancementsE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverStatsE2eBridge",
+      "dev.totem.vanillatweaks.e2e.ObserverHorseE2eBridge",
       "dev.totem.vanillatweaks.e2e.ObserverE2eClient",
       "dev.totem.vanillatweaks.e2e.ObserverCraftingE2eBridge"
     ]
