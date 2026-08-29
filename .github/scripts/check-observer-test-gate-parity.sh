@@ -178,9 +178,10 @@ for gradle_workflow in "$workflow" "$production_workflow" "$publish_workflow"; d
   fi
 done
 if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.12.jar' "$publish_workflow" \
+    || ! grep -Fq -- "--arg core '>=0.7.12 <0.8.0'" "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_REFERENCE_VERSION_ID:' "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_PROJECT_ID:' "$publish_workflow"; then
-  fail 'Modrinth publication must use the exact built TotemCore external dependency, never a stale or guessed project/version ID'
+  fail 'Modrinth publication must validate and use the exact built TotemCore 0.7.12 dependency, never a stale range or guessed project/version ID'
 fi
 if ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]' "$publish_workflow" \
     || ! grep -Fq 'core_dependency_file="${core_archive}-${core_version}.jar"' "$publish_workflow" \
