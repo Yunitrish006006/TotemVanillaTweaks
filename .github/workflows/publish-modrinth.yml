@@ -357,7 +357,7 @@ jobs:
           if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
             fail_release 'release JAR has no readable fabric.mod.json.'
           fi
-          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.0 <0.8.0' \
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.12 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
             /tmp/fabric.mod.json >/dev/null; then
             fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
