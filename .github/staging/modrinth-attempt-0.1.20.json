@@ -1,0 +1,8 @@
+{
+  "version": "0.1.20",
+  "release_ref": "main",
+  "release_type": "release",
+  "run": "33256551851",
+  "status": "failure",
+  "publish_step": "failure"
+}
