@@ -67,7 +67,9 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
         if (observerRequested && !mapSeen
                 && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier)) {
             var payload = (dev.totem.nexus.network.SpaceUnitMapPayload) observerPayload(minecraft.gui.screen());
-            if (!"Home v2".equals(payload.sourceName())) {
+            if (!"Home v2".equals(payload.sourceName())
+                    || payload.interfaceType() != dev.totem.nexus.space.TeleportInterfaceType.FILLED_MAP
+                    || payload.mapId() != ObserverOwnedE2eSnapshots.NEXUS_MAP_ID) {
                 fail("Nexus map production Screen did not apply the later snapshot");
                 return;
             }
@@ -121,7 +123,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
 
         if (registrationSaved && !observerClosed
                 && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
-                "nexus", "registration", 1)
+                "nexus", "registration", 3)
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-nexus-closed.txt",
@@ -204,7 +206,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
     }
 
     private static RenderBarrier observeVariant(String variant, RenderBarrier current) {
-        if (!dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive("nexus", variant, 2)) {
+        if (!dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive("nexus", variant, 3)) {
             return current;
         }
         long sequence = ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS);

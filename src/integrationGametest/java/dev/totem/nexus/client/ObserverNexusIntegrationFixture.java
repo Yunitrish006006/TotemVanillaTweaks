@@ -1,7 +1,9 @@
 package dev.totem.nexus.client;
 
 import dev.totem.nexus.network.SpaceUnitFriendsPayload;
+import dev.totem.nexus.network.SpaceUnitMapPayload;
 import dev.totem.nexus.network.SpaceUnitRegistrationPreviewPayload;
+import dev.totem.nexus.space.TeleportInterfaceType;
 import net.minecraft.client.gui.screens.Screen;
 
 /** Test-only constructor bridge for Nexus package-private production screens. */
@@ -18,6 +20,18 @@ public final class ObserverNexusIntegrationFixture {
 
     public static String mapName(Screen screen) {
         return ((NexusSpaceUnitMapScreen) screen).observerPayload().sourceName();
+    }
+
+    public static boolean isFilledMap(Screen screen, int mapId) {
+        SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
+        return payload.interfaceType() == TeleportInterfaceType.FILLED_MAP && payload.mapId() == mapId;
+    }
+
+    public static boolean isManagementOnly(Screen screen, TeleportInterfaceType interfaceType) {
+        SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
+        return payload.interfaceType() == interfaceType
+                && payload.mapId() == SpaceUnitMapPayload.NO_MAP_ID
+                && ((NexusSpaceUnitMapScreen) screen).managementOnlyPresentationForVisualTest();
     }
 
     public static int friendCount(Screen screen) {

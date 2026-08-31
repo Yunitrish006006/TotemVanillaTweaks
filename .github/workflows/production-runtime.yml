@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: e9dc2975cca37210f9d3bab2df4830e81af77295
+          ref: 8407f3ad58c21db03758242a2dea552364b08963
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 0267e2d4017c3a97a9389f71903b5b26744eff23
+          ref: a2e9a78ae106246999699862df3fb85d4fed3520
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -100,10 +100,10 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a ./gradlew \
-            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.12.jar" \
+            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.14.jar" \
             -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
             -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.6.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.8.jar" \
             -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
             -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
@@ -131,6 +131,6 @@ jobs:
         run: |
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.12'
+          test "$core_version" = '0.7.14'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace

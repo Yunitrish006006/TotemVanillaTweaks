@@ -46,6 +46,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Module-present proof for owner capture, production Screen creation/update and read-only input. */
 public final class ObserverCrossModuleProductionSenderClientGameTest implements FabricClientGameTest {
+    private static final int NEXUS_MAP_ID = 8801;
+
     @Override public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             world.getClientLevel().waitForChunksRender();
@@ -80,9 +82,15 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
 
     private static void nexus(ClientGameTestContext context) {
         var provider = new NexusObserverScreenProvider();
+        for (TeleportInterfaceType interfaceType : List.of(
+                TeleportInterfaceType.COMPASS,
+                TeleportInterfaceType.RECOVERY_COMPASS,
+                TeleportInterfaceType.BOOK)) {
+            verifyNexusManagementOnly(context, provider, interfaceType);
+        }
         Screen map = context.computeOnClient(client -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(
                 UUID.randomUUID(), "local", "Home", "minecraft:overworld", 1, 64, 1,
-                TeleportInterfaceType.COMPASS, List.of())));
+                TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of())));
         exercise(context, provider, map, "dev.totem.nexus.client.NexusSpaceUnitMapScreen",
                 "owner-present-nexus-map-production-screen");
         Screen friends = context.computeOnClient(client -> ObserverNexusIntegrationFixture.friends(
@@ -96,6 +104,29 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
         exercise(context, provider, registration,
                 "dev.totem.nexus.client.NexusSpaceUnitRegistrationPreviewScreen",
                 "owner-present-nexus-registration-production-screen");
+    }
+
+    private static void verifyNexusManagementOnly(ClientGameTestContext context,
+                                                  ObserverScreenProvider provider,
+                                                  TeleportInterfaceType interfaceType) {
+        Screen source = context.computeOnClient(client -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(
+                UUID.randomUUID(), "local", "Management", "minecraft:overworld", 1, 64, 1,
+                interfaceType, SpaceUnitMapPayload.NO_MAP_ID, List.of())));
+        ObserverScreenSnapshot snapshot = captureOnClient(context, provider, source, 1);
+        AtomicBoolean stopped = new AtomicBoolean();
+        ObserverScreenHandle handle = context.computeOnClient(client -> provider.create(new ObserverScreenContext(
+                UUID.randomUUID(), "Target", () -> stopped.set(true)), snapshot));
+        context.runOnClient(client -> client.setScreenAndShow(handle.screen()));
+        context.waitFor(client -> client.gui.screen() == handle.screen()
+                && ObserverNexusIntegrationFixture.isManagementOnly(client.gui.screen(), interfaceType), 100);
+        context.runOnClient(client -> {
+            if (!handle.screen().keyPressed(new KeyEvent(256, 0, 0)) || !stopped.get()) {
+                throw new AssertionError("Nexus " + interfaceType.id()
+                        + " management-only Observer screen did not close read-only");
+            }
+            client.setScreenAndShow(null);
+        });
+        context.waitForScreen(null);
     }
 
     private static void villagers(ClientGameTestContext context) {
@@ -233,7 +264,7 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             case "nexus" -> switch (initial.variant()) {
                 case "map" -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
                         "Remote Home", "minecraft:overworld", 9, 70, 9,
-                        TeleportInterfaceType.COMPASS, List.of()));
+                        TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of()));
                 case "friends" -> ObserverNexusIntegrationFixture.friends(new SpaceUnitFriendsPayload(List.of(
                         new SpaceUnitFriendsPayload.Entry(UUID.randomUUID(), "Friend", true, "friend"),
                         new SpaceUnitFriendsPayload.Entry(UUID.randomUUID(), "Remote Friend", false, "shared"))));
@@ -294,7 +325,8 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             case "automata_copper_golem" -> ObserverAutomataIntegrationFixture.revision(
                     (dev.totem.automata.client.CopperGolemMenuScreen) screen) == 8;
             case "nexus" -> switch (update.variant()) {
-                case "map" -> "Remote Home".equals(ObserverNexusIntegrationFixture.mapName(screen));
+                case "map" -> "Remote Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
+                        && ObserverNexusIntegrationFixture.isFilledMap(screen, NEXUS_MAP_ID);
                 case "friends" -> ObserverNexusIntegrationFixture.friendCount(screen) == 2;
                 case "registration" -> ObserverNexusIntegrationFixture.registrationTier(screen) == 4;
                 default -> false;

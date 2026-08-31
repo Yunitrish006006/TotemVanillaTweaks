@@ -28,6 +28,8 @@ import java.util.UUID;
 
 /** Typed owner payload fixtures used by the real three-JVM generic relay. */
 final class ObserverOwnedE2eSnapshots {
+    static final int NEXUS_MAP_ID = 8801;
+
     private ObserverOwnedE2eSnapshots() { }
 
     static ObserverOwnedScreenPayloads.State remnant(long sequence, int diamonds) {
@@ -53,7 +55,8 @@ final class ObserverOwnedE2eSnapshots {
 
     static ObserverOwnedScreenPayloads.State nexusMap(long sequence, String name) {
         var payload = new SpaceUnitMapPayload(UUID.fromString("10000000-0000-0000-0000-000000000001"),
-                "local", name, "minecraft:overworld", 10, 64, 10, TeleportInterfaceType.COMPASS, List.of());
+                "local", name, "minecraft:overworld", 10, 64, 10,
+                TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of());
         return open("nexus", "map", sequence, "Nexus Map", List.of(), new int[0], Map.of(),
                 encode(SpaceUnitMapPayload.CODEC, payload));
     }
