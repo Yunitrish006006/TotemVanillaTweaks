@@ -506,8 +506,8 @@ for integration_workflow in "$workflow" "$production_workflow" "$publish_workflo
     fail "$(basename "$integration_workflow") must build pinned optional modules and run exactly one cross-module gate; found build=$integration_build_count runtime=$integration_runtime_count"
   fi
   if [[ "$(grep -Fc 'build/owner-present-integration-screenshots/*.png' "$integration_workflow" || true)" != 1 \
-      || "$(grep -Fc 'if [[ "$count" != 8 ]]; then' "$integration_workflow" || true)" != 1 \
-      || "$(grep -Fc 'Expected exactly 8 owner-present screenshots; found $count.' "$integration_workflow" || true)" != 1 ]]; then
+      || "$(grep -Fc 'if [[ "$count" != 9 ]]; then' "$integration_workflow" || true)" != 1 \
+      || "$(grep -Fc 'Expected exactly 9 owner-present screenshots; found $count.' "$integration_workflow" || true)" != 1 ]]; then
     fail "$(basename "$integration_workflow") must separately count and upload exactly eight owner-present screenshots"
   fi
 done
