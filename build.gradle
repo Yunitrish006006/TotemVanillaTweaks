@@ -8,14 +8,14 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.14.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.16.jar'))
 def observerIntegrationJars = [
         remnant   : file(providers.gradleProperty('totemRemnantJar')
                 .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.16.jar')),
         automata  : file(providers.gradleProperty('totemAutomataJar')
                 .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.18.jar')),
         nexus     : file(providers.gradleProperty('totemNexusJar')
-                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.8.jar')),
+                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.13.jar')),
         villagers : file(providers.gradleProperty('totemVillagersJar')
                 .getOrElse('../TotemVillagers/build/libs/totem-villagers-0.1.33.jar')),
         locksmith : file(providers.gradleProperty('totemLocksmithJar')

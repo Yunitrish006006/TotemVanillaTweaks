@@ -82,8 +82,12 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
 
     private static void nexus(ClientGameTestContext context) {
         var provider = new NexusObserverScreenProvider();
+        Screen compass = context.computeOnClient(client -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(
+                UUID.randomUUID(), "local", "Compass Home", "minecraft:overworld", 1, 64, 1,
+                TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of())));
+        exercise(context, provider, compass, "dev.totem.nexus.client.NexusSpaceUnitMapScreen",
+                "owner-present-nexus-compass-production-screen");
         for (TeleportInterfaceType interfaceType : List.of(
-                TeleportInterfaceType.COMPASS,
                 TeleportInterfaceType.RECOVERY_COMPASS,
                 TeleportInterfaceType.BOOK)) {
             verifyNexusManagementOnly(context, provider, interfaceType);
@@ -262,9 +266,16 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             case "automata_copper_golem" -> ObserverAutomataIntegrationFixture.create(
                     client.player.getInventory(), UUID.fromString(initial.metadata().get("golem_id")), 8);
             case "nexus" -> switch (initial.variant()) {
-                case "map" -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
-                        "Remote Home", "minecraft:overworld", 9, 70, 9,
-                        TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of()));
+                case "compass" -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
+                        "Remote Compass Home", "minecraft:overworld", 9, 70, 9,
+                        TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of()));
+                case "map" -> {
+                    Screen map = new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
+                            "Remote Home", "minecraft:overworld", 9, 70, 9,
+                            TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of()));
+                    ObserverNexusIntegrationFixture.prepareZoomedMapView(map);
+                    yield map;
+                }
                 case "friends" -> ObserverNexusIntegrationFixture.friends(new SpaceUnitFriendsPayload(List.of(
                         new SpaceUnitFriendsPayload.Entry(UUID.randomUUID(), "Friend", true, "friend"),
                         new SpaceUnitFriendsPayload.Entry(UUID.randomUUID(), "Remote Friend", false, "shared"))));
@@ -325,8 +336,11 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             case "automata_copper_golem" -> ObserverAutomataIntegrationFixture.revision(
                     (dev.totem.automata.client.CopperGolemMenuScreen) screen) == 8;
             case "nexus" -> switch (update.variant()) {
+                case "compass" -> "Remote Compass Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
+                        && ObserverNexusIntegrationFixture.isCompass(screen);
                 case "map" -> "Remote Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
-                        && ObserverNexusIntegrationFixture.isFilledMap(screen, NEXUS_MAP_ID);
+                        && ObserverNexusIntegrationFixture.isFilledMap(screen, NEXUS_MAP_ID)
+                        && ObserverNexusIntegrationFixture.hasZoomedMapView(screen);
                 case "friends" -> ObserverNexusIntegrationFixture.friendCount(screen) == 2;
                 case "registration" -> ObserverNexusIntegrationFixture.registrationTier(screen) == 4;
                 default -> false;

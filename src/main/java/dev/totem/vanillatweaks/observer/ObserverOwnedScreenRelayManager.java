@@ -17,7 +17,8 @@ public final class ObserverOwnedScreenRelayManager {
     private static final Map<String, Set<String>> VARIANTS = Map.of(
             "remnant_backpack", Set.of(""),
             "automata_copper_golem", Set.of(""),
-            "nexus", Set.of("map", "map_legacy", "friends", "friends_legacy", "registration", "registration_legacy"),
+            "nexus", Set.of("compass", "map", "management", "map_legacy", "friends", "friends_legacy",
+                    "registration", "registration_legacy"),
             "nexus_death_node_admin", Set.of(""),
             "locksmith_management", Set.of(""),
             "villagers_woodcutter", Set.of(""));

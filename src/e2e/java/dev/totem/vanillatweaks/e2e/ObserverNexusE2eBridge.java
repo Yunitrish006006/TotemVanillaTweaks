@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
-/** Runs map -> friends -> registration Nexus semantics across the real three-JVM Observer path. */
+/** Runs compass -> map -> management -> friends -> registration Nexus semantics across the real three-JVM path. */
 public final class ObserverNexusE2eBridge implements ClientModInitializer {
     private static final Class<?> GENERIC = ObserverNativeScreenClient.class;
     private static final Class<?> DRIVER = ObserverE2eClient.class;
@@ -26,14 +26,20 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
 
     private static String role;
     private static boolean observerRequested;
+    private static boolean compassSeen;
+    private static volatile boolean compassSaved;
     private static boolean mapSeen;
     private static volatile boolean mapSaved;
+    private static boolean managementSeen;
+    private static volatile boolean managementSaved;
     private static boolean friendsSeen;
     private static volatile boolean friendsSaved;
     private static boolean registrationSeen;
     private static volatile boolean registrationSaved;
     private static boolean observerClosed;
+    private static RenderBarrier compassRenderBarrier;
     private static RenderBarrier mapRenderBarrier;
+    private static RenderBarrier managementRenderBarrier;
     private static RenderBarrier friendsRenderBarrier;
     private static RenderBarrier registrationRenderBarrier;
     private static int targetStage;
@@ -57,19 +63,44 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 && markerExists("target-native-automata-copper-golem-close-sent.txt")) {
             setBoolean(DRIVER, "observerStopRequested", true);
             observerRequested = true;
-            ObserverE2eCommon.marker("observer-ready-for-nexus-map.txt",
-                    "Target may send Nexus map semantic state through the dedicated server.\n");
+            ObserverE2eCommon.marker("observer-ready-for-nexus-compass.txt",
+                    "Target may send Nexus compass semantic state through the dedicated server.\n");
         }
 
-        if (observerRequested && !mapSeen) {
+        if (observerRequested && !compassSeen) {
+            compassRenderBarrier = observeVariant("compass", compassRenderBarrier);
+        }
+        if (observerRequested && !compassSeen
+                && observerScreenVisibleAfterRender(minecraft, "compass", compassRenderBarrier)) {
+            var payload = (dev.totem.nexus.network.SpaceUnitMapPayload) observerPayload(minecraft.gui.screen());
+            if (!"Compass Home v2".equals(payload.sourceName())
+                    || payload.interfaceType() != dev.totem.nexus.space.TeleportInterfaceType.COMPASS
+                    || payload.mapId() != dev.totem.nexus.network.SpaceUnitMapPayload.NO_MAP_ID
+                    || !ObserverOwnedE2eSnapshots.NEXUS_TARGET_ID.equals(observerSelection(minecraft.gui.screen()))) {
+                fail("Nexus compass production Screen did not apply the later selected-destination snapshot");
+                return;
+            }
+            ensureNoGenericFallback("compass");
+            compassSeen = true;
+            ObserverE2eCommon.marker("observer-native-nexus-compass-ok.txt",
+                    "Observer rendered Nexus compass destination-list state.\n");
+            saveScreenshot(minecraft, "observer-native-nexus-compass.png",
+                    "observer-native-nexus-compass-saved.txt", 1);
+        }
+
+        if (compassSaved && !mapSeen) {
             mapRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier);
         }
-        if (observerRequested && !mapSeen
+        if (compassSaved && !mapSeen
                 && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_MAP, mapRenderBarrier)) {
             var payload = (dev.totem.nexus.network.SpaceUnitMapPayload) observerPayload(minecraft.gui.screen());
             if (!"Home v2".equals(payload.sourceName())
                     || payload.interfaceType() != dev.totem.nexus.space.TeleportInterfaceType.FILLED_MAP
-                    || payload.mapId() != ObserverOwnedE2eSnapshots.NEXUS_MAP_ID) {
+                    || payload.mapId() != ObserverOwnedE2eSnapshots.NEXUS_MAP_ID
+                    || !ObserverOwnedE2eSnapshots.NEXUS_TARGET_ID.equals(observerSelection(minecraft.gui.screen()))
+                    || observerMapView(minecraft.gui.screen())[0] != 2
+                    || observerMapView(minecraft.gui.screen())[1] != 0
+                    || observerMapView(minecraft.gui.screen())[2] != -24) {
                 fail("Nexus map production Screen did not apply the later snapshot");
                 return;
             }
@@ -77,13 +108,33 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             mapSeen = true;
             ObserverE2eCommon.marker("observer-native-nexus-map-ok.txt",
                     "Observer rendered Nexus map semantic state.\n");
-            saveScreenshot(minecraft, "observer-native-nexus-map.png", "observer-native-nexus-map-saved.txt", 1);
+            saveScreenshot(minecraft, "observer-native-nexus-map.png", "observer-native-nexus-map-saved.txt", 2);
         }
 
-        if (mapSaved && !friendsSeen) {
+        if (mapSaved && !managementSeen) {
+            managementRenderBarrier = observeVariant("management", managementRenderBarrier);
+        }
+        if (mapSaved && !managementSeen
+                && observerScreenVisibleAfterRender(minecraft, "management", managementRenderBarrier)) {
+            var payload = (dev.totem.nexus.network.SpaceUnitMapPayload) observerPayload(minecraft.gui.screen());
+            if (!"Management Home v2".equals(payload.sourceName())
+                    || payload.interfaceType() != dev.totem.nexus.space.TeleportInterfaceType.BOOK
+                    || payload.mapId() != dev.totem.nexus.network.SpaceUnitMapPayload.NO_MAP_ID) {
+                fail("Nexus management production Screen did not apply the later snapshot");
+                return;
+            }
+            ensureNoGenericFallback("management");
+            managementSeen = true;
+            ObserverE2eCommon.marker("observer-native-nexus-management-ok.txt",
+                    "Observer rendered Nexus management-only state.\n");
+            saveScreenshot(minecraft, "observer-native-nexus-management.png",
+                    "observer-native-nexus-management-saved.txt", 3);
+        }
+
+        if (managementSaved && !friendsSeen) {
             friendsRenderBarrier = observeVariant(ObserverNexusScreenPayloads.VARIANT_FRIENDS, friendsRenderBarrier);
         }
-        if (mapSaved && !friendsSeen
+        if (managementSaved && !friendsSeen
                 && observerScreenVisibleAfterRender(minecraft, ObserverNexusScreenPayloads.VARIANT_FRIENDS,
                         friendsRenderBarrier)) {
             var payload = (dev.totem.nexus.network.SpaceUnitFriendsPayload) observerPayload(minecraft.gui.screen());
@@ -95,7 +146,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             friendsSeen = true;
             ObserverE2eCommon.marker("observer-native-nexus-friends-ok.txt",
                     "Observer rendered Nexus friends semantic state.\n");
-            saveScreenshot(minecraft, "observer-native-nexus-friends.png", "observer-native-nexus-friends-saved.txt", 2);
+            saveScreenshot(minecraft, "observer-native-nexus-friends.png", "observer-native-nexus-friends-saved.txt", 4);
         }
 
         if (friendsSaved && !registrationSeen) {
@@ -118,7 +169,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             ObserverE2eCommon.marker("observer-native-nexus-registration-ok.txt",
                     "Observer rendered Nexus registration semantic state.\n");
             saveScreenshot(minecraft, "observer-native-nexus-registration.png",
-                    "observer-native-nexus-registration-saved.txt", 3);
+                    "observer-native-nexus-registration-saved.txt", 5);
         }
 
         if (registrationSaved && !observerClosed
@@ -133,34 +184,52 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
     }
 
     private static void tickTarget() {
-        if (targetStage == 0 && markerExists("observer-ready-for-nexus-map.txt")) {
+        if (targetStage == 0 && markerExists("observer-ready-for-nexus-compass.txt")) {
             if (!dev.totem.vanillatweaks.client.ObserverNativeClient.targetSupportsScreen(
                     ObserverNativeScreenPayloads.CAPABILITY_NEXUS)) {
                 fail("Target did not negotiate Nexus semantic capability");
                 return;
             }
             targetStage = 1;
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusCompass(
+                    ++targetSequence, "Compass Home v1"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusCompass(
+                    ++targetSequence, "Compass Home v2"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "compass", 1L));
+            ObserverE2eCommon.marker("target-native-nexus-compass-state-sent.txt",
+                    "Target sent Nexus compass semantic state.\n");
+        } else if (targetStage == 1 && markerExists("observer-native-nexus-compass-saved.txt")) {
+            targetStage = 2;
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusMap(++targetSequence, "Home v1"));
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusMap(++targetSequence, "Home v2"));
-            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "map", 1L));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "map", 2L));
             ObserverE2eCommon.marker("target-native-nexus-map-state-sent.txt",
                     "Target sent Nexus map semantic state.\n");
-        } else if (targetStage == 1 && markerExists("observer-native-nexus-map-saved.txt")) {
-            targetStage = 2;
+        } else if (targetStage == 2 && markerExists("observer-native-nexus-map-saved.txt")) {
+            targetStage = 3;
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusManagement(
+                    ++targetSequence, "Management Home v1"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusManagement(
+                    ++targetSequence, "Management Home v2"));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "management", 3L));
+            ObserverE2eCommon.marker("target-native-nexus-management-state-sent.txt",
+                    "Target sent Nexus management semantic state.\n");
+        } else if (targetStage == 3 && markerExists("observer-native-nexus-management-saved.txt")) {
+            targetStage = 4;
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusFriends(++targetSequence, "Friend v1"));
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusFriends(++targetSequence, "Friend v2"));
-            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "friends", 2L));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "friends", 4L));
             ObserverE2eCommon.marker("target-native-nexus-friends-state-sent.txt",
                     "Target sent Nexus friends semantic state.\n");
-        } else if (targetStage == 2 && markerExists("observer-native-nexus-friends-saved.txt")) {
-            targetStage = 3;
+        } else if (targetStage == 4 && markerExists("observer-native-nexus-friends-saved.txt")) {
+            targetStage = 5;
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusRegistration(++targetSequence, 3));
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.nexusRegistration(++targetSequence, 4));
-            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "registration", 3L));
+            ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.cursor("nexus", "registration", 5L));
             ObserverE2eCommon.marker("target-native-nexus-registration-state-sent.txt",
                     "Target sent Nexus registration semantic state.\n");
-        } else if (targetStage == 3 && markerExists("observer-native-nexus-registration-saved.txt")) {
-            targetStage = 4;
+        } else if (targetStage == 5 && markerExists("observer-native-nexus-registration-saved.txt")) {
+            targetStage = 6;
             ClientPlayNetworking.send(ObserverOwnedE2eSnapshots.close("nexus", "registration", ++targetSequence));
             ObserverE2eCommon.marker("target-native-nexus-close-sent.txt",
                     "Target sent Nexus semantic close state.\n");
@@ -223,7 +292,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
             RenderBarrier barrier
     ) {
         String expected = switch (variant) {
-            case "map" -> "dev.totem.nexus.client.NexusSpaceUnitMapScreen";
+            case "compass", "map", "management" -> "dev.totem.nexus.client.NexusSpaceUnitMapScreen";
             case "friends" -> "dev.totem.nexus.client.NexusSpaceUnitFriendsScreen";
             case "registration" -> "dev.totem.nexus.client.NexusSpaceUnitRegistrationPreviewScreen";
             default -> "";
@@ -247,6 +316,31 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
         }
     }
 
+    private static UUID observerSelection(Object screen) {
+        try {
+            var method = screen.getClass().getDeclaredMethod("observerSelectedUnitId");
+            method.setAccessible(true);
+            return (UUID) method.invoke(screen);
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Nexus production Screen did not expose Observer selection", error);
+        }
+    }
+
+    private static int[] observerMapView(Object screen) {
+        try {
+            int[] view = new int[3];
+            String[] methods = {"observerMapZoom", "observerMapPanX", "observerMapPanY"};
+            for (int index = 0; index < methods.length; index++) {
+                var method = screen.getClass().getDeclaredMethod(methods[index]);
+                method.setAccessible(true);
+                view[index] = (int) method.invoke(screen);
+            }
+            return view;
+        } catch (ReflectiveOperationException error) {
+            throw new RuntimeException("Nexus production Screen did not expose Observer map view", error);
+        }
+    }
+
     private static void ensureNoGenericFallback(String variant) {
         if (getBoolean(GENERIC, "remoteGenericOpen")) {
             fail("Metadata fallback competed with Nexus " + variant + " semantic relay");
@@ -263,9 +357,11 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 Path output = ObserverE2eCommon.resultsDir().resolve(name);
                 Files.createDirectories(output.getParent());
                 owned.writeToFile(output);
-                if (stage == 1) mapSaved = true;
-                else if (stage == 2) friendsSaved = true;
-                else if (stage == 3) registrationSaved = true;
+                if (stage == 1) compassSaved = true;
+                else if (stage == 2) mapSaved = true;
+                else if (stage == 3) managementSaved = true;
+                else if (stage == 4) friendsSaved = true;
+                else if (stage == 5) registrationSaved = true;
                 ObserverE2eCommon.marker(marker, "Nexus semantic screenshot saved locally.\n");
             } catch (Exception error) {
                 fail("Failed to save Nexus E2E screenshot: " + error);

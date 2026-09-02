@@ -1,8 +1,8 @@
 {
-  "version": "0.1.21",
+  "version": "0.1.22",
   "release_ref": "main",
   "release_type": "release",
   "dry_run": false,
-  "request_id": "modrinth-0.1.21-nexus-provider-v3-release-20260901",
-  "reason": "Publish TotemVanillaTweaks 0.1.21 with TotemNexus 0.3.8 owned-provider protocol v3 support, semantic filled-map and management-only Observer coverage, exhaustive framebuffer-free release gates, and an exact required external TotemCore 0.7.14 file dependency."
+  "request_id": "modrinth-0.1.22-nexus-teleport-ui-release-20260902",
+  "reason": "Publish TotemVanillaTweaks 0.1.22 with TotemNexus 0.3.13 compass, map, and management Observer variants, bounded map zoom and pan semantics, exhaustive framebuffer-free release gates, and an exact required external TotemCore 0.7.16 file dependency."
 }

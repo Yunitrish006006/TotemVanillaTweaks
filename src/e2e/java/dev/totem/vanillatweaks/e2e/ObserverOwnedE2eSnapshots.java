@@ -29,6 +29,8 @@ import java.util.UUID;
 /** Typed owner payload fixtures used by the real three-JVM generic relay. */
 final class ObserverOwnedE2eSnapshots {
     static final int NEXUS_MAP_ID = 8801;
+    static final UUID NEXUS_SOURCE_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    static final UUID NEXUS_TARGET_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
 
     private ObserverOwnedE2eSnapshots() { }
 
@@ -53,12 +55,60 @@ final class ObserverOwnedE2eSnapshots {
                 Map.of("golem_id", golem.toString()), encode(CopperWrenchBindingsPayload.CODEC, payload));
     }
 
-    static ObserverOwnedScreenPayloads.State nexusMap(long sequence, String name) {
-        var payload = new SpaceUnitMapPayload(UUID.fromString("10000000-0000-0000-0000-000000000001"),
-                "local", name, "minecraft:overworld", 10, 64, 10,
-                TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of());
-        return open("nexus", "map", sequence, "Nexus Map", List.of(), new int[0], Map.of(),
+    static ObserverOwnedScreenPayloads.State nexusCompass(long sequence, String name) {
+        var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
+                "lodestone", name, "minecraft:overworld", 10, 64, 10,
+                TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID,
+                nexusEntries("message.deadrecall.space_unit.interface_bonus.compass"));
+        return open("nexus", "compass", sequence, "Nexus Compass", List.of(), new int[0],
+                Map.of("selected_unit_id", NEXUS_TARGET_ID.toString()),
                 encode(SpaceUnitMapPayload.CODEC, payload));
+    }
+
+    static ObserverOwnedScreenPayloads.State nexusMap(long sequence, String name) {
+        var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
+                "local", name, "minecraft:overworld", 10, 64, 10,
+                TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID,
+                nexusEntries("message.deadrecall.space_unit.interface_bonus.filled_map.active"));
+        return open("nexus", "map", sequence, "Nexus Map", List.of(), new int[0],
+                Map.of(
+                        "selected_unit_id", NEXUS_TARGET_ID.toString(),
+                        "map_zoom", "2",
+                        "map_pan_x", "0",
+                        "map_pan_y", "-24"),
+                encode(SpaceUnitMapPayload.CODEC, payload));
+    }
+
+    static ObserverOwnedScreenPayloads.State nexusManagement(long sequence, String name) {
+        var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
+                "lodestone", name, "minecraft:overworld", 10, 64, 10,
+                TeleportInterfaceType.BOOK, SpaceUnitMapPayload.NO_MAP_ID,
+                List.of(nexusEntry(NEXUS_SOURCE_ID, name, 10, 10,
+                        "message.deadrecall.space_unit.interface_bonus.book.active", false)));
+        return open("nexus", "management", sequence, "Nexus Management", List.of(), new int[0], Map.of(),
+                encode(SpaceUnitMapPayload.CODEC, payload));
+    }
+
+    private static List<SpaceUnitMapPayload.Entry> nexusEntries(String bonusMessage) {
+        return List.of(
+                nexusEntry(NEXUS_SOURCE_ID, "Home Nexus", 10, 10, bonusMessage, false),
+                nexusEntry(NEXUS_TARGET_ID, "Mountain Relay", 34, -12, bonusMessage, true));
+    }
+
+    private static SpaceUnitMapPayload.Entry nexusEntry(
+            UUID id, String name, int x, int z, String bonusMessage, boolean canTeleport) {
+        return new SpaceUnitMapPayload.Entry(
+                id, "lodestone", name, "private", false, "minecraft:overworld", x, 64, z,
+                0.92D, 2, canTeleport ? 32 : 0,
+                0, 0, 0, 0, 0, 20,
+                0, 0,
+                20, 16,
+                4, 3,
+                0,
+                0, 0,
+                true, bonusMessage,
+                false, true, true, 1, 2, canTeleport,
+                canTeleport ? "" : "message.deadrecall.space_unit.teleport_blocked.same_source");
     }
 
     static ObserverOwnedScreenPayloads.State nexusFriends(long sequence, String name) {

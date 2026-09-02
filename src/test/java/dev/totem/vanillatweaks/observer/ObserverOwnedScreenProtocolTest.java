@@ -39,4 +39,18 @@ class ObserverOwnedScreenProtocolTest {
                 ObserverOwnedScreenPayloads.PROTOCOL_VERSION,
                 List.of(new ObserverOwnedScreenPayloads.ProviderIdentity("nexus", 4)))));
     }
+
+    @Test void nexusRelayAcceptsOnlyTheOwnerDeclaredCompassMapAndManagementVariants() {
+        for (String variant : List.of("compass", "map", "management")) {
+            var snapshot = new ObserverScreenSnapshot("nexus", variant, 3, 1, Component.empty(),
+                    List.of(), new int[0], Map.of(), new byte[0]);
+            assertTrue(ObserverOwnedScreenRelayManager.validState(
+                    new ObserverOwnedScreenPayloads.State(true, snapshot)), variant);
+        }
+
+        var unknownVariant = new ObserverScreenSnapshot("nexus", "teleport-list-copy", 3, 1,
+                Component.empty(), List.of(), new int[0], Map.of(), new byte[0]);
+        assertFalse(ObserverOwnedScreenRelayManager.validState(
+                new ObserverOwnedScreenPayloads.State(true, unknownVariant)));
+    }
 }

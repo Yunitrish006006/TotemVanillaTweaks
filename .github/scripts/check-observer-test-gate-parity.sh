@@ -177,11 +177,11 @@ for gradle_workflow in "$workflow" "$production_workflow" "$publish_workflow"; d
     fail "$(basename "$gradle_workflow") must disable every setup-gradle cache restore/write; found $cache_disabled_count/$setup_gradle_count"
   fi
 done
-if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.14.jar' "$publish_workflow" \
-    || ! grep -Fq -- "--arg core '>=0.7.14 <0.8.0'" "$publish_workflow" \
+if ! grep -Fq 'TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.16.jar' "$publish_workflow" \
+    || ! grep -Fq -- "--arg core '>=0.7.16 <0.8.0'" "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_REFERENCE_VERSION_ID:' "$publish_workflow" \
     || grep -Fq 'TOTEM_CORE_PROJECT_ID:' "$publish_workflow"; then
-  fail 'Modrinth publication must validate and use the exact built TotemCore 0.7.14 dependency, never a stale range or guessed project/version ID'
+  fail 'Modrinth publication must validate and use the exact built TotemCore 0.7.16 dependency, never a stale range or guessed project/version ID'
 fi
 if ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]' "$publish_workflow" \
     || ! grep -Fq 'core_dependency_file="${core_archive}-${core_version}.jar"' "$publish_workflow" \
@@ -191,7 +191,7 @@ if ! grep -Fq '[{project_id:$fabric,dependency_type:"required"},{file_name:$core
   fail 'Modrinth publication must submit the exact TotemCore file and reuse the strict remote dependency verifier'
 fi
 if [[ -f "$remote_dependency_filter" ]]; then
-  remote_dependencies_exact='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.14.jar"}]}'
+  remote_dependencies_exact='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.16.jar"}]}'
   remote_dependencies_normalized='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null}]}'
   remote_dependencies_wrong_file='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"wrong-core.jar"}]}'
   remote_dependencies_extra='{"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":null},{"dependency_type":"optional","project_id":"extra","version_id":null,"file_name":null}]}'
@@ -199,7 +199,7 @@ if [[ -f "$remote_dependency_filter" ]]; then
   for accepted_dependencies in "$remote_dependencies_exact" "$remote_dependencies_normalized"; do
     if ! jq -e \
         --arg fabric 'P7dR8mSH' \
-        --arg core_file 'totem-core-0.7.14.jar' \
+        --arg core_file 'totem-core-0.7.16.jar' \
         -f "$remote_dependency_filter" <<<"$accepted_dependencies" >/dev/null; then
       fail 'Modrinth remote dependency verifier must accept exact and normalized-null TotemCore file_name metadata'
     fi
@@ -208,7 +208,7 @@ if [[ -f "$remote_dependency_filter" ]]; then
   for rejected_dependencies in "$remote_dependencies_wrong_file" "$remote_dependencies_extra"; do
     if jq -e \
         --arg fabric 'P7dR8mSH' \
-        --arg core_file 'totem-core-0.7.14.jar' \
+        --arg core_file 'totem-core-0.7.16.jar' \
         -f "$remote_dependency_filter" <<<"$rejected_dependencies" >/dev/null; then
       fail 'Modrinth remote dependency verifier must reject wrong TotemCore file names and extra dependencies'
     fi
@@ -226,8 +226,8 @@ if [[ ! -f "$dependency_summary_filter" ]] \
     || ! grep -Fq "printf 'Published Modrinth dependency summary: %s\\n' \"\$dependency_summary\" >&2" "$publish_workflow"; then
   fail 'Modrinth verification failures must emit the dedicated redacted dependency summary'
 else
-  dependency_summary_input='{"token":"must-not-leak","author":{"id":"private"},"unrelated":"must-not-leak","dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"private":"must-not-leak"},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.14.jar","private":"must-not-leak"}]}'
-  dependency_summary_expected='{"dependency_count":2,"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name_present":false,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name_present":true,"file_name":"totem-core-0.7.14.jar"}]}'
+  dependency_summary_input='{"token":"must-not-leak","author":{"id":"private"},"unrelated":"must-not-leak","dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"private":"must-not-leak"},{"dependency_type":"required","project_id":null,"version_id":null,"file_name":"totem-core-0.7.16.jar","private":"must-not-leak"}]}'
+  dependency_summary_expected='{"dependency_count":2,"dependencies":[{"dependency_type":"required","project_id":"P7dR8mSH","version_id":null,"file_name_present":false,"file_name":null},{"dependency_type":"required","project_id":null,"version_id":null,"file_name_present":true,"file_name":"totem-core-0.7.16.jar"}]}'
   if ! dependency_summary_actual="$(jq -c -f "$dependency_summary_filter" <<<"$dependency_summary_input")"; then
     fail 'Modrinth dependency summary filter rejected valid metadata'
   elif [[ "$dependency_summary_actual" != "$dependency_summary_expected" ]]; then
@@ -512,11 +512,11 @@ for integration_workflow in "$workflow" "$production_workflow" "$publish_workflo
   fi
 done
 for checkout in \
-  'TotemCore 8407f3ad58c21db03758242a2dea552364b08963 0.7.14' \
+  'TotemCore b0b57bc98a98140a1c12a660a33952ea61167278 0.7.16' \
   'TotemExcavation 6b54011195b81ec9a9a09146d162ba303ebd8ee4 0.1.8' \
   'TotemRemnant a3f9231b50c6c55f03a8c145e80644bd6cff7021 0.2.16' \
   'TotemAutomata b007eeb0ef0417804fe2abb25524842480419ae1 0.1.18' \
-  'TotemNexus a2e9a78ae106246999699862df3fb85d4fed3520 0.3.8' \
+  'TotemNexus 781c4593b03c6d620c5bca575a69053612aef240 0.3.13' \
   'TotemVillagers c4d37815c45b86f102939ec5e43b171692a406e0 0.1.33' \
   'TotemLocksmith c89d380b88b10a3f0f55044e04266bc8ada70357 0.1.6'; do
   if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then
@@ -716,28 +716,36 @@ if ! grep -Fq '"observer-ui-native-player-inventory-screen.png"' \
   fail 'ObserverUiClientGameTest must persist the native player-inventory semantic screenshot'
 fi
 
-# Nexus is one bridge with three sequential semantic variants and one shared
-# close. Its 15-file contract is deliberately separate from the 7-file family
+# Nexus is one bridge with five sequential semantic variants and one shared
+# close. Its 23-file contract is deliberately separate from the 7-file family
 # convention above.
 nexus_source="$e2e_source_dir/ObserverNexusE2eBridge.java"
-nexus_ready=('observer-ready-for-nexus-map.txt')
+nexus_ready=('observer-ready-for-nexus-compass.txt')
 nexus_states=(
+  'target-native-nexus-compass-state-sent.txt'
   'target-native-nexus-map-state-sent.txt'
+  'target-native-nexus-management-state-sent.txt'
   'target-native-nexus-friends-state-sent.txt'
   'target-native-nexus-registration-state-sent.txt'
 )
 nexus_ok=(
+  'observer-native-nexus-compass-ok.txt'
   'observer-native-nexus-map-ok.txt'
+  'observer-native-nexus-management-ok.txt'
   'observer-native-nexus-friends-ok.txt'
   'observer-native-nexus-registration-ok.txt'
 )
 nexus_saved=(
+  'observer-native-nexus-compass-saved.txt'
   'observer-native-nexus-map-saved.txt'
+  'observer-native-nexus-management-saved.txt'
   'observer-native-nexus-friends-saved.txt'
   'observer-native-nexus-registration-saved.txt'
 )
 nexus_png=(
+  'observer-native-nexus-compass.png'
   'observer-native-nexus-map.png'
+  'observer-native-nexus-management.png'
   'observer-native-nexus-friends.png'
   'observer-native-nexus-registration.png'
 )
@@ -768,7 +776,7 @@ assert_emitted_marker_set 'ObserverNexusE2eBridge close-sent marker' "$nexus_sou
 assert_emitted_marker_set 'ObserverNexusE2eBridge closed marker' "$nexus_source" \
   'observer-native-[a-z0-9-]+-closed\.txt' "${nexus_closed[@]}"
 assert_workflow_evidence 'ObserverNexusE2eBridge' "${nexus_evidence[@]}"
-for variant in map friends registration; do
+for variant in compass map management friends registration; do
   if ! grep -Fq "${variant}RenderBarrier = observeVariant(" "$nexus_source"; then
     fail "ObserverNexusE2eBridge must arm a render-frame barrier for the $variant variant"
   fi
@@ -840,4 +848,4 @@ fi
 printf '%s\n' \
   "Observer test gate parity passed: ${#client_sources[@]} Client GameTests match their manifest." \
   "Observer E2E parity passed: ${#bridge_classes[@]} bridges plus Common/Client drivers match their manifests." \
-  "Observer lifecycle parity passed: $regular_bridge_count regular bridges, Crafting/container and three-variant Nexus exceptions, including 105 late-family evidence files."
+  "Observer lifecycle parity passed: $regular_bridge_count regular bridges, Crafting/container and five-variant Nexus exceptions, including 105 late-family evidence files."

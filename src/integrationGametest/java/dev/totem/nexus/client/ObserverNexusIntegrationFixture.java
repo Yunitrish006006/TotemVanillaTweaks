@@ -5,6 +5,7 @@ import dev.totem.nexus.network.SpaceUnitMapPayload;
 import dev.totem.nexus.network.SpaceUnitRegistrationPreviewPayload;
 import dev.totem.nexus.space.TeleportInterfaceType;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 
 /** Test-only constructor bridge for Nexus package-private production screens. */
 public final class ObserverNexusIntegrationFixture {
@@ -25,6 +26,28 @@ public final class ObserverNexusIntegrationFixture {
     public static boolean isFilledMap(Screen screen, int mapId) {
         SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
         return payload.interfaceType() == TeleportInterfaceType.FILLED_MAP && payload.mapId() == mapId;
+    }
+
+    public static void prepareZoomedMapView(Screen screen) {
+        NexusSpaceUnitMapScreen map = (NexusSpaceUnitMapScreen) screen;
+        if (!map.keyPressed(new KeyEvent(61, 0, 0))
+                || !map.keyPressed(new KeyEvent(264, 0, 1))) {
+            throw new AssertionError("Nexus map did not accept zoom and keyboard pan controls");
+        }
+    }
+
+    public static boolean hasZoomedMapView(Screen screen) {
+        NexusSpaceUnitMapScreen map = (NexusSpaceUnitMapScreen) screen;
+        return map.observerMapZoom() == 2
+                && map.observerMapPanX() == 0
+                && map.observerMapPanY() == -16;
+    }
+
+    public static boolean isCompass(Screen screen) {
+        SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
+        return payload.interfaceType() == TeleportInterfaceType.COMPASS
+                && payload.mapId() == SpaceUnitMapPayload.NO_MAP_ID
+                && ((NexusSpaceUnitMapScreen) screen).compassTeleportPresentationForVisualTest();
     }
 
     public static boolean isManagementOnly(Screen screen, TeleportInterfaceType interfaceType) {
