@@ -1,0 +1,19 @@
+{
+  "advancements.deadrecall.vanilla_tweaks_root.title": "Totem Vanilla Tweaks",
+  "advancements.deadrecall.vanilla_tweaks_root.description": "Fabrica un atril y regístralo con una guía o un libro de Totem.",
+  "advancements.deadrecall.vanilla_tweaks_manual.title": "Registra los pequeños cambios",
+  "advancements.deadrecall.vanilla_tweaks_manual.description": "Usa una guía o un libro sobre un atril para obtener la guía de métodos de ajustes de Minecraft.",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.title": "El atril revisitado",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.description": "Fabrica un atril con la receta revisada.",
+  "book.deadrecall.vanilla_tweaks_manual.title": "Guía de métodos de ajustes de Minecraft",
+  "book.deadrecall.vanilla_tweaks_manual.page.1": "INVENTARIOS\n\nColoca el cursor sobre el lado del jugador o del contenedor de un menú abierto y pulsa la tecla Ordenar mochila (botón central de forma predeterminada). El servidor valida el objetivo.",
+  "book.deadrecall.vanilla_tweaks_manual.page.2": "MUNDO\n\nLos atriles usan cuatro losas y un libro. Las estanterías se convierten en estanterías cinceladas; el polvo de concreto mojado se endurece y la salida fundida por tolva libera la experiencia de la receta.",
+  "book.deadrecall.vanilla_tweaks_manual.page.3": "CARCAJES DE ESQUELETO\n\nLas reservas base son Fácil 3–5, Normal 5–8 y Difícil 8–12. Normal obtiene hasta 2 flechas extra y Difícil hasta 4; cada flecha extra usa como probabilidad el multiplicador especial de la dificultad local de Minecraft, por lo que las regiones maduras alcanzan aproximadamente 3–5, 7–10 y 12–16. Las flechas se pueden recoger y los arqueros sin flechas cambian al combate cuerpo a cuerpo. Consulta Encantamiento para los cambios de objetivos.",
+  "book.deadrecall.vanilla_tweaks_manual.page.4": "VISTA DE OBSERVADOR\n\nUsa /observeui <jugador> en modo Espectador. La interfaz de Minecraft compatible usa su pantalla original; la interfaz de Totem usa la pantalla de producción de su mod propietario, en modo de solo lectura. El cursor se sincroniza. El chat sin enviar, las teclas y otros datos privados nunca se envían. Las pantallas no compatibles solo muestran el estado. Pulsa Esc o usa /observeui stop.",
+  "screen.totem-vanilla-tweaks.observer_view": "Vista de observador",
+  "screen.totem-vanilla-tweaks.observer_view.exit": "ESC: dejar de observar",
+  "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
+  "key.deadrecall.sort_backpack": "Ordenar mochila",
+  "message.deadrecall.sort_backpack.success": "¡Mochila ordenada!",
+  "message.deadrecall.sort_backpack.need_backpack": "Usa el atajo de ordenar mientras haya abierta una pantalla de contenedor"
+}

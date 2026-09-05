@@ -8,18 +8,18 @@ group = project.maven_group
 base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
-        .getOrElse('../TotemCore/build/libs/totem-core-0.7.16.jar'))
+        .getOrElse('../TotemCore/build/libs/totem-core-0.7.17.jar'))
 def observerIntegrationJars = [
         remnant   : file(providers.gradleProperty('totemRemnantJar')
-                .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.16.jar')),
+                .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.20.jar')),
         automata  : file(providers.gradleProperty('totemAutomataJar')
-                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.18.jar')),
+                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.23.jar')),
         nexus     : file(providers.gradleProperty('totemNexusJar')
-                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.13.jar')),
+                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.14.jar')),
         villagers : file(providers.gradleProperty('totemVillagersJar')
-                .getOrElse('../TotemVillagers/build/libs/totem-villagers-0.1.33.jar')),
+                .getOrElse('../TotemVillagers/build/libs/totem-villagers-0.1.35.jar')),
         locksmith : file(providers.gradleProperty('totemLocksmithJar')
-                .getOrElse('../TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar'))
+                .getOrElse('../TotemLocksmith/build/libs/totem-locksmith-0.1.9.jar'))
 ]
 
 def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
