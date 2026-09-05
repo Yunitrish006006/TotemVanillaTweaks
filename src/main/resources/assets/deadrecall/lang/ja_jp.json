@@ -1,0 +1,19 @@
+{
+  "advancements.deadrecall.vanilla_tweaks_root.title": "Totemバニラ調整",
+  "advancements.deadrecall.vanilla_tweaks_root.description": "書見台を作り、Totemガイドまたは本で記録する。",
+  "advancements.deadrecall.vanilla_tweaks_manual.title": "小さな変更を記録する",
+  "advancements.deadrecall.vanilla_tweaks_manual.description": "書見台にガイドまたは本を使用し、バニラ調整手法ガイドを入手する。",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.title": "書見台の再訪",
+  "advancements.deadrecall.vanilla_tweaks_craft_lectern.description": "変更されたレシピで書見台を作る。",
+  "book.deadrecall.vanilla_tweaks_manual.title": "バニラ調整手法ガイド",
+  "book.deadrecall.vanilla_tweaks_manual.page.1": "インベントリ\n\n開いているメニューのプレイヤー側またはコンテナ側にカーソルを合わせ、バックパック整理キー（初期設定はマウス中央）を押します。サーバーが対象を検証します。",
+  "book.deadrecall.vanilla_tweaks_manual.page.2": "ワールド\n\n書見台にはハーフブロック4個と本1冊を使います。本棚は模様入りの本棚になり、濡れたコンクリートパウダーは固まり、ホッパーで精錬した出力からはレシピ経験値が得られます。",
+  "book.deadrecall.vanilla_tweaks_manual.page.3": "スケルトンの矢筒\n\n基本の予備矢はイージーで3～5本、ノーマルで5～8本、ハードで8～12本です。ノーマルは追加で最大2本、ハードは最大4本を抽選します。各追加矢の確率にはバニラのローカル難易度の特別倍率を使用するため、成熟した地域ではおよそ3～5本、7～10本、12～16本が上限です。矢は回収でき、矢が尽きた射手は近接攻撃に切り替わります。対象の変更はエンチャントを参照してください。",
+  "book.deadrecall.vanilla_tweaks_manual.page.4": "オブザーバービュー\n\nスペクテイターモードで/observeui <player>を使用します。対応するバニラUIは元のScreenを使用し、Totem UIは所有modの本番用Screenを読み取り専用で使用します。カーソルは同期されます。未送信のチャット、キー、その他の私用データは決して送信されません。非対応の画面は状態のみ表示します。Escを押すか/observeui stopを使用してください。",
+  "screen.totem-vanilla-tweaks.observer_view": "オブザーバービュー",
+  "screen.totem-vanilla-tweaks.observer_view.exit": "ESC: 観察を停止",
+  "key.category.totem-vanilla-tweaks.category": "Totemバニラ調整",
+  "key.deadrecall.sort_backpack": "バックパックを整理",
+  "message.deadrecall.sort_backpack.success": "バックパックを整理しました！",
+  "message.deadrecall.sort_backpack.need_backpack": "コンテナ画面を開いている間に整理ショートカットを使用してください"
+}
