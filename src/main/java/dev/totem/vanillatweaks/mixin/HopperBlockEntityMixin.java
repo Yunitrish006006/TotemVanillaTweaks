@@ -20,7 +20,7 @@ public abstract class HopperBlockEntityMixin {
     private static final int FURNACE_RESULT_SLOT = 2;
 
     @Inject(method = "tryTakeInItemFromSlot", at = @At("RETURN"))
-    private static void deadrecall$popFurnaceExperienceWhenHopperTakesResult(
+    private static void totem$popFurnaceExperienceWhenHopperTakesResult(
             Hopper hopper,
             Container source,
             int slot,
@@ -41,7 +41,7 @@ public abstract class HopperBlockEntityMixin {
         Vec3 orbPos = new Vec3(hopper.getLevelX(), hopper.getLevelY() + 0.25D, hopper.getLevelZ());
         List<?> awardedRecipes = furnace.getRecipesToAwardAndPopExperience(serverLevel, orbPos);
         if (!awardedRecipes.isEmpty()) {
-            ((AbstractFurnaceBlockEntityAccessor) furnace).deadrecall$getRecipesUsed().clear();
+            ((AbstractFurnaceBlockEntityAccessor) furnace).totem$getRecipesUsed().clear();
             furnace.setChanged();
         }
     }

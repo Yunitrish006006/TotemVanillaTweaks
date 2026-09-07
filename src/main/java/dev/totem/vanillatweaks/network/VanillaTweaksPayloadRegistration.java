@@ -33,7 +33,6 @@ public final class VanillaTweaksPayloadRegistration {
         PayloadTypeRegistry.serverboundPlay().register(SortBackpackPayload.TYPE, SortBackpackPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(SortBackpackPayload.TYPE,
                 (payload, context) -> context.server().execute(() -> ContainerSortService.sortOpenContainer(context.player(), payload.target())));
-
         PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.ScreenState.TYPE, ObserverPayloads.ScreenState.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ObserverPayloads.Stop.TYPE, ObserverPayloads.Stop.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ObserverPayloads.ScreenRelay.TYPE, ObserverPayloads.ScreenRelay.CODEC);

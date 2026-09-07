@@ -23,6 +23,6 @@ public final class TotemVanillaTweaks implements ModInitializer {
         ObserverSessionManager.register();
         BookshelfInventoryRule.register();
         SkeletonAmmo.register();
-        LOGGER.info("TotemVanillaTweaks initialized without DeadRecall implementation dependency");
+        LOGGER.info("TotemVanillaTweaks initialized");
     }
 }

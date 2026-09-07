@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemEntity.class)
 public abstract class ConcretePowderItemEntityMixin {
     @Inject(method = "tick", at = @At("TAIL"))
-    private void deadrecall$hardenConcretePowderInWater(CallbackInfo ci) {
+    private void totem$hardenConcretePowderInWater(CallbackInfo ci) {
         ItemEntity itemEntity = (ItemEntity) (Object) this;
         if (!(itemEntity.level() instanceof ServerLevel)) {
             return;

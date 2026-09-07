@@ -1,8 +1,11 @@
 {
-  "parent": "deadrecall:root",
+  "parent": "totem:root",
   "criteria": {
     "crafted_lectern": {
-      "trigger": "minecraft:impossible"
+      "conditions": {
+        "recipe_id": "minecraft:lectern"
+      },
+      "trigger": "minecraft:recipe_crafted"
     }
   },
   "display": {

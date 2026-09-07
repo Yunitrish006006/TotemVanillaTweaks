@@ -40,12 +40,12 @@ concurrency:
 env:
   MODULE_ID: totem-vanilla-tweaks
   # Match the module-owned Observer contract used by the normal build/E2E gate.
-  CORE_REF: b0b57bc98a98140a1c12a660a33952ea61167278
+  CORE_REF: f87cd10fe8aefce77925b9e75dad237f17f38966
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # The former first-party TotemCore project/version IDs are no longer public.
   # Keep this an exact external dependency instead of guessing a same-name project.
-  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.16.jar
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.18.jar
 
 jobs:
   publish:
@@ -203,7 +203,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemExcavation
-          ref: 6b54011195b81ec9a9a09146d162ba303ebd8ee4
+          ref: f40b94fd5d9de8b47534343c76a95f62926d2b1b
           path: .lockstep/TotemExcavation
           persist-credentials: false
 
@@ -212,7 +212,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
+          ref: 1d89395f93d8ea817947db4653919a11355eb548
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -221,7 +221,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemAutomata
-          ref: b007eeb0ef0417804fe2abb25524842480419ae1
+          ref: cc4bdb022615faad73bc9e5c0ef6d52b9d0970e6
           path: .lockstep/TotemAutomata
           persist-credentials: false
 
@@ -230,7 +230,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 781c4593b03c6d620c5bca575a69053612aef240
+          ref: 4ea96cba02bf6e07489992e3c40d4fbfeccc18aa
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -239,7 +239,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemVillagers
-          ref: c4d37815c45b86f102939ec5e43b171692a406e0
+          ref: 615f83c5c3534a40e6ae7a2a0713390512f8b64c
           path: .lockstep/TotemVillagers
           persist-credentials: false
 
@@ -248,7 +248,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemLocksmith
-          ref: c89d380b88b10a3f0f55044e04266bc8ada70357
+          ref: 9e8e25d44887a33839dc2a3b92a424ca4b931e00
           path: .lockstep/TotemLocksmith
           persist-credentials: false
 
@@ -263,12 +263,12 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a ./gradlew \
-            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.16.jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.13.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
 
       - name: Verify release cross-module integration screenshots
@@ -309,8 +309,8 @@ jobs:
             || fail_release_build 'checked-out mod_version does not match the resolved release version.'
           chmod +x gradlew .lockstep/TotemCore/gradlew
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          [[ "$core" == 0.7.16 ]] \
-            || fail_release_build 'pinned TotemCore checkout is not version 0.7.16.'
+          [[ "$core" == 0.7.18 ]] \
+            || fail_release_build 'pinned TotemCore checkout is not version 0.7.18.'
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
           [[ -f "$core_jar" ]] \
             || fail_release_build 'pinned TotemCore production JAR is missing.'
@@ -357,7 +357,7 @@ jobs:
           if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
             fail_release 'release JAR has no readable fabric.mod.json.'
           fi
-          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.16 <0.8.0' \
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.18 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
             /tmp/fabric.mod.json >/dev/null; then
             fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
@@ -421,7 +421,7 @@ jobs:
           core_dependency_file="${core_archive}-${core_version}.jar"
           core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
           if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
-            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.16.jar.'
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.18.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"

@@ -22,7 +22,7 @@ import java.util.List;
 
 public final class ConcretePowderItemHardeningGameTest {
     private static final BlockPos ITEM_POS = new BlockPos(2, 2, 2);
-    private static final Component TEST_NAME = Component.literal("DeadRecall concrete powder GameTest");
+    private static final Component TEST_NAME = Component.literal("Totem concrete powder GameTest");
     private static final int STRESS_ENTITY_COUNT = 512;
 
     @GameTest(maxTicks = 40)
@@ -139,7 +139,7 @@ public final class ConcretePowderItemHardeningGameTest {
         for (int index = 0; index < STRESS_ENTITY_COUNT; index++) {
             boolean supportedPowder = index % 2 == 0;
             ItemStack stack = new ItemStack(item(supportedPowder ? "red_concrete_powder" : "stone"));
-            stack.set(DataComponents.CUSTOM_NAME, Component.literal("DeadRecall concrete stress " + index));
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal("Totem concrete stress " + index));
 
             ItemEntity entity = spawn(helper, ITEM_POS, stack, Vec3.ZERO);
             entity.setNoGravity(true);

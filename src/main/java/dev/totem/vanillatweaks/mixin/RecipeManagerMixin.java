@@ -15,7 +15,7 @@ import java.util.List;
 public abstract class RecipeManagerMixin {
 
     @Unique
-    private static final Identifier deadrecall$vanillaBookshelfRecipe = Identifier.withDefaultNamespace("bookshelf");
+    private static final Identifier totem$vanillaBookshelfRecipe = Identifier.withDefaultNamespace("bookshelf");
 
     /**
      * 在配方套用時移除原版書櫃配方（minecraft:bookshelf）。
@@ -25,15 +25,15 @@ public abstract class RecipeManagerMixin {
             at = @At("HEAD"),
             argsOnly = true
     )
-    private RecipeMap deadrecall$removeVanillaBookshelfRecipe(RecipeMap recipes) {
+    private RecipeMap totem$removeVanillaBookshelfRecipe(RecipeMap recipes) {
         List<RecipeHolder<?>> filtered = recipes.values().stream()
-                .filter(holder -> !deadrecall$isVanillaBookshelfRecipe(holder))
+                .filter(holder -> !totem$isVanillaBookshelfRecipe(holder))
                 .toList();
         return RecipeMap.create(filtered);
     }
 
     @Unique
-    private boolean deadrecall$isVanillaBookshelfRecipe(RecipeHolder<?> holder) {
-        return holder.id().identifier().equals(deadrecall$vanillaBookshelfRecipe);
+    private boolean totem$isVanillaBookshelfRecipe(RecipeHolder<?> holder) {
+        return holder.id().identifier().equals(totem$vanillaBookshelfRecipe);
     }
 }

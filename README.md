@@ -32,7 +32,7 @@ Client 與 Server 都放入：
 
 Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
 提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。
-使用 DeadRecall 整合 JAR 時不要再安裝獨立 TotemVanillaTweaks。
+舊整合 JAR 不應再與獨立 TotemVanillaTweaks 並用。
 
 ## Spectator Observer View（protocol v4）
 
@@ -107,7 +107,7 @@ metadata-only fallback 與本地 semantic reconstruction，並保存 native-scal
 
 ## 容器整理
 
-預設按鍵為滑鼠中鍵，可在「設定 → 按鍵綁定 → DeadRecall」更改。
+預設按鍵為滑鼠中鍵，可在「設定 → 按鍵綁定 → Totem Vanilla Tweaks」更改。
 
 1. 開啟物品欄或容器 GUI。
 2. 把游標移到要整理的一側。

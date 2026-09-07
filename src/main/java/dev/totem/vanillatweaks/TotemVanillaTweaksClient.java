@@ -42,7 +42,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
                 Identifier.fromNamespaceAndPath(TotemVanillaTweaks.MOD_ID, "category")
         );
         sortBackpackKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.deadrecall.sort_backpack",
+                "key.totem.sort_backpack",
                 InputConstants.Type.MOUSE,
                 GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
                 category

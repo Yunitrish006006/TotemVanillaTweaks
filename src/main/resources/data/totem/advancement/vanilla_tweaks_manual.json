@@ -1,5 +1,5 @@
 {
-  "parent": "deadrecall:vanilla_tweaks_root",
+  "parent": "totem:vanilla_tweaks_root",
   "criteria": {
     "has_manual": {
       "trigger": "minecraft:impossible"

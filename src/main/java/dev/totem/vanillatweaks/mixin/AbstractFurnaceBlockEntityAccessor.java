@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(AbstractFurnaceBlockEntity.class)
 public interface AbstractFurnaceBlockEntityAccessor {
     @Accessor("recipesUsed")
-    Reference2IntOpenHashMap<ResourceKey<Recipe<?>>> deadrecall$getRecipesUsed();
+    Reference2IntOpenHashMap<ResourceKey<Recipe<?>>> totem$getRecipesUsed();
 }

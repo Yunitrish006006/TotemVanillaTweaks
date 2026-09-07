@@ -1,5 +1,22 @@
 {
   "item.totem.vanilla_tweaks.cooked_pufferfish": "Cooked Pufferfish",
   "item.totem.vanilla_tweaks.smoked_rotten_flesh": "Smoked Rotten Flesh",
-  "block.totem.vanilla_tweaks.gravel_iron_ore": "Gravel Iron Ore"
+  "block.totem.vanilla_tweaks.gravel_iron_ore": "Gravel Iron Ore",
+  "advancements.totem.vanilla_tweaks_root.title": "Totem Vanilla Tweaks",
+  "advancements.totem.vanilla_tweaks_root.description": "Craft a Lectern, then record it with a Totem guide or a book.",
+  "advancements.totem.vanilla_tweaks_manual.title": "Record the Small Changes",
+  "advancements.totem.vanilla_tweaks_manual.description": "Use a guide or book on a Lectern to obtain the Vanilla Tweaks method guide.",
+  "advancements.totem.vanilla_tweaks_craft_lectern.title": "Lectern Revisited",
+  "advancements.totem.vanilla_tweaks_craft_lectern.description": "Craft a lectern with the revised recipe.",
+  "book.totem.vanilla_tweaks_manual.title": "Vanilla Tweaks Method Guide",
+  "book.totem.vanilla_tweaks_manual.page.1": "INVENTORIES\n\nHover the player or container side of an open menu and press the Sort Backpack key (middle mouse by default). The server validates the target.",
+  "book.totem.vanilla_tweaks_manual.page.2": "WORLD\n\nLecterns use four slabs and one book. Bookshelves become Chiseled Bookshelves; wet Concrete Powder hardens, and hopper-smelted output releases recipe XP.",
+  "book.totem.vanilla_tweaks_manual.page.3": "SKELETON QUIVERS\n\nBase reserves are Easy 3–5, Normal 5–8, Hard 8–12. Normal rolls up to 2 extra arrows and Hard up to 4; each extra arrow uses vanilla local difficulty's special multiplier as its chance, so mature regions top out around 3–5, 7–10, and 12–16. Arrows are collectible and empty archers switch to melee. See Enchanting for target changes.",
+  "book.totem.vanilla_tweaks_manual.page.4": "OBSERVER VIEW\n\nUse /observeui <player> in Spectator mode. Supported vanilla UI uses its original Screen; Totem UI uses its owning mod's production Screen, read-only. The cursor is synced. Unsent chat, keys, and other private data are never sent. Unsupported screens show status only. Press Esc or use /observeui stop.",
+  "screen.totem-vanilla-tweaks.observer_view": "Observer View",
+  "screen.totem-vanilla-tweaks.observer_view.exit": "ESC: stop observing",
+  "key.category.totem-vanilla-tweaks.category": "Totem Vanilla Tweaks",
+  "key.totem.sort_backpack": "Sort Backpack",
+  "message.totem.sort_backpack.success": "Backpack sorted!",
+  "message.totem.sort_backpack.need_backpack": "Use the sort shortcut while a container screen is open"
 }

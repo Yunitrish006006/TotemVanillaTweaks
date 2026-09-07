@@ -59,7 +59,7 @@ final class ObserverOwnedE2eSnapshots {
         var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
                 "lodestone", name, "minecraft:overworld", 10, 64, 10,
                 TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID,
-                nexusEntries("message.deadrecall.space_unit.interface_bonus.compass"));
+                nexusEntries("message.totem.space_unit.interface_bonus.compass"));
         return open("nexus", "compass", sequence, "Nexus Compass", List.of(), new int[0],
                 Map.of("selected_unit_id", NEXUS_TARGET_ID.toString()),
                 encode(SpaceUnitMapPayload.CODEC, payload));
@@ -69,7 +69,7 @@ final class ObserverOwnedE2eSnapshots {
         var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
                 "local", name, "minecraft:overworld", 10, 64, 10,
                 TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID,
-                nexusEntries("message.deadrecall.space_unit.interface_bonus.filled_map.active"));
+                nexusEntries("message.totem.space_unit.interface_bonus.filled_map.active"));
         return open("nexus", "map", sequence, "Nexus Map", List.of(), new int[0],
                 Map.of(
                         "selected_unit_id", NEXUS_TARGET_ID.toString(),
@@ -84,7 +84,7 @@ final class ObserverOwnedE2eSnapshots {
                 "lodestone", name, "minecraft:overworld", 10, 64, 10,
                 TeleportInterfaceType.BOOK, SpaceUnitMapPayload.NO_MAP_ID,
                 List.of(nexusEntry(NEXUS_SOURCE_ID, name, 10, 10,
-                        "message.deadrecall.space_unit.interface_bonus.book.active", false)));
+                        "message.totem.space_unit.interface_bonus.book.active", false)));
         return open("nexus", "management", sequence, "Nexus Management", List.of(), new int[0], Map.of(),
                 encode(SpaceUnitMapPayload.CODEC, payload));
     }
@@ -108,7 +108,7 @@ final class ObserverOwnedE2eSnapshots {
                 0, 0,
                 true, bonusMessage,
                 false, true, true, 1, 2, canTeleport,
-                canTeleport ? "" : "message.deadrecall.space_unit.teleport_blocked.same_source");
+                canTeleport ? "" : "message.totem.space_unit.teleport_blocked.same_source");
     }
 
     static ObserverOwnedScreenPayloads.State nexusFriends(long sequence, String name) {

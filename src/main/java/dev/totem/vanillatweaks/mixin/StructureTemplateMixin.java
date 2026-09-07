@@ -26,7 +26,7 @@ public abstract class StructureTemplateMixin {
     private static final int CHISELED_BOOKSHELF_SLOT_COUNT = 6;
 
     @Inject(method = "processBlockInfos", at = @At("RETURN"), cancellable = true)
-    private static void deadrecall$replaceBookshelfBlockInfos(
+    private static void totem$replaceBookshelfBlockInfos(
             ServerLevelAccessor level,
             BlockPos origin,
             BlockPos pivot,
@@ -46,15 +46,15 @@ public abstract class StructureTemplateMixin {
                 continue;
             }
 
-            BlockState bookshelfState = deadrecall$filledBookshelfState();
-            CompoundTag bookshelfNbt = deadrecall$filledBookshelfNbt(level, info.pos(), bookshelfState);
+            BlockState bookshelfState = totem$filledBookshelfState();
+            CompoundTag bookshelfNbt = totem$filledBookshelfNbt(level, info.pos(), bookshelfState);
             replaced.add(new StructureTemplate.StructureBlockInfo(info.pos(), bookshelfState, bookshelfNbt));
         }
 
         cir.setReturnValue(replaced);
     }
 
-    private static BlockState deadrecall$filledBookshelfState() {
+    private static BlockState totem$filledBookshelfState() {
         BlockState state = Blocks.CHISELED_BOOKSHELF.defaultBlockState();
         for (var occupiedProperty : ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES) {
             state = state.setValue(occupiedProperty, true);
@@ -62,7 +62,7 @@ public abstract class StructureTemplateMixin {
         return state;
     }
 
-    private static CompoundTag deadrecall$filledBookshelfNbt(
+    private static CompoundTag totem$filledBookshelfNbt(
             ServerLevelAccessor level,
             BlockPos pos,
             BlockState state

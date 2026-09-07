@@ -12,12 +12,12 @@ public final class VanillaTweaksManual {
     private static final TotemManualSection SECTION = new TotemManualSection(
             Identifier.fromNamespaceAndPath("totem", "vanilla_tweaks/manual"),
             700,
-            "book.deadrecall.vanilla_tweaks_manual.title",
+            "book.totem.vanilla_tweaks_manual.title",
             List.of(
-                    "book.deadrecall.vanilla_tweaks_manual.page.1",
-                    "book.deadrecall.vanilla_tweaks_manual.page.2",
-                    "book.deadrecall.vanilla_tweaks_manual.page.3",
-                    "book.deadrecall.vanilla_tweaks_manual.page.4"
+                    "book.totem.vanilla_tweaks_manual.page.1",
+                    "book.totem.vanilla_tweaks_manual.page.2",
+                    "book.totem.vanilla_tweaks_manual.page.3",
+                    "book.totem.vanilla_tweaks_manual.page.4"
             )
     );
 
@@ -27,7 +27,7 @@ public final class VanillaTweaksManual {
     public static void register() {
         TotemModuleManualSource.register(
                 SECTION,
-                Identifier.fromNamespaceAndPath("deadrecall", "vanilla_tweaks_manual"),
+                Identifier.fromNamespaceAndPath("totem", "vanilla_tweaks_manual"),
                 state -> state.is(Blocks.LECTERN)
         );
     }

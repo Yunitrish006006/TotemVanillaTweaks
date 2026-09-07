@@ -1,8 +1,11 @@
 {
-  "parent": "deadrecall:vanilla_tweaks_manual",
+  "parent": "totem:vanilla_tweaks_manual",
   "criteria": {
     "crafted_lectern": {
-      "trigger": "minecraft:impossible"
+      "conditions": {
+        "recipe_id": "minecraft:lectern"
+      },
+      "trigger": "minecraft:recipe_crafted"
     }
   },
   "display": {

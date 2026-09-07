@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: b0b57bc98a98140a1c12a660a33952ea61167278
+          ref: f87cd10fe8aefce77925b9e75dad237f17f38966
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemExcavation
-          ref: 6b54011195b81ec9a9a09146d162ba303ebd8ee4
+          ref: f40b94fd5d9de8b47534343c76a95f62926d2b1b
           path: .lockstep/TotemExcavation
           persist-credentials: false
 
@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemRemnant
-          ref: a3f9231b50c6c55f03a8c145e80644bd6cff7021
+          ref: 1d89395f93d8ea817947db4653919a11355eb548
           path: .lockstep/TotemRemnant
           persist-credentials: false
 
@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemAutomata
-          ref: b007eeb0ef0417804fe2abb25524842480419ae1
+          ref: cc4bdb022615faad73bc9e5c0ef6d52b9d0970e6
           path: .lockstep/TotemAutomata
           persist-credentials: false
 
@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 781c4593b03c6d620c5bca575a69053612aef240
+          ref: 4ea96cba02bf6e07489992e3c40d4fbfeccc18aa
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -75,7 +75,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemVillagers
-          ref: c4d37815c45b86f102939ec5e43b171692a406e0
+          ref: 615f83c5c3534a40e6ae7a2a0713390512f8b64c
           path: .lockstep/TotemVillagers
           persist-credentials: false
 
@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemLocksmith
-          ref: c89d380b88b10a3f0f55044e04266bc8ada70357
+          ref: 9e8e25d44887a33839dc2a3b92a424ca4b931e00
           path: .lockstep/TotemLocksmith
           persist-credentials: false
 
@@ -96,14 +96,14 @@ jobs:
         run: |
           set -euo pipefail
           core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.16'
+          test "$core_version" = '0.7.18'
           core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
           ./gradlew -PtotemCoreJar="$core_jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.13.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             test assemble compileGametestJava compileE2eJava processE2eResources --no-daemon --stacktrace
 
       - name: Verify Observer test gate parity
@@ -144,14 +144,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.16.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
           xvfb-run -a ./gradlew \
             -PtotemCoreJar="$core_jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.13.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
 
       - name: Verify cross-module integration screenshots
@@ -205,11 +205,11 @@ jobs:
             \( -name 'launch.cfg' -o -name 'runE2eTarget.args' -o -name 'runE2eObserver.args' \) \
             -delete
           ./gradlew -PtotemCoreJar="$core_jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.13.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             -Pe2eLaunchInputsDir="$launch_dir" \
             --project-cache-dir "$client_launch_cache" \
             prepareE2eClientLaunchInputs \
@@ -263,11 +263,11 @@ jobs:
           trap cleanup EXIT
 
           ./gradlew -PtotemCoreJar="$core_jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.16.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.18.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.13.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.33.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.6.jar" \
+            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
+            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
+            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             --project-cache-dir "${GITHUB_WORKSPACE}/build/e2e/gradle-server" \
             runE2eServer --no-daemon --stacktrace > build/e2e/server.log 2>&1 &
           server_pid=$!

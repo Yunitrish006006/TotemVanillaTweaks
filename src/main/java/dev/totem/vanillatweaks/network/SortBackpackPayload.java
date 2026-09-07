@@ -13,7 +13,7 @@ public record SortBackpackPayload(Target target) implements CustomPacketPayload 
     }
 
     public static final Type<SortBackpackPayload> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath("deadrecall", "sort_backpack"));
+            new Type<>(Identifier.fromNamespaceAndPath("totem", "sort_backpack"));
 
     public static final StreamCodec<FriendlyByteBuf, SortBackpackPayload> CODEC =
             StreamCodec.of(

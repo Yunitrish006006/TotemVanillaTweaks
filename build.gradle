@@ -316,8 +316,8 @@ tasks.named('processResources', ProcessResources) {
     // zh_cn intentionally reuses zh_tw; maintain only the Traditional Chinese source.
     doLast {
         copy {
-            from(file('src/main/resources/assets/deadrecall/lang/zh_tw.json'))
-            into(file("${destinationDir}/assets/deadrecall/lang"))
+            from(file('src/main/resources/assets/totem/lang/zh_tw.json'))
+            into(file("${destinationDir}/assets/totem/lang"))
             rename { 'zh_cn.json' }
         }
     }
