@@ -516,7 +516,7 @@ for checkout in \
   'TotemExcavation f40b94fd5d9de8b47534343c76a95f62926d2b1b 0.1.13' \
   'TotemRemnant 1d89395f93d8ea817947db4653919a11355eb548 0.2.21' \
   'TotemAutomata cc4bdb022615faad73bc9e5c0ef6d52b9d0970e6 0.1.24' \
-  'TotemNexus 4ea96cba02bf6e07489992e3c40d4fbfeccc18aa 0.3.15' \
+  'TotemNexus 93bb7387e3ed1f77401bc1ebf35b3cbab6877a0f 0.3.16' \
   'TotemVillagers 615f83c5c3534a40e6ae7a2a0713390512f8b64c 0.1.36' \
   'TotemLocksmith 9e8e25d44887a33839dc2a3b92a424ca4b931e00 0.1.10'; do
   if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then

@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 4ea96cba02bf6e07489992e3c40d4fbfeccc18aa
+          ref: 93bb7387e3ed1f77401bc1ebf35b3cbab6877a0f
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -103,7 +103,7 @@ jobs:
             -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar" \
             -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
             -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.15.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.16.jar" \
             -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
             -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
