@@ -2,7 +2,7 @@
   "version": "0.1.26",
   "release_ref": "3437956bcedab557f2f7f73c61450d91198e5386",
   "release_type": "release",
-  "run": "34247854183",
-  "status": "failure",
-  "publish_step": "failure"
+  "run": "34248614333",
+  "status": "success",
+  "publish_step": "success"
 }
