@@ -5,22 +5,50 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.HopperMenu;
+import net.minecraft.world.inventory.DispenserMenu;
+import net.minecraft.world.inventory.ShulkerBoxMenu;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.FurnaceMenu;
+import net.minecraft.world.inventory.BlastFurnaceMenu;
+import net.minecraft.world.inventory.SmokerMenu;
+import net.minecraft.world.inventory.AnvilMenu;
+import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.inventory.BrewingStandMenu;
+import net.minecraft.world.inventory.BeaconMenu;
+import net.minecraft.world.inventory.CartographyTableMenu;
+import net.minecraft.world.inventory.CrafterMenu;
+import net.minecraft.world.inventory.EnchantmentMenu;
+import net.minecraft.world.inventory.GrindstoneMenu;
+import net.minecraft.world.inventory.HorseInventoryMenu;
+import net.minecraft.world.inventory.LoomMenu;
+import net.minecraft.world.inventory.SmithingMenu;
+import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /** Server-authoritative sorting for the container or player side of an open menu. */
 public final class ContainerSortService {
     private static final int PLAYER_HOTBAR_SLOT_COUNT = 9;
+    private static final Set<Class<?>> PLAYER_SORT_MENUS = Set.of(
+            InventoryMenu.class, CraftingMenu.class, FurnaceMenu.class, BlastFurnaceMenu.class,
+            SmokerMenu.class, AnvilMenu.class, MerchantMenu.class, BrewingStandMenu.class,
+            BeaconMenu.class, CartographyTableMenu.class, CrafterMenu.class, EnchantmentMenu.class,
+            GrindstoneMenu.class, HorseInventoryMenu.class, LoomMenu.class, SmithingMenu.class,
+            StonecutterMenu.class
+    );
 
     private ContainerSortService() {
     }
 
     public static boolean sortOpenContainer(ServerPlayer player, SortBackpackPayload.Target target) {
         AbstractContainerMenu menu = player.containerMenu;
-        if (menu == null) {
+        if (menu == null || !menu.stillValid(player)) {
             return false;
         }
 
@@ -28,9 +56,9 @@ public final class ContainerSortService {
             return sortPlayerInventorySlots(menu, player);
         }
 
-        // The inventory screen has no independent top container to sort. Reject a forged
-        // CONTAINER request instead of allowing it to rewrite crafting or equipment slots.
-        if (menu instanceof InventoryMenu) {
+        // Slot layout alone cannot distinguish storage from recipe inputs/results, or
+        // custom containers whose setItem serializes/compacts the entire inventory.
+        if (!isStorageMenu(menu)) {
             return false;
         }
 
@@ -39,7 +67,7 @@ public final class ContainerSortService {
             return false;
         }
 
-        boolean sorted = sortSlotRange(menu, 0, topSlotCount);
+        boolean sorted = sortSlotRange(menu, player, 0, topSlotCount);
         if (sorted) {
             menu.broadcastChanges();
         }
@@ -47,6 +75,11 @@ public final class ContainerSortService {
     }
 
     private static boolean sortPlayerInventorySlots(AbstractContainerMenu menu, ServerPlayer player) {
+        // A custom menu may track an inventory ItemStack (e.g. an open backpack).
+        // Replacing that stack would detach its persisted contents from the menu.
+        if (!isStorageMenu(menu) && !PLAYER_SORT_MENUS.contains(menu.getClass())) {
+            return false;
+        }
         List<Integer> playerSlots = new ArrayList<>();
         int nonEquipmentSlotCount = player.getInventory().getNonEquipmentItems().size();
         for (int i = 0; i < menu.slots.size(); i++) {
@@ -75,9 +108,17 @@ public final class ContainerSortService {
             return false;
         }
 
-        applySortedStacks(menu, playerSlots, stacks);
+        if (!applySortedStacks(menu, player, playerSlots, stacks)) {
+            return false;
+        }
         menu.broadcastChanges();
         return true;
+    }
+
+    private static boolean isStorageMenu(AbstractContainerMenu menu) {
+        Class<?> type = menu.getClass();
+        return type == ChestMenu.class || type == HopperMenu.class
+                || type == DispenserMenu.class || type == ShulkerBoxMenu.class;
     }
 
     private static int findTopSlotCount(AbstractContainerMenu menu, ServerPlayer player) {
@@ -91,7 +132,7 @@ public final class ContainerSortService {
         return count;
     }
 
-    private static boolean sortSlotRange(AbstractContainerMenu menu, int startInclusive, int endExclusive) {
+    private static boolean sortSlotRange(AbstractContainerMenu menu, ServerPlayer player, int startInclusive, int endExclusive) {
         List<Integer> slotIndexes = new ArrayList<>();
         List<ItemStack> stacks = new ArrayList<>();
         for (int i = startInclusive; i < endExclusive; i++) {
@@ -106,12 +147,12 @@ public final class ContainerSortService {
             return false;
         }
 
-        applySortedStacks(menu, slotIndexes, stacks);
-        return true;
+        return applySortedStacks(menu, player, slotIndexes, stacks);
     }
 
-    private static void applySortedStacks(
+    private static boolean applySortedStacks(
             AbstractContainerMenu menu,
+            ServerPlayer player,
             List<Integer> targetSlots,
             List<ItemStack> stacks
     ) {
@@ -126,10 +167,29 @@ public final class ContainerSortService {
         });
 
         List<ItemStack> compacted = compactStacks(stacks);
+        if (compacted.size() > targetSlots.size()) {
+            return false;
+        }
+        // Validate the entire proposal before the first write. A late rejection must
+        // never leave half the inventory overwritten or bypass a restricted slot.
+        for (int i = 0; i < targetSlots.size(); i++) {
+            Slot slot = menu.getSlot(targetSlots.get(i));
+            ItemStack proposed = i < compacted.size() ? compacted.get(i) : ItemStack.EMPTY;
+            if (!slot.isActive() || !slot.mayPickup(player)) {
+                return false;
+            }
+            if (!proposed.isEmpty() && (!slot.mayPlace(proposed)
+                    || !slot.container.canPlaceItem(slot.getContainerSlot(), proposed)
+                    || proposed.getCount() > slot.getMaxStackSize(proposed)
+                    || proposed.getCount() > slot.container.getMaxStackSize(proposed))) {
+                return false;
+            }
+        }
         for (int i = 0; i < targetSlots.size(); i++) {
             ItemStack stack = i < compacted.size() ? compacted.get(i).copy() : ItemStack.EMPTY;
             menu.getSlot(targetSlots.get(i)).setByPlayer(stack);
         }
+        return true;
     }
 
     private static List<ItemStack> compactStacks(List<ItemStack> stacks) {
