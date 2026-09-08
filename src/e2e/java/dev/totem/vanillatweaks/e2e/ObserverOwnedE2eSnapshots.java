@@ -65,6 +65,16 @@ final class ObserverOwnedE2eSnapshots {
                 encode(SpaceUnitMapPayload.CODEC, payload));
     }
 
+    static ObserverOwnedScreenPayloads.State nexusRecoveryCompass(long sequence, String name) {
+        var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
+                "lodestone", name, "minecraft:overworld", 10, 64, 10,
+                TeleportInterfaceType.RECOVERY_COMPASS, SpaceUnitMapPayload.NO_MAP_ID,
+                nexusEntries("message.totem.space_unit.interface_bonus.recovery_compass.inactive"));
+        return open("nexus", "recovery_compass", sequence, "Nexus Recovery Compass", List.of(), new int[0],
+                Map.of("selected_unit_id", NEXUS_TARGET_ID.toString()),
+                encode(SpaceUnitMapPayload.CODEC, payload));
+    }
+
     static ObserverOwnedScreenPayloads.State nexusMap(long sequence, String name) {
         var payload = new SpaceUnitMapPayload(NEXUS_SOURCE_ID,
                 "local", name, "minecraft:overworld", 10, 64, 10,

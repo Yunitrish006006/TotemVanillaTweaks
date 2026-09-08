@@ -50,6 +50,13 @@ public final class ObserverNexusIntegrationFixture {
                 && ((NexusSpaceUnitMapScreen) screen).compassTeleportPresentationForVisualTest();
     }
 
+    public static boolean isRecoveryCompass(Screen screen) {
+        SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
+        return payload.interfaceType() == TeleportInterfaceType.RECOVERY_COMPASS
+                && payload.mapId() == SpaceUnitMapPayload.NO_MAP_ID
+                && ((NexusSpaceUnitMapScreen) screen).compassTeleportPresentationForVisualTest();
+    }
+
     public static boolean isManagementOnly(Screen screen, TeleportInterfaceType interfaceType) {
         SpaceUnitMapPayload payload = ((NexusSpaceUnitMapScreen) screen).observerPayload();
         return payload.interfaceType() == interfaceType

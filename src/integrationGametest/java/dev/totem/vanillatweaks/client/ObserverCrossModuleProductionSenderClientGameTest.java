@@ -87,11 +87,12 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
                 TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of())));
         exercise(context, provider, compass, "dev.totem.nexus.client.NexusSpaceUnitMapScreen",
                 "owner-present-nexus-compass-production-screen");
-        for (TeleportInterfaceType interfaceType : List.of(
-                TeleportInterfaceType.RECOVERY_COMPASS,
-                TeleportInterfaceType.BOOK)) {
-            verifyNexusManagementOnly(context, provider, interfaceType);
-        }
+        Screen recovery = context.computeOnClient(client -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(
+                UUID.randomUUID(), "local", "Recovery Home", "minecraft:overworld", 1, 64, 1,
+                TeleportInterfaceType.RECOVERY_COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of())));
+        exercise(context, provider, recovery, "dev.totem.nexus.client.NexusSpaceUnitMapScreen",
+                "owner-present-nexus-recovery-compass-production-screen");
+        verifyNexusManagementOnly(context, provider, TeleportInterfaceType.BOOK);
         Screen map = context.computeOnClient(client -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(
                 UUID.randomUUID(), "local", "Home", "minecraft:overworld", 1, 64, 1,
                 TeleportInterfaceType.FILLED_MAP, NEXUS_MAP_ID, List.of())));
@@ -185,7 +186,7 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             return provider.create(new ObserverScreenContext(
                     UUID.randomUUID(), "Target", () -> stopped.set(true)), initial);
         });
-        if (!ObserverOwnedScreenCoordinator.isReadOnlyObserverScreen(handle.screen())) {
+        if (!context.computeOnClient(client -> ObserverOwnedScreenCoordinator.isReadOnlyObserverScreen(handle.screen()))) {
             throw new AssertionError(expectedClass + " Observer mode did not enable read-only ownership");
         }
         context.runOnClient(client -> {
@@ -269,6 +270,9 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
                 case "compass" -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
                         "Remote Compass Home", "minecraft:overworld", 9, 70, 9,
                         TeleportInterfaceType.COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of()));
+                case "recovery_compass" -> new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
+                        "Remote Recovery Home", "minecraft:overworld", 9, 70, 9,
+                        TeleportInterfaceType.RECOVERY_COMPASS, SpaceUnitMapPayload.NO_MAP_ID, List.of()));
                 case "map" -> {
                     Screen map = new NexusSpaceUnitMapScreen(new SpaceUnitMapPayload(UUID.randomUUID(), "local",
                             "Remote Home", "minecraft:overworld", 9, 70, 9,
@@ -338,6 +342,8 @@ public final class ObserverCrossModuleProductionSenderClientGameTest implements 
             case "nexus" -> switch (update.variant()) {
                 case "compass" -> "Remote Compass Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
                         && ObserverNexusIntegrationFixture.isCompass(screen);
+                case "recovery_compass" -> "Remote Recovery Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
+                        && ObserverNexusIntegrationFixture.isRecoveryCompass(screen);
                 case "map" -> "Remote Home".equals(ObserverNexusIntegrationFixture.mapName(screen))
                         && ObserverNexusIntegrationFixture.isFilledMap(screen, NEXUS_MAP_ID)
                         && ObserverNexusIntegrationFixture.hasZoomedMapView(screen);

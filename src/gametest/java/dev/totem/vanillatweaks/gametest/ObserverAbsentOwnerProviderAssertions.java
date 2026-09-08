@@ -43,6 +43,16 @@ final class ObserverAbsentOwnerProviderAssertions {
             for (String name : screenshotNames(family)) {
                 persistForCi(context.takeScreenshot(name), name + ".png");
             }
+            if ("nexus".equals(family)) {
+                context.runOnClient(minecraft -> ObserverOwnedScreenCoordinator.open(new ObserverScreenSnapshot(
+                        "nexus", "recovery_compass", 3, 2L, Component.literal("Recovery Compass unavailable"),
+                        List.of(), new int[0], Map.of(), new byte[0])));
+                context.waitFor(minecraft -> minecraft.gui.screen() instanceof ObserverReadOnlyScreen
+                        && minecraft.gui.screen().getClass().getSimpleName().equals("ObserverMetadataScreen"), 100);
+                context.waitTicks(2);
+                persistForCi(context.takeScreenshot("owner-absent-nexus-recovery-compass-unsupported"),
+                        "owner-absent-nexus-recovery-compass-unsupported.png");
+            }
             context.runOnClient(minecraft -> {
                 ObserverOwnedScreenCoordinator.close(family);
                 applySession(false, new UUID(0L, 0L));

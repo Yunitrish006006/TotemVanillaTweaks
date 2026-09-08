@@ -10,8 +10,8 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 > **0.1.22 Observer 更新：** protocol-native v4／screen protocol v2 現在有
 > 25 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
 > 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
-> 以結構化資料本地重建。TotemNexus 0.3.13 的 owned provider 使用 protocol v3，
-> 分別支援羅盤清單、地圖標記與 management-only 介面；地圖縮放、平移及選點
+> 以結構化資料本地重建。TotemNexus 0.3.16 的 owned provider 使用 protocol v3，
+> 分別支援普通羅盤與回生羅盤目的地清單、地圖標記與書本 management-only 介面；地圖縮放、平移及選點
 > 以有界語意同步，不傳送地圖像素。
 
 ## 安裝
@@ -62,7 +62,7 @@ negotiated semantic family capability：
   `loom`、`cartography`、`beacon`、`sign`、`crafter`、`advancements`、`stats`、
   `horse_inventory`。
 - Totem 整合：`remnant_backpack`、`automata_copper_golem`、`nexus`
-  （compass／map／management／friends／registration variants）、`nexus_death_node_admin`、
+  （compass／recovery_compass／map／management／friends／registration variants）、`nexus_death_node_admin`、
   `locksmith_management`、`villagers_woodcutter`。
 
 `container_slots` 仍負責可以由通用 `AbstractContainerScreen` 槽位資料充分表達的畫面；
