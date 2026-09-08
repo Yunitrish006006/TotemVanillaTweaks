@@ -349,8 +349,8 @@ if ! grep -Fq './gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest 
 fi
 if ! grep -Fq 'production_screenshot_count="$(find "$production_screenshots" -maxdepth 1 -type f -name '\''*.png'\'' | wc -l)"' \
     <<< "$production_step" \
-    || ! grep -Fq 'if [[ "$production_screenshot_count" != 31 ]]; then' <<< "$production_step"; then
-  fail 'Production Client GameTest CI step must require exactly 31 persisted screenshots'
+    || ! grep -Fq 'if [[ "$production_screenshot_count" != 32 ]]; then' <<< "$production_step"; then
+  fail 'Production Client GameTest CI step must require exactly 32 persisted screenshots'
 fi
 if grep -Eq 'continue-on-error|runProductionClientGameTest[^\n]*(\|\|[[:space:]]*true|--exclude-task|[[:space:]]-x[[:space:]])' \
     <<< "$production_step"; then
