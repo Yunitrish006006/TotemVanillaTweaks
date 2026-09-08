@@ -1,6 +1,7 @@
 name: Production Runtime
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -67,7 +68,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 93bb7387e3ed1f77401bc1ebf35b3cbab6877a0f
+          ref: e3f91a19790f9da85494b9ae1d5770dda12e0e43
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -103,7 +104,7 @@ jobs:
             -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar" \
             -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
             -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.16.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.17.jar" \
             -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
             -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
@@ -114,8 +115,8 @@ jobs:
           set -euo pipefail
           integration_screenshots="${GITHUB_WORKSPACE}/build/owner-present-integration-screenshots"
           count="$(find "$integration_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
-          if [[ "$count" != 9 ]]; then
-            echo "Expected exactly 9 owner-present screenshots; found $count." >&2
+          if [[ "$count" != 10 ]]; then
+            echo "Expected exactly 10 owner-present screenshots; found $count." >&2
             exit 1
           fi
 

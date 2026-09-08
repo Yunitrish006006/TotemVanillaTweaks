@@ -245,6 +245,16 @@ fi
 if grep -Eq '^[[:space:]]+test([[:space:]]|$)' "$publish_workflow"; then
   fail 'Modrinth publication preconditions must emit explicit non-secret errors instead of bare test exits'
 fi
+# A candidate dry-run must remain read-only on the default branch and retain
+# the exact artifact/metadata so the publisher result can be reviewed.
+if ! awk '/name: Record publication attempt on main/{getline; print}' "$publish_workflow" \
+    | grep -Fq "steps.release.outputs.dry_run == 'false'"; then
+  fail 'Modrinth dry-runs must not write publication attempts to main'
+fi
+if ! grep -Fq 'build/modrinth-release/validated-metadata.json' "$publish_workflow" \
+    || ! grep -Fq 'name: Upload validated release artifact and metadata' "$publish_workflow"; then
+  fail 'Modrinth validation must retain the release artifact and exact dependency metadata'
+fi
 release_dry_run_filter='(.dry_run // false) | booleans | tostring'
 if ! grep -Fq "jq -er '$release_dry_run_filter'" "$publish_workflow"; then
   fail 'Modrinth release requests must accept false without weakening dry_run boolean validation'
@@ -506,9 +516,9 @@ for integration_workflow in "$workflow" "$production_workflow" "$publish_workflo
     fail "$(basename "$integration_workflow") must build pinned optional modules and run exactly one cross-module gate; found build=$integration_build_count runtime=$integration_runtime_count"
   fi
   if [[ "$(grep -Fc 'build/owner-present-integration-screenshots/*.png' "$integration_workflow" || true)" != 1 \
-      || "$(grep -Fc 'if [[ "$count" != 9 ]]; then' "$integration_workflow" || true)" != 1 \
-      || "$(grep -Fc 'Expected exactly 9 owner-present screenshots; found $count.' "$integration_workflow" || true)" != 1 ]]; then
-    fail "$(basename "$integration_workflow") must separately count and upload exactly eight owner-present screenshots"
+      || "$(grep -Fc 'if [[ "$count" != 10 ]]; then' "$integration_workflow" || true)" != 1 \
+      || "$(grep -Fc 'Expected exactly 10 owner-present screenshots; found $count.' "$integration_workflow" || true)" != 1 ]]; then
+    fail "$(basename "$integration_workflow") must separately count and upload exactly ten owner-present screenshots"
   fi
 done
 for checkout in \
@@ -516,7 +526,7 @@ for checkout in \
   'TotemExcavation f40b94fd5d9de8b47534343c76a95f62926d2b1b 0.1.13' \
   'TotemRemnant 1d89395f93d8ea817947db4653919a11355eb548 0.2.21' \
   'TotemAutomata cc4bdb022615faad73bc9e5c0ef6d52b9d0970e6 0.1.24' \
-  'TotemNexus 93bb7387e3ed1f77401bc1ebf35b3cbab6877a0f 0.3.16' \
+  'TotemNexus e3f91a19790f9da85494b9ae1d5770dda12e0e43 0.3.17' \
   'TotemVillagers 615f83c5c3534a40e6ae7a2a0713390512f8b64c 0.1.36' \
   'TotemLocksmith 9e8e25d44887a33839dc2a3b92a424ca4b931e00 0.1.10'; do
   if ! grep -Fq "assert_checkout $checkout" "$integration_build_script"; then
@@ -716,13 +726,14 @@ if ! grep -Fq '"observer-ui-native-player-inventory-screen.png"' \
   fail 'ObserverUiClientGameTest must persist the native player-inventory semantic screenshot'
 fi
 
-# Nexus is one bridge with five sequential semantic variants and one shared
-# close. Its 23-file contract is deliberately separate from the 7-file family
+# Nexus is one bridge with six sequential semantic variants and a recovery
+# close before the final shared close. Its 29-file contract is deliberately separate from the 7-file family
 # convention above.
 nexus_source="$e2e_source_dir/ObserverNexusE2eBridge.java"
 nexus_ready=('observer-ready-for-nexus-compass.txt')
 nexus_states=(
   'target-native-nexus-compass-state-sent.txt'
+  'target-native-nexus-recovery-compass-state-sent.txt'
   'target-native-nexus-map-state-sent.txt'
   'target-native-nexus-management-state-sent.txt'
   'target-native-nexus-friends-state-sent.txt'
@@ -730,6 +741,7 @@ nexus_states=(
 )
 nexus_ok=(
   'observer-native-nexus-compass-ok.txt'
+  'observer-native-nexus-recovery-compass-ok.txt'
   'observer-native-nexus-map-ok.txt'
   'observer-native-nexus-management-ok.txt'
   'observer-native-nexus-friends-ok.txt'
@@ -737,6 +749,7 @@ nexus_ok=(
 )
 nexus_saved=(
   'observer-native-nexus-compass-saved.txt'
+  'observer-native-nexus-recovery-compass-saved.txt'
   'observer-native-nexus-map-saved.txt'
   'observer-native-nexus-management-saved.txt'
   'observer-native-nexus-friends-saved.txt'
@@ -744,15 +757,18 @@ nexus_saved=(
 )
 nexus_png=(
   'observer-native-nexus-compass.png'
+  'observer-native-nexus-recovery-compass.png'
   'observer-native-nexus-map.png'
   'observer-native-nexus-management.png'
   'observer-native-nexus-friends.png'
   'observer-native-nexus-registration.png'
 )
 nexus_close=('target-native-nexus-close-sent.txt')
-nexus_closed=('observer-native-nexus-closed.txt')
+nexus_closed=('observer-native-nexus-recovery-compass-closed.txt' 'observer-native-nexus-closed.txt')
+nexus_initial=('observer-native-nexus-recovery-compass-initial.txt')
 nexus_evidence=(
   "${nexus_ready[@]}"
+  "${nexus_initial[@]}"
   "${nexus_states[@]}"
   "${nexus_ok[@]}"
   "${nexus_saved[@]}"
@@ -776,7 +792,7 @@ assert_emitted_marker_set 'ObserverNexusE2eBridge close-sent marker' "$nexus_sou
 assert_emitted_marker_set 'ObserverNexusE2eBridge closed marker' "$nexus_source" \
   'observer-native-[a-z0-9-]+-closed\.txt' "${nexus_closed[@]}"
 assert_workflow_evidence 'ObserverNexusE2eBridge' "${nexus_evidence[@]}"
-for variant in compass map management friends registration; do
+for variant in compass recovery map management friends registration; do
   if ! grep -Fq "${variant}RenderBarrier = observeVariant(" "$nexus_source"; then
     fail "ObserverNexusE2eBridge must arm a render-frame barrier for the $variant variant"
   fi
@@ -848,4 +864,4 @@ fi
 printf '%s\n' \
   "Observer test gate parity passed: ${#client_sources[@]} Client GameTests match their manifest." \
   "Observer E2E parity passed: ${#bridge_classes[@]} bridges plus Common/Client drivers match their manifests." \
-  "Observer lifecycle parity passed: $regular_bridge_count regular bridges, Crafting/container and five-variant Nexus exceptions, including 105 late-family evidence files."
+  "Observer lifecycle parity passed: $regular_bridge_count regular bridges, Crafting/container and six-variant Nexus exceptions, including 105 late-family evidence files."

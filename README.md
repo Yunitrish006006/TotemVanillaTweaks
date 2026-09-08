@@ -4,13 +4,13 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
 管理員用的 Spectator Observer View。
 
-目前的 module-owned Observer 版本需要 TotemCore **>=0.7.16 <0.8.0**；
-0.7.16 提供 owner provider、bounded semantic snapshot 與 remote cursor contract。
+目前的 module-owned Observer 版本需要 TotemCore **>=0.7.18 <0.8.0**；
+0.7.18 保留 owner provider、bounded semantic snapshot 與 remote cursor contract。
 
-> **0.1.22 Observer 更新：** protocol-native v4／screen protocol v2 現在有
+> **0.1.26 Observer 更新：** protocol-native v4／screen protocol v2 現在有
 > 25 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
 > 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
-> 以結構化資料本地重建。TotemNexus 0.3.16 的 owned provider 使用 protocol v3，
+> 以結構化資料本地重建。TotemNexus 0.3.17 的 owned provider 使用 protocol v3，
 > 分別支援普通羅盤與回生羅盤目的地清單、地圖標記與書本 management-only 介面；地圖縮放、平移及選點
 > 以有界語意同步，不傳送地圖像素。
 
@@ -19,8 +19,8 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容�
 Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
-2. TotemCore `0.7.16`（`>=0.7.16 <0.8.0`）
-3. TotemVanillaTweaks `0.1.22`
+2. TotemCore `0.7.18`（`>=0.7.18 <0.8.0`）
+3. TotemVanillaTweaks `0.1.26`
 
 | 項目 | 需求 |
 | --- | --- |
@@ -28,7 +28,7 @@ Client 與 Server 都放入：
 | Fabric Loader | 0.19.3+ |
 | Java | 25+ |
 | Fabric API | 0.154.2+26.2 |
-| 必要 Totem 模組 | `totem-core >=0.7.16 <0.8.0` |
+| 必要 Totem 模組 | `totem-core >=0.7.18 <0.8.0` |
 
 Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
 提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。

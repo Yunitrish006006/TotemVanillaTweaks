@@ -230,7 +230,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemNexus
-          ref: 93bb7387e3ed1f77401bc1ebf35b3cbab6877a0f
+          ref: e3f91a19790f9da85494b9ae1d5770dda12e0e43
           path: .lockstep/TotemNexus
           persist-credentials: false
 
@@ -266,7 +266,7 @@ jobs:
             -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar" \
             -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
             -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.16.jar" \
+            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.17.jar" \
             -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
             -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
             runIntegrationClientGametest --no-daemon --stacktrace
@@ -278,8 +278,8 @@ jobs:
           set -euo pipefail
           integration_screenshots="${GITHUB_WORKSPACE}/build/owner-present-integration-screenshots"
           count="$(find "$integration_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
-          if [[ "$count" != 9 ]]; then
-            echo "Expected exactly 9 owner-present screenshots; found $count." >&2
+          if [[ "$count" != 10 ]]; then
+            echo "Expected exactly 10 owner-present screenshots; found $count." >&2
             exit 1
           fi
 
@@ -438,16 +438,25 @@ jobs:
           fi
           [[ -n "$c" ]] || fail_release 'release changelog is empty.'
 
-          if [[ "$DRY_RUN" == true ]]; then
-            echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); TotemCore external dependency=${core_dependency_file}."
-            echo "version=$v" >> "$GITHUB_OUTPUT"
-            echo "sha512=$sha" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          mkdir -p build/modrinth-release
+          jq -nce --arg version "$v" --arg project "$p" --arg minecraft "$mc" \
+            --arg channel "$RELEASE_TYPE" --arg file "$(basename "$artifact")" --arg sha512 "$sha" \
+            --arg changelog "$c" --argjson dependencies "$deps" \
+            '{version:$version,project_id:$project,game_versions:[$minecraft],loaders:["fabric"],release_type:$channel,file:$file,sha512:$sha512,dependencies:$dependencies,changelog:$changelog}' \
+            > build/modrinth-release/validated-metadata.json
 
           fetch_modrinth_json 'release versions' "project/${p}/version?include_changelog=false" /tmp/versions.json array
           if ! count="$(jq -er --arg v "$v" '[.[] | select(.version_number==$v)] | length' /tmp/versions.json)"; then
             fail_release 'could not count matching existing Modrinth versions.'
+          fi
+
+          if [[ "$DRY_RUN" == true ]]; then
+            [[ "$count" == 0 ]] \
+              || fail_release "dry-run expects a new version; ${v} already exists on Modrinth."
+            echo "Validated Modrinth metadata for ${v} (${RELEASE_TYPE}); TotemCore external dependency=${core_dependency_file}."
+            echo "version=$v" >> "$GITHUB_OUTPUT"
+            echo "sha512=$sha" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           if [[ "$count" == 1 ]]; then
@@ -527,6 +536,16 @@ jobs:
           echo "version_id=$id" >> "$GITHUB_OUTPUT"
           echo "sha512=$sha" >> "$GITHUB_OUTPUT"
 
+      - name: Upload validated release artifact and metadata
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true' && steps.modrinth.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: modrinth-validated-${{ steps.release.outputs.version }}
+          path: |
+            build/libs/totem-vanilla-tweaks-${{ steps.release.outputs.version }}.jar
+            build/modrinth-release/validated-metadata.json
+          if-no-files-found: error
+
       - name: Record verified publication on main
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true' && steps.release.outputs.dry_run == 'false' && steps.modrinth.outcome == 'success'
         shell: bash
@@ -547,7 +566,7 @@ jobs:
           curl --fail -sS -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$payload" >/dev/null
 
       - name: Record publication attempt on main
-        if: always() && steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        if: always() && steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true' && steps.release.outputs.dry_run == 'false'
         shell: bash
         env:
           GH_TOKEN: '${{ github.token }}'
