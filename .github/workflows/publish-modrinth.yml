@@ -484,8 +484,11 @@ jobs:
               '{name:$n,version_number:$v,changelog:$c,dependencies:$deps,game_versions:[$mc],version_type:$t,loaders:["fabric"],featured:false,status:"listed",project_id:$p,file_parts:["primary"],primary_file:"primary",environment:"client_and_server"}')"; then
               fail_release 'could not construct Modrinth version creation metadata.'
             fi
+            # curl -F treats semicolons in inline content as field attributes.
+            # Read JSON from a file so changelog punctuation stays literal.
+            printf '%s' "$data" > build/modrinth-release/create-version.json
             if ! create_status="$(curl "${args[@]}" -X POST "$api/version" \
-                -F "data=${data};type=application/json" \
+                -F "data=<build/modrinth-release/create-version.json;type=application/json" \
                 -F "primary=@${artifact};filename=$(basename "$artifact");type=application/java-archive" \
                 --output /tmp/version.json --write-out '%{http_code}')"; then
               echo 'Modrinth version creation failed before an HTTP response was received.' >&2

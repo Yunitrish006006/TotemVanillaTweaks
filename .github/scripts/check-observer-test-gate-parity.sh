@@ -245,6 +245,12 @@ fi
 if grep -Eq '^[[:space:]]+test([[:space:]]|$)' "$publish_workflow"; then
   fail 'Modrinth publication preconditions must emit explicit non-secret errors instead of bare test exits'
 fi
+# JSON must be supplied as literal file content: inline -F values truncate at
+# semicolons inside translated release notes.
+if ! grep -Fq -- '-F "data=<build/modrinth-release/create-version.json;type=application/json"' "$publish_workflow" \
+    || grep -Fq -- '-F "data=${data};type=application/json"' "$publish_workflow"; then
+  fail 'Modrinth multipart JSON must be read from a file without re-parsing changelog punctuation'
+fi
 # A candidate dry-run must remain read-only on the default branch and retain
 # the exact artifact/metadata so the publisher result can be reviewed.
 if ! awk '/name: Record publication attempt on main/{getline; print}' "$publish_workflow" \
