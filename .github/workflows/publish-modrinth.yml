@@ -493,6 +493,14 @@ jobs:
             fi
             if [[ "$create_status" != 200 ]]; then
               echo "Modrinth version creation returned HTTP ${create_status}; TotemCore was declared as required external file ${core_dependency_file}." >&2
+              if ! jq --arg status "$create_status" \
+                  '{http_status:$status,error:(.error // "unknown"),description:(.description // "No description")}' \
+                  /tmp/version.json > build/modrinth-release/creation-error.json; then
+                jq -n --arg status "$create_status" \
+                  '{http_status:$status,error:"non_json_response"}' \
+                  > build/modrinth-release/creation-error.json
+              fi
+              cat build/modrinth-release/creation-error.json >&2
               exit 1
             fi
             if ! id="$(jq -er '.id | strings | select(length > 0)' /tmp/version.json)"; then
@@ -535,6 +543,14 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "version_id=$id" >> "$GITHUB_OUTPUT"
           echo "sha512=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Modrinth creation failure diagnostics
+        if: failure() && steps.modrinth.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: modrinth-diagnostic-${{ steps.release.outputs.version }}
+          path: build/modrinth-release/*.json
+          if-no-files-found: warn
 
       - name: Upload validated release artifact and metadata
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true' && steps.modrinth.outcome == 'success'
