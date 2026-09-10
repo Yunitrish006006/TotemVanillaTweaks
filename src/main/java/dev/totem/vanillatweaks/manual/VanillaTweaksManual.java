@@ -16,8 +16,7 @@ public final class VanillaTweaksManual {
             List.of(
                     "book.totem.vanilla_tweaks_manual.page.1",
                     "book.totem.vanilla_tweaks_manual.page.2",
-                    "book.totem.vanilla_tweaks_manual.page.3",
-                    "book.totem.vanilla_tweaks_manual.page.4"
+                    "book.totem.vanilla_tweaks_manual.page.3"
             )
     );
 

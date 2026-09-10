@@ -9,95 +9,18 @@ base { archivesName = project.archives_base_name }
 
 def totemCoreJar = file(providers.gradleProperty('totemCoreJar')
         .getOrElse('../TotemCore/build/libs/totem-core-0.7.18.jar'))
-def observerIntegrationJars = [
-        remnant   : file(providers.gradleProperty('totemRemnantJar')
-                .getOrElse('../TotemRemnant/build/libs/totem-remnant-0.2.20.jar')),
-        automata  : file(providers.gradleProperty('totemAutomataJar')
-                .getOrElse('../TotemAutomata/build/libs/totem-automata-0.1.23.jar')),
-        nexus     : file(providers.gradleProperty('totemNexusJar')
-                .getOrElse('../TotemNexus/build/libs/totem-nexus-0.3.17.jar')),
-        villagers : file(providers.gradleProperty('totemVillagersJar')
-                .getOrElse('../TotemVillagers/build/libs/totem-villagers-0.1.35.jar')),
-        locksmith : file(providers.gradleProperty('totemLocksmithJar')
-                .getOrElse('../TotemLocksmith/build/libs/totem-locksmith-0.1.9.jar'))
-]
 
-def observerE2eResults = file("${buildDir}/e2e/results").absolutePath
+repositories { mavenCentral() }
 
-sourceSets {
-    e2e {
-        // Gradle already assigns conventional source dirs when a SourceSet is created.
-        // Replace them explicitly so Loom cannot accumulate the same E2E resource root twice.
-        java.setSrcDirs(['src/e2e/java'])
-        resources.setSrcDirs(['src/e2e/resources'])
-        // Compile the test-only driver against production code, while keeping its
-        // classes/resources in a distinct Fabric local-mod classpath group.
-        compileClasspath += sourceSets.main.output.classesDirs + configurations.compileClasspath
-        compileClasspath += files(observerIntegrationJars.values())
-        runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
-        runtimeClasspath += files(observerIntegrationJars.values())
-    }
-    integrationGametest {
-        java.setSrcDirs(['src/integrationGametest/java'])
-        resources.setSrcDirs(['src/integrationGametest/resources'])
-        compileClasspath += sourceSets.main.output.classesDirs
-        compileClasspath += configurations.compileClasspath
-        compileClasspath += files(observerIntegrationJars.values())
-        runtimeClasspath += output + sourceSets.main.output
-        runtimeClasspath += configurations.runtimeClasspath
-        runtimeClasspath += files(observerIntegrationJars.values())
-    }
-}
-
-loom {
-    mods {
-        'totem-vanilla-tweaks' { sourceSet sourceSets.main }
-        'totem-vanilla-tweaks-e2e' { sourceSet sourceSets.e2e }
-        'totem-vanilla-tweaks-integration-gametest' { sourceSet sourceSets.integrationGametest }
-    }
-    runs {
-        e2eServer {
-            server()
-            configName = 'Observer E2E Server'
-            runDir = 'build/e2e/server'
-            // Loom run configurations select one primary SourceSet. Keep production
-            // main as the primary run source, then append the E2E mod output to the
-            // run task classpath below so Fabric Loader discovers both mod IDs.
-            source = sourceSets.main
-            vmArg '-Dtotem.observer.e2e.enabled=true'
-            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
-        }
-        e2eTarget {
-            client()
-            configName = 'Observer E2E Target'
-            runDir = 'build/e2e/target'
-            source = sourceSets.main
-            vmArg '-Dtotem.observer.e2e.enabled=true'
-            vmArg '-Dtotem.observer.e2e.role=target'
-            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
-            programArg '--username'
-            programArg 'Target'
-        }
-        e2eObserver {
-            client()
-            configName = 'Observer E2E Observer'
-            runDir = 'build/e2e/observer'
-            source = sourceSets.main
-            vmArg '-Dtotem.observer.e2e.enabled=true'
-            vmArg '-Dtotem.observer.e2e.role=observer'
-            vmArg "-Dtotem.observer.e2e.results=${observerE2eResults}"
-            programArg '--username'
-            programArg 'Observer'
-        }
-        integrationClientGametest {
-            client()
-            configName = 'Observer Cross-module Integration Client GameTest'
-            runDir = 'build/run/integrationClientGametest'
-            source = sourceSets.integrationGametest
-            vmArg '-Dfabric.client.gametest'
-            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
-        }
-    }
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation files(totemCoreJar)
+    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    productionRuntimeMods files(totemCoreJar)
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 fabricApi {
@@ -110,53 +33,8 @@ fabricApi {
     }
 }
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    implementation files(totemCoreJar)
-
-    // Production namespace regression tests must load the same runtime mods that
-    // users install. The project JAR itself is supplied by Loom's production task.
-    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    productionRuntimeMods files(totemCoreJar)
-
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-tasks.named('compileIntegrationGametestJava').configure {
-    doFirst {
-        observerIntegrationJars.each { module, jarFile ->
-            if (!jarFile.isFile()) {
-                throw new GradleException("Missing pinned Observer integration JAR for ${module}: ${jarFile}")
-            }
-        }
-    }
-}
-
-tasks.named('runIntegrationClientGametest').configure {
-    dependsOn(sourceSets.integrationGametest.classesTaskName,
-            sourceSets.integrationGametest.processResourcesTaskName)
-    doFirst {
-        File dir = file('build/run/integrationClientGametest')
-        dir.mkdirs()
-        new File(dir, 'options.txt').text = '''onboardAccessibility:false
-skipMultiplayerWarning:true
-tutorialStep:none
-'''
-    }
-}
-
 tasks.withType(Test).configureEach { useJUnitPlatform() }
 
-// Build the separate GameTest source set as a real test-only Fabric mod. Loom's
-// generic production run task loads the main project JAR automatically, but it
-// does not automatically add a createSourceSet=true GameTest mod to its mod list.
 tasks.register('productionGametestModJar', Jar) {
     dependsOn(sourceSets.gametest.classesTaskName, sourceSets.gametest.processResourcesTaskName)
     archiveClassifier = 'production-gametest'
@@ -165,8 +43,6 @@ tasks.register('productionGametestModJar', Jar) {
     reproducibleFileOrder = true
 }
 
-// This runs the built distribution artifact in Loom's production environment,
-// which is the missing gate that allowed the 0.1.15 mixed-namespace ABI bug.
 tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     dependsOn('productionGametestModJar')
     mods.from(tasks.named('productionGametestModJar').flatMap { it.archiveFile })
@@ -175,145 +51,15 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
     useXVFB = true
 }
 
-// A Loom run has exactly one primary SourceSet. The E2E runs use main so the
-// production mod is discovered normally, then append only the test mod output.
-// `loom.mods` above supplies separate classpath groups for both mod IDs.
-tasks.matching { task -> task.name in ["runE2eServer", "runE2eTarget", "runE2eObserver"] }.configureEach {
-    dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName)
-    classpath(sourceSets.e2e.output)
-    classpath(files(observerIntegrationJars.values()))
-    doFirst {
-        observerIntegrationJars.each { module, jarFile ->
-            if (!jarFile.isFile()) throw new GradleException("Missing pinned Observer E2E JAR for ${module}: ${jarFile}")
-        }
-    }
-}
-
-// Produce immutable direct-launch inputs from the current run-task classpaths.
-// configureClientLaunch only creates launch.cfg; Loom writes each classpath
-// argfile as a side effect of executing that run task, which is too late for
-// starting the two clients concurrently and can otherwise reuse stale files.
-def e2eLaunchInputsDir = providers.gradleProperty('e2eLaunchInputsDir')
-        .map { path -> file(path) }
-        .orElse(layout.buildDirectory.dir('e2e/launch').map { it.asFile })
-def e2eClientRunTasks = ["runE2eTarget", "runE2eObserver"].collect { taskName ->
-    tasks.named(taskName, net.fabricmc.loom.task.RunGameTask)
-}
-
-tasks.register('prepareE2eClientLaunchInputs') {
-    group = 'verification'
-    description = 'Writes fresh official-namespace E2E client launch.cfg and classpath argfiles.'
-    dependsOn(sourceSets.e2e.classesTaskName, sourceSets.e2e.processResourcesTaskName, 'configureClientLaunch')
-    outputs.files(e2eLaunchInputsDir.map { outputDir ->
-        [
-                new File(outputDir, 'launch.cfg'),
-                new File(outputDir, 'runE2eTarget.args'),
-                new File(outputDir, 'runE2eObserver.args')
-        ]
-    })
-    // These files are a launch-time handoff, not a reusable build artifact.
-    // Always rewrite them from the tasks configured by this Gradle invocation.
-    outputs.upToDateWhen { false }
-
-    doLast {
-        File outputDir = e2eLaunchInputsDir.get()
-        outputDir.mkdirs()
-
-        File projectCacheDir = gradle.startParameter.projectCacheDir ?: file('.gradle')
-        File generatedLaunchConfig = new File(projectCacheDir, 'loom-cache/launch.cfg')
-        if (!generatedLaunchConfig.isFile()) {
-            throw new GradleException("configureClientLaunch did not create ${generatedLaunchConfig}")
-        }
-
-        String launchConfig = generatedLaunchConfig.getText('UTF-8')
-        if (!launchConfig.contains('fabric.defaultModDistributionNamespace=official')
-                || launchConfig.contains('fabric.defaultModDistributionNamespace=named')) {
-            throw new GradleException('E2E launch.cfg must use the official distribution namespace')
-        }
-        java.nio.file.Files.copy(
-                generatedLaunchConfig.toPath(),
-                new File(outputDir, 'launch.cfg').toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
-        )
-
-        String expectedClasspath = null
-        e2eClientRunTasks.each { runTaskProvider ->
-            def runTask = runTaskProvider.get()
-            String classpath = runTask.classpath.files
-                    .collect { classpathEntry -> classpathEntry.absolutePath }
-                    .join(File.pathSeparator)
-            String lowerClasspath = classpath.toLowerCase(Locale.ROOT)
-            if (classpath.isBlank()) {
-                throw new GradleException("${runTask.name} resolved an empty classpath")
-            }
-            if (lowerClasspath.contains('org.relativitymc') || lowerClasspath.contains('modern-yarn')) {
-                throw new GradleException("${runTask.name} resolved a stale mapped classpath")
-            }
-            if (!classpath.contains(sourceSets.main.output.classesDirs.singleFile.absolutePath)
-                    || !classpath.contains(sourceSets.e2e.output.classesDirs.singleFile.absolutePath)
-                    || !classpath.contains(totemCoreJar.absolutePath)) {
-                throw new GradleException("${runTask.name} is missing main, E2E, or pinned TotemCore classpath entries")
-            }
-            observerIntegrationJars.each { module, jarFile ->
-                if (!jarFile.isFile() || !classpath.contains(jarFile.absolutePath)) {
-                    throw new GradleException("${runTask.name} is missing pinned Observer owner JAR for ${module}: ${jarFile}")
-                }
-            }
-            if (expectedClasspath != null && expectedClasspath != classpath) {
-                throw new GradleException('Target and Observer direct-launch classpaths must be identical')
-            }
-            expectedClasspath = classpath
-
-            String escapedClasspath = classpath
-                    .replace('\\', '\\\\')
-                    .replace('"', '\\"')
-            new File(outputDir, "${runTask.name}.args")
-                    .setText("-classpath\n\"${escapedClasspath}\"\n", 'UTF-8')
-        }
-    }
-}
-
-// Keep E2E clients deterministic on fresh CI machines: suppress Minecraft's
-// first-launch accessibility screen and let the test driver connect only after
-// resources have had time to finish loading.
-tasks.matching { task -> task.name in ["runE2eTarget", "runE2eObserver"] }.configureEach {
-    doFirst {
-        String runDirName = name == 'runE2eTarget' ? 'target' : 'observer'
-        File dir = file("build/e2e/${runDirName}")
-        dir.mkdirs()
-        new File(dir, 'options.txt').text = '''onboardAccessibility:false
-skipMultiplayerWarning:true
-tutorialStep:none
-'''
-    }
-}
-
-tasks.named('runE2eServer').configure {
-    doFirst {
-        File dir = file('build/e2e/server')
-        dir.mkdirs()
-        new File(dir, 'eula.txt').text = 'eula=true\n'
-        new File(dir, 'server.properties').text = '''server-port=25570
-online-mode=false
-enforce-secure-profile=false
-spawn-protection=0
-view-distance=2
-simulation-distance=2
-max-players=4
-motd=Totem Observer E2E
-'''
-    }
-}
-
 java {
     withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
+
 tasks.named('processResources', ProcessResources) {
     inputs.property 'version', project.version
     filesMatching('fabric.mod.json') { expand(version: project.version) }
-    // zh_cn intentionally reuses zh_tw; maintain only the Traditional Chinese source.
     doLast {
         copy {
             from(file('src/main/resources/assets/totem/lang/zh_tw.json'))
@@ -322,6 +68,7 @@ tasks.named('processResources', ProcessResources) {
         }
     }
 }
+
 tasks.named('jar', Jar) {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
