@@ -1,0 +1,54 @@
+package dev.totem.vanillatweaks.observer;
+
+import dev.totem.vanillatweaks.client.ObserverAdvancementsScreenClient;
+import dev.totem.vanillatweaks.client.ObserverBeaconScreenClient;
+import dev.totem.vanillatweaks.client.ObserverBrewingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverCartographyScreenClient;
+import dev.totem.vanillatweaks.client.ObserverCrafterScreenClient;
+import dev.totem.vanillatweaks.client.ObserverGrindstoneScreenClient;
+import dev.totem.vanillatweaks.client.ObserverHorseScreenClient;
+import dev.totem.vanillatweaks.client.ObserverLoomScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeAnvilScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeBookScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeClient;
+import dev.totem.vanillatweaks.client.ObserverNativeCraftingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeEnchantingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeHud;
+import dev.totem.vanillatweaks.client.ObserverNativeMerchantScreenClient;
+import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
+import dev.totem.vanillatweaks.client.ObserverOwnedScreenTransportClient;
+import dev.totem.vanillatweaks.client.ObserverSignScreenClient;
+import dev.totem.vanillatweaks.client.ObserverSmithingScreenClient;
+import dev.totem.vanillatweaks.client.ObserverStatsScreenClient;
+import dev.totem.vanillatweaks.client.ObserverStonecutterScreenClient;
+import dev.totem.vanillatweaks.client.ObserverUiClient;
+
+/** Single client bootstrap seam for the Observer subsystem. */
+public final class ObserverClientRuntime {
+    private ObserverClientRuntime() {}
+
+    public static void register() {
+        ObserverUiClient.register();
+        ObserverNativeClient.register();
+        ObserverOwnedScreenTransportClient.register();
+        ObserverNativeScreenClient.register();
+        ObserverNativeBookScreenClient.register();
+        ObserverNativeCraftingScreenClient.register();
+        ObserverNativeMerchantScreenClient.register();
+        ObserverNativeAnvilScreenClient.register();
+        ObserverNativeEnchantingScreenClient.register();
+        ObserverBrewingScreenClient.register();
+        ObserverSmithingScreenClient.register();
+        ObserverStonecutterScreenClient.register();
+        ObserverGrindstoneScreenClient.register();
+        ObserverLoomScreenClient.register();
+        ObserverCartographyScreenClient.register();
+        ObserverBeaconScreenClient.register();
+        ObserverSignScreenClient.register();
+        ObserverCrafterScreenClient.register();
+        ObserverAdvancementsScreenClient.register();
+        ObserverStatsScreenClient.register();
+        ObserverHorseScreenClient.register();
+        ObserverNativeHud.register();
+    }
+}
