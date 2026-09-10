@@ -22,13 +22,17 @@ public abstract class ObserverNativeSessionManagerNexusCapabilityMixin {
     @ModifyReturnValue(method = "negotiatedScreenCapabilities", at = @At("RETURN"))
     private static long totem$includeNexusCapability(long original, ServerPlayer observer) {
         if (!ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
-                || !ObserverNativeSessionManager.ownedProviderAdvertises(observer,
-                ObserverNativeScreenPayloads.FAMILY_NEXUS,
-                ObserverOwnedScreenProtocols.expected(ObserverNativeScreenPayloads.FAMILY_NEXUS))) {
+                || !totem$advertisesCompatibleNexusProvider(observer)) {
             return original;
         }
         return ObserverNativeScreenPayloads.sanitizeCapabilities(
                 original | ObserverNativeScreenPayloads.CAPABILITY_NEXUS);
+    }
+
+    private static boolean totem$advertisesCompatibleNexusProvider(ServerPlayer observer) {
+        return ObserverOwnedScreenProtocols.supported(ObserverNativeScreenPayloads.FAMILY_NEXUS).stream()
+                .anyMatch(protocol -> ObserverNativeSessionManager.ownedProviderAdvertises(
+                        observer, ObserverNativeScreenPayloads.FAMILY_NEXUS, protocol));
     }
 
     @Inject(method = "clearTargetSequences", at = @At("TAIL"))
