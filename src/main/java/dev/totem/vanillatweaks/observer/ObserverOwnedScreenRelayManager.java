@@ -1,78 +1,79 @@
 package dev.totem.vanillatweaks.observer;
 
 import dev.totem.core.api.v1.client.observer.ObserverScreenSnapshot;
-import dev.totem.vanillatweaks.network.*;
+import dev.totem.vanillatweaks.network.ObserverOwnedProviderPolicy;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenCapability;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
-/** Session- and capability-bound relay for owning-module semantic envelopes. */
+/** Session- and provider-identity-bound relay for owning-module semantic envelopes. */
 public final class ObserverOwnedScreenRelayManager {
     private static final Map<UUID, Map<String, Long>> LAST = new HashMap<>();
     private static final Map<UUID, ScreenIdentity> OPEN = new HashMap<>();
-    private static final Map<String, Set<String>> VARIANTS = Map.of(
-            "remnant_backpack", Set.of(""),
-            "automata_copper_golem", Set.of(""),
-            "nexus", Set.of("compass", "recovery_compass", "map", "management", "map_legacy", "friends", "friends_legacy",
-                    "registration", "registration_legacy"),
-            "nexus_death_node_admin", Set.of(""),
-            "locksmith_management", Set.of(""),
-            "villagers_woodcutter", Set.of(""));
 
     private ObserverOwnedScreenRelayManager() { }
 
     public static void accept(ServerPlayer target, ObserverOwnedScreenPayloads.State payload) {
         ObserverScreenSnapshot snapshot = payload.snapshot();
-        long capability = capability(snapshot.familyId());
-        if (!validState(payload)) return;
+        if (!validState(payload)
+                || !ObserverNativeSessionManager.ownedProviderAdvertises(
+                        target, snapshot.familyId(), snapshot.protocolVersion())) {
+            return;
+        }
         UUID targetId = target.getUUID();
         long previous = LAST.computeIfAbsent(targetId, ignored -> new HashMap<>())
                 .getOrDefault(snapshot.familyId(), -1L);
         if (snapshot.sequence() <= previous) return;
-        var observerIds = ObserverNativeSessionManager.observerIdsForTarget(targetId, capability);
+
+        var observerIds = ObserverNativeSessionManager.observerIdsForTarget(
+                targetId, ObserverOwnedScreenCapability.CAPABILITY).stream()
+                .filter(observerId -> {
+                    ServerPlayer observer = target.level().getServer().getPlayerList().getPlayer(observerId);
+                    return observer != null && ObserverNativeSessionManager.ownedProviderAdvertises(
+                            observer, snapshot.familyId(), snapshot.protocolVersion());
+                })
+                .toList();
         if (observerIds.isEmpty()) return;
+
         LAST.get(targetId).put(snapshot.familyId(), snapshot.sequence());
-        if (payload.open()) OPEN.put(targetId, new ScreenIdentity(snapshot.familyId(), snapshot.variant(), snapshot.protocolVersion()));
-        else OPEN.remove(targetId);
+        if (payload.open()) {
+            OPEN.put(targetId, new ScreenIdentity(
+                    snapshot.familyId(), snapshot.variant(), snapshot.protocolVersion()));
+        } else {
+            OPEN.remove(targetId);
+        }
         var relay = new ObserverOwnedScreenPayloads.Relay(targetId, payload.open(), snapshot);
         for (UUID observerId : observerIds) {
             ServerPlayer observer = target.level().getServer().getPlayerList().getPlayer(observerId);
             if (observer != null && observer.isSpectator()
-                    && ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE))
+                    && ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)) {
                 ServerPlayNetworking.send(observer, relay);
+            }
         }
     }
 
-    public static void clearTarget(UUID targetId) { LAST.remove(targetId); OPEN.remove(targetId); }
+    public static void clearTarget(UUID targetId) {
+        LAST.remove(targetId);
+        OPEN.remove(targetId);
+    }
 
     public static boolean matchesOpen(UUID targetId, String family, String variant, int protocol) {
         return new ScreenIdentity(family, variant, protocol).equals(OPEN.get(targetId));
     }
 
-    public static boolean isOwnedFamily(String family) { return VARIANTS.containsKey(family); }
-
     static boolean validState(ObserverOwnedScreenPayloads.State payload) {
+        if (payload == null || payload.snapshot() == null) return false;
         ObserverScreenSnapshot snapshot = payload.snapshot();
-        if (capability(snapshot.familyId()) == 0
-                || !ObserverOwnedScreenProtocols.accepts(snapshot.familyId(), snapshot.protocolVersion())
-                || !VARIANTS.getOrDefault(snapshot.familyId(), Set.of()).contains(snapshot.variant())) return false;
+        var identity = new ObserverOwnedScreenPayloads.ProviderIdentity(
+                snapshot.familyId(), snapshot.protocolVersion());
+        if (!ObserverOwnedProviderPolicy.validIdentity(identity)) return false;
         return payload.open() || (snapshot.slots().isEmpty() && snapshot.data().length == 0
                 && snapshot.metadata().isEmpty() && snapshot.ownerPayload().length == 0);
-    }
-
-    public static long capability(String family) {
-        long builtIn = ObserverNativeScreenPayloads.capabilityForFamily(family);
-        if (builtIn != 0) return builtIn;
-        return switch (family) {
-            case "villagers_woodcutter" -> ObserverVillagersWoodcutterPayloads.CAPABILITY;
-            case "nexus_death_node_admin" -> ObserverNexusDeathNodeAdminPayloads.CAPABILITY;
-            case "locksmith_management" -> ObserverLocksmithManagementPayloads.CAPABILITY;
-            default -> 0L;
-        };
     }
 
     private record ScreenIdentity(String family, String variant, int protocol) { }
