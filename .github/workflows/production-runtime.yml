@@ -11,12 +11,20 @@ permissions:
   contents: read
 
 jobs:
-  production-client-gametest:
+  production-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 35
     steps:
-      - name: Check out VanillaTweaks
+      - name: Check out TotemVanillaTweaks
         uses: actions/checkout@v4
+
+      - name: Check out pinned TotemCore
+        uses: actions/checkout@v4
+        with:
+          repository: Yunitrish006006/TotemCore
+          ref: f87cd10fe8aefce77925b9e75dad237f17f38966
+          path: .lockstep/TotemCore
+          persist-credentials: false
 
       - name: Set up Java 25
         uses: actions/setup-java@v5
@@ -27,111 +35,31 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          # A pre-non-remap build rewrote Fabric API access wideners inside the
-          # shared Gradle dependency cache. A production namespace gate must
-          # resolve pristine distribution artifacts exactly as a player does.
           cache-disabled: true
 
-      - name: Check out pinned TotemCore
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemCore
-          ref: f87cd10fe8aefce77925b9e75dad237f17f38966
-          path: .lockstep/TotemCore
-          persist-credentials: false
-
-      - name: Check out pinned TotemExcavation compile dependency
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemExcavation
-          ref: f40b94fd5d9de8b47534343c76a95f62926d2b1b
-          path: .lockstep/TotemExcavation
-          persist-credentials: false
-
-      - name: Check out pinned TotemRemnant
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemRemnant
-          ref: 1d89395f93d8ea817947db4653919a11355eb548
-          path: .lockstep/TotemRemnant
-          persist-credentials: false
-
-      - name: Check out pinned TotemAutomata
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemAutomata
-          ref: cc4bdb022615faad73bc9e5c0ef6d52b9d0970e6
-          path: .lockstep/TotemAutomata
-          persist-credentials: false
-
-      - name: Check out pinned TotemNexus
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemNexus
-          ref: e3f91a19790f9da85494b9ae1d5770dda12e0e43
-          path: .lockstep/TotemNexus
-          persist-credentials: false
-
-      - name: Check out pinned TotemVillagers
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemVillagers
-          ref: 615f83c5c3534a40e6ae7a2a0713390512f8b64c
-          path: .lockstep/TotemVillagers
-          persist-credentials: false
-
-      - name: Check out pinned TotemLocksmith
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemLocksmith
-          ref: 9e8e25d44887a33839dc2a3b92a424ca4b931e00
-          path: .lockstep/TotemLocksmith
-          persist-credentials: false
-
-      - name: Build pinned Observer integration modules
-        shell: bash
-        run: bash .github/scripts/build-observer-integration-jars.sh
-
-      - name: Enforce module-owned Observer screens
-        shell: bash
-        run: bash .github/scripts/check-owned-observer-screens.sh
-
-      - name: Run cross-module production sender Client GameTest
+      - name: Build pinned TotemCore
         shell: bash
         run: |
           set -euo pipefail
-          xvfb-run -a ./gradlew \
-            -PtotemCoreJar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar" \
-            -PtotemRemnantJar="${GITHUB_WORKSPACE}/.lockstep/TotemRemnant/build/libs/totem-remnant-0.2.21.jar" \
-            -PtotemAutomataJar="${GITHUB_WORKSPACE}/.lockstep/TotemAutomata/build/libs/totem-automata-0.1.24.jar" \
-            -PtotemNexusJar="${GITHUB_WORKSPACE}/.lockstep/TotemNexus/build/libs/totem-nexus-0.3.17.jar" \
-            -PtotemVillagersJar="${GITHUB_WORKSPACE}/.lockstep/TotemVillagers/build/libs/totem-villagers-0.1.36.jar" \
-            -PtotemLocksmithJar="${GITHUB_WORKSPACE}/.lockstep/TotemLocksmith/build/libs/totem-locksmith-0.1.10.jar" \
-            runIntegrationClientGametest --no-daemon --stacktrace
+          (cd .lockstep/TotemCore && ./gradlew assemble --no-daemon --stacktrace)
 
-      - name: Verify cross-module integration screenshots
+      - name: Run built-artifact gameplay Client GameTest
         shell: bash
         run: |
           set -euo pipefail
-          integration_screenshots="${GITHUB_WORKSPACE}/build/owner-present-integration-screenshots"
-          count="$(find "$integration_screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)"
-          if [[ "$count" != 10 ]]; then
-            echo "Expected exactly 10 owner-present screenshots; found $count." >&2
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
+          ./gradlew -PtotemCoreJar="$core_jar" clean assemble runProductionClientGameTest --no-daemon --stacktrace
+
+      - name: Inspect production artifact ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_file="build/libs/totem-vanilla-tweaks-0.1.28.jar"
+          test -f "$jar_file"
+          if jar tf "$jar_file" | grep -E 'dev/totem/vanillatweaks/(observer/|network/Observer|client/Observer|mixin/.*/?Observer|mixin/Observer)'; then
+            echo 'Embedded Observer classes remain in the VanillaTweaks artifact.' >&2
             exit 1
           fi
-
-      - name: Upload cross-module integration screenshots
-        uses: actions/upload-artifact@v4
-        with:
-          name: observer-owner-present-production-runtime-screenshots
-          path: build/owner-present-integration-screenshots/*.png
-          if-no-files-found: error
-
-      - name: Run production-namespace client GameTests
-        shell: bash
-        run: |
-          set -euo pipefail
-          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          test "$core_version" = '0.7.18'
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-${core_version}.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace
+          ! unzip -p "$jar_file" fabric.mod.json | grep -q 'Observer View'
+          ! unzip -p "$jar_file" totem-vanilla-tweaks.mixins.json | grep -q 'Observer'
+          ! unzip -p "$jar_file" totem-vanilla-tweaks.client.mixins.json | grep -q 'Observer'
