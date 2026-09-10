@@ -41,7 +41,10 @@ jobs:
 
       - name: Remove embedded Observer ownership
         shell: bash
-        run: bash .github/migrations/remove-embedded-observer.sh
+        run: |
+          set -euo pipefail
+          bash .github/migrations/remove-observer-manual-page.sh
+          bash .github/migrations/remove-embedded-observer.sh
 
       - name: Build pinned TotemCore
         shell: bash
@@ -90,13 +93,14 @@ jobs:
           grep -Fq '"OptionsMixin"' src/main/resources/totem-vanilla-tweaks.client.mixins.json
           grep -Fq '"AbstractContainerScreenMixin"' src/main/resources/totem-vanilla-tweaks.client.mixins.json
           test "$(jq '.client | length' src/main/resources/totem-vanilla-tweaks.client.mixins.json)" = '2'
+          ! grep -R -n 'vanilla_tweaks_manual.page.4' src/main
 
       - name: Commit gameplay-only module
         shell: bash
         run: |
           set -euo pipefail
           rm -rf .lockstep
-          rm -f .github/migrations/remove-embedded-observer.sh
+          rm -f .github/migrations/remove-embedded-observer.sh .github/migrations/remove-observer-manual-page.sh
           rmdir .github/migrations 2>/dev/null || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
