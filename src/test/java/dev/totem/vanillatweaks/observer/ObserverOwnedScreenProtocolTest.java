@@ -1,8 +1,12 @@
 package dev.totem.vanillatweaks.observer;
 
 import dev.totem.core.api.v1.client.observer.ObserverScreenSnapshot;
+import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedProviderPolicy;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenCapability;
 import dev.totem.vanillatweaks.network.ObserverOwnedScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
+import dev.totem.vanillatweaks.network.ObserverScreenCapabilities;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 
@@ -12,59 +16,66 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ObserverOwnedScreenProtocolTest {
-    @Test void screenProtocolNegotiatesIndependentlyFromTransportProtocol() {
+    @Test
+    void newFeatureProviderDoesNotNeedCentralFamilyRegistration() {
         assertEquals(1, ObserverOwnedScreenPayloads.PROTOCOL_VERSION);
-        assertEquals(3, ObserverOwnedScreenProtocols.expected("nexus"));
+        assertEquals(1L << 26, ObserverOwnedScreenCapability.CAPABILITY);
+
+        var alchemy = new ObserverOwnedScreenPayloads.ProviderIdentity("alchemy_cauldron", 1);
         var providers = new ObserverOwnedScreenPayloads.ProviderSet(
-                ObserverOwnedScreenPayloads.PROTOCOL_VERSION,
-                List.of(new ObserverOwnedScreenPayloads.ProviderIdentity("nexus", 3)));
-        assertNotNull(ObserverNativeSessionManager.validateOwnedProviderSet(providers));
+                ObserverOwnedScreenPayloads.PROTOCOL_VERSION, List.of(alchemy));
+        assertEquals(java.util.Set.of(alchemy), ObserverNativeSessionManager.validateOwnedProviderSet(providers));
+        assertEquals(0L, ObserverScreenCapabilities.vanillaCapability("alchemy_cauldron"));
+
+        assertNull(ObserverNativeSessionManager.validateOwnedProviderSet(new ObserverOwnedScreenPayloads.ProviderSet(
+                2, List.of(alchemy))));
+        assertNull(ObserverNativeSessionManager.validateOwnedProviderSet(new ObserverOwnedScreenPayloads.ProviderSet(
+                ObserverOwnedScreenPayloads.PROTOCOL_VERSION, List.of(alchemy, alchemy))));
+    }
+
+    @Test
+    void owningModulesCannotClaimObserverOwnedVanillaFamilies() {
+        var furnace = new ObserverOwnedScreenPayloads.ProviderIdentity(
+                ObserverNativeScreenPayloads.FAMILY_FURNACE, 1);
+        assertTrue(ObserverScreenCapabilities.isReservedVanillaFamily(furnace.familyId()));
+        assertFalse(ObserverOwnedProviderPolicy.validIdentity(furnace));
+        assertNull(ObserverNativeSessionManager.validateOwnedProviderSet(new ObserverOwnedScreenPayloads.ProviderSet(
+                ObserverOwnedScreenPayloads.PROTOCOL_VERSION, List.of(furnace))));
+
+        assertTrue(ObserverOwnedProviderPolicy.validIdentity(
+                new ObserverOwnedScreenPayloads.ProviderIdentity("totem:alchemy_cauldron", 7)));
+        assertFalse(ObserverOwnedProviderPolicy.validIdentity(
+                new ObserverOwnedScreenPayloads.ProviderIdentity("Invalid Family", 1)));
+    }
+
+    @Test
+    void genericOwnedStateIsStructurallyBoundedWhileProviderOwnsVariantCompatibility() {
+        var open = new ObserverScreenSnapshot("alchemy_cauldron", "research", 7, 42,
+                Component.literal("Alchemy"), List.of(), new int[0], Map.of(), new byte[0]);
+        assertTrue(ObserverOwnedScreenRelayManager.validState(
+                new ObserverOwnedScreenPayloads.State(true, open)));
+
+        var differentVersion = new ObserverScreenSnapshot("alchemy_cauldron", "research", 8, 43,
+                Component.literal("Alchemy"), List.of(), new int[0], Map.of(), new byte[0]);
+        assertTrue(ObserverOwnedScreenRelayManager.validState(
+                new ObserverOwnedScreenPayloads.State(true, differentVersion)),
+                "server structural validation must not hardcode an owning module's protocol");
+
+        var closed = ObserverOwnedScreenPayloads.closed("alchemy_cauldron", "research", 7, 44);
+        assertTrue(ObserverOwnedScreenRelayManager.validState(
+                new ObserverOwnedScreenPayloads.State(false, closed)));
+
+        var dirtyClose = new ObserverScreenSnapshot("alchemy_cauldron", "research", 7, 45,
+                Component.empty(), List.of(), new int[]{1}, Map.of(), new byte[0]);
+        assertFalse(ObserverOwnedScreenRelayManager.validState(
+                new ObserverOwnedScreenPayloads.State(false, dirtyClose)));
+    }
+
+    @Test
+    void legacyFamilyProtocolTableRemainsOnlyForV4CompatibilityPaths() {
+        assertEquals(3, ObserverOwnedScreenProtocols.expected("nexus"));
         assertTrue(ObserverOwnedScreenProtocols.accepts("nexus", 3));
         assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 2));
-        assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 1));
-        assertFalse(ObserverOwnedScreenProtocols.accepts("unknown", 1));
-        assertNull(ObserverNativeSessionManager.validateOwnedProviderSet(new ObserverOwnedScreenPayloads.ProviderSet(
-                2, List.of(new ObserverOwnedScreenPayloads.ProviderIdentity("nexus", 3)))));
+        assertFalse(ObserverOwnedScreenProtocols.accepts("alchemy_cauldron", 1));
     }
-
-    @Test void closeRetainsCurrentScreenProtocolAndUnknownVersionsAreRejected() {
-        ObserverScreenSnapshot closed = ObserverOwnedScreenPayloads.closed("nexus", "map", 3, 42);
-        assertEquals(3, closed.protocolVersion());
-        assertTrue(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(false, closed)));
-
-        var unknown = new ObserverScreenSnapshot("nexus", "map", 4, 43, Component.empty(),
-                List.of(), new int[0], Map.of(), new byte[0]);
-        assertFalse(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(true, unknown)));
-        assertNull(ObserverNativeSessionManager.validateOwnedProviderSet(new ObserverOwnedScreenPayloads.ProviderSet(
-                ObserverOwnedScreenPayloads.PROTOCOL_VERSION,
-                List.of(new ObserverOwnedScreenPayloads.ProviderIdentity("nexus", 4)))));
-    }
-
-    @Test void nexusRelayAcceptsOnlyTheOwnerDeclaredCompassFamilyMapAndManagementVariants() {
-        for (String variant : List.of("compass", "recovery_compass", "map", "management")) {
-            var snapshot = new ObserverScreenSnapshot("nexus", variant, 3, 1, Component.empty(),
-                    List.of(), new int[0], Map.of(), new byte[0]);
-            assertTrue(ObserverOwnedScreenRelayManager.validState(
-                    new ObserverOwnedScreenPayloads.State(true, snapshot)), variant);
-        }
-
-        var unknownVariant = new ObserverScreenSnapshot("nexus", "teleport-list-copy", 3, 1,
-                Component.empty(), List.of(), new int[0], Map.of(), new byte[0]);
-        assertFalse(ObserverOwnedScreenRelayManager.validState(
-                new ObserverOwnedScreenPayloads.State(true, unknownVariant)));
-    }
-    @Test void recoveryCompassRequiresExactVariantAndProtocolForOpenAndClose() {
-        var valid = ObserverOwnedScreenPayloads.closed("nexus", "recovery_compass", 3, 42);
-        assertTrue(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(true, valid)));
-        assertTrue(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(false, valid)));
-        for (String variant : List.of("RECOVERY_COMPASS", "recovery-compass", "recovery_compass_copy")) {
-            var forged = ObserverOwnedScreenPayloads.closed("nexus", variant, 3, 43);
-            assertFalse(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(true, forged)));
-        }
-        for (int protocol : List.of(1, 2, 4)) {
-            var stale = ObserverOwnedScreenPayloads.closed("nexus", "recovery_compass", protocol, 43);
-            assertFalse(ObserverOwnedScreenRelayManager.validState(new ObserverOwnedScreenPayloads.State(true, stale)));
-        }
-    }
-
 }

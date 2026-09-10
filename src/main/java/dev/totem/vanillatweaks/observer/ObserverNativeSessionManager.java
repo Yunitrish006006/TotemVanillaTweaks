@@ -7,6 +7,8 @@ import dev.totem.vanillatweaks.network.ObserverEnchantingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverMerchantScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativePayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedProviderPolicy;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenCapability;
 import dev.totem.vanillatweaks.network.ObserverPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemnantBackpackPayloads;
 import dev.totem.vanillatweaks.network.ObserverRemoteCursorPayloads;
@@ -97,15 +99,7 @@ public final class ObserverNativeSessionManager {
 
     static Set<ObserverOwnedScreenPayloads.ProviderIdentity> validateOwnedProviderSet(
             ObserverOwnedScreenPayloads.ProviderSet payload) {
-        if (payload.protocolVersion() != ObserverOwnedScreenPayloads.PROTOCOL_VERSION) return null;
-        java.util.LinkedHashSet<ObserverOwnedScreenPayloads.ProviderIdentity> accepted = new java.util.LinkedHashSet<>();
-        java.util.HashSet<String> families = new java.util.HashSet<>();
-        for (ObserverOwnedScreenPayloads.ProviderIdentity provider : payload.providers()) {
-            if (!ObserverOwnedScreenProtocols.accepts(provider.familyId(), provider.protocolVersion())
-                    || ObserverOwnedScreenRelayManager.capability(provider.familyId()) == 0L
-                    || !families.add(provider.familyId()) || !accepted.add(provider)) return null;
-        }
-        return Set.copyOf(accepted);
+        return ObserverOwnedProviderPolicy.validate(payload);
     }
 
     public static void clearOwnedProviderSet(UUID playerId) {
@@ -437,6 +431,10 @@ public final class ObserverNativeSessionManager {
         if (ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
                 && ownedProviderAdvertises(observer, ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK,
                 ObserverOwnedScreenProtocols.expected(ObserverNativeScreenPayloads.FAMILY_REMNANT_BACKPACK))) capabilities |= ObserverNativeScreenPayloads.CAPABILITY_REMNANT_BACKPACK;
+        if (ServerPlayNetworking.canSend(observer, ObserverOwnedScreenPayloads.Relay.TYPE)
+                && !OWNED_PROVIDERS_BY_PLAYER.getOrDefault(observer.getUUID(), Set.of()).isEmpty()) {
+            capabilities |= ObserverOwnedScreenCapability.CAPABILITY;
+        }
         if (ServerPlayNetworking.canSend(observer, ObserverRemoteCursorPayloads.Relay.TYPE)) capabilities |= ObserverRemoteCursorPayloads.CAPABILITY;
         return ObserverNativeScreenPayloads.sanitizeCapabilities(capabilities);
     }

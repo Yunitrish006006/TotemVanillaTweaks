@@ -6,17 +6,18 @@ import dev.totem.vanillatweaks.network.ObserverBrewingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCartographyScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverCrafterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverGrindstoneScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverHorseScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverLocksmithManagementPayloads;
 import dev.totem.vanillatweaks.network.ObserverLoomScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusDeathNodeAdminPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenCapability;
+import dev.totem.vanillatweaks.network.ObserverRemoteCursorPayloads;
 import dev.totem.vanillatweaks.network.ObserverSignScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverSmithingScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStatsScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverStonecutterScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverVillagersWoodcutterPayloads;
-import dev.totem.vanillatweaks.network.ObserverRemoteCursorPayloads;
-import dev.totem.vanillatweaks.network.ObserverHorseScreenPayloads;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -43,6 +44,7 @@ public abstract class ObserverNativeScreenPayloadsExtensionCapabilityMixin {
                 | ObserverAdvancementsScreenPayloads.CAPABILITY
                 | ObserverStatsScreenPayloads.CAPABILITY
                 | ObserverRemoteCursorPayloads.CAPABILITY
-                | ObserverHorseScreenPayloads.CAPABILITY));
+                | ObserverHorseScreenPayloads.CAPABILITY
+                | ObserverOwnedScreenCapability.CAPABILITY));
     }
 }

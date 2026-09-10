@@ -61,9 +61,9 @@ public final class ObserverOwnedScreenTransportClient {
         }
         if (providersAdvertised) return;
         var identities = providers.values().stream()
-                .filter(provider -> capability(provider.familyId()) != 0L)
                 .map(provider -> new ObserverOwnedScreenPayloads.ProviderIdentity(
                         provider.familyId(), provider.protocolVersion()))
+                .filter(ObserverOwnedProviderPolicy::validIdentity)
                 .sorted(Comparator.comparing(ObserverOwnedScreenPayloads.ProviderIdentity::familyId))
                 .toList();
         ClientPlayNetworking.send(new ObserverOwnedScreenPayloads.ProviderSet(
@@ -79,7 +79,11 @@ public final class ObserverOwnedScreenTransportClient {
         ObserverVanillaScreenIdentity.Identity identity = targetFamily.isEmpty()
                 ? ObserverVanillaScreenIdentity.classify(minecraft.gui.screen()).orElse(null)
                 : new ObserverVanillaScreenIdentity.Identity(targetFamily, targetVariant, targetProtocol);
-        if (identity == null || !ObserverNativeClient.targetSupportsScreen(capability(identity.family()))) return;
+        if (identity == null) return;
+        long screenCapability = targetFamily.isEmpty()
+                ? ObserverScreenCapabilities.vanillaCapability(identity.family())
+                : ObserverOwnedScreenCapability.CAPABILITY;
+        if (screenCapability == 0L || !ObserverNativeClient.targetSupportsScreen(screenCapability)) return;
         long now = System.nanoTime();
         if (now - lastCursorNanos < 1_000_000_000L / ObserverRemoteCursorPayloads.MAX_UPDATES_PER_SECOND) return;
         int width = Math.max(1, minecraft.gui.screen().width), height = Math.max(1, minecraft.gui.screen().height);
@@ -102,9 +106,14 @@ public final class ObserverOwnedScreenTransportClient {
         long now = System.nanoTime();
         if (now - lastSnapshotNanos < SNAPSHOT_INTERVAL_NANOS) return;
         Screen screen = minecraft.gui.screen();
+        if (!ObserverNativeClient.targetSupportsScreen(ObserverOwnedScreenCapability.CAPABILITY)) {
+            closeTarget();
+            return;
+        }
         for (ObserverScreenProvider provider : providers.values()) {
-            long capability = capability(provider.familyId());
-            if (capability == 0 || !ObserverNativeClient.targetSupportsScreen(capability)) continue;
+            var identity = new ObserverOwnedScreenPayloads.ProviderIdentity(
+                    provider.familyId(), provider.protocolVersion());
+            if (!ObserverOwnedProviderPolicy.validIdentity(identity)) continue;
             java.util.Optional<ObserverScreenSnapshot> captured;
             try {
                 captured = provider.capture(screen, sequence + 1);
@@ -192,8 +201,7 @@ public final class ObserverOwnedScreenTransportClient {
         UUID target = ObserverNativeClient.observerTargetId();
         ObserverScreenSnapshot snapshot = payload.snapshot();
         if (!ObserverNativeClient.observerSessionActive() || target == null || !target.equals(payload.targetId())
-                || !ObserverOwnedScreenProtocols.accepts(snapshot.familyId(), snapshot.protocolVersion())
-                || !ObserverNativeClient.observerSupportsScreen(capability(snapshot.familyId()))
+                || !ObserverNativeClient.observerSupportsScreen(ObserverOwnedScreenCapability.CAPABILITY)
                 || !ObserverRemoteSequenceTracker.accept(snapshot.familyId(), payload.targetId(), snapshot.sequence())) return;
         if (!payload.open()) {
             ObserverOwnedScreenCoordinator.close(snapshot.familyId());
@@ -202,16 +210,5 @@ public final class ObserverOwnedScreenTransportClient {
         }
         ObserverNativeScreenClient.applyGenericScreenState(false, "", "");
         if (ObserverOwnedScreenCoordinator.open(snapshot)) observerFamily = snapshot.familyId();
-    }
-
-    private static long capability(String family) {
-        long builtIn = ObserverNativeScreenPayloads.capabilityForFamily(family);
-        if (builtIn != 0) return builtIn;
-        return switch (family) {
-            case "villagers_woodcutter" -> ObserverVillagersWoodcutterPayloads.CAPABILITY;
-            case "nexus_death_node_admin" -> ObserverNexusDeathNodeAdminPayloads.CAPABILITY;
-            case "locksmith_management" -> ObserverLocksmithManagementPayloads.CAPABILITY;
-            default -> 0L;
-        };
     }
 }
