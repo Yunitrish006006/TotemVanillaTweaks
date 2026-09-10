@@ -72,10 +72,12 @@ class ObserverOwnedScreenProtocolTest {
     }
 
     @Test
-    void legacyFamilyProtocolTableRemainsOnlyForV4CompatibilityPaths() {
-        assertEquals(4, ObserverOwnedScreenProtocols.expected("nexus"));
+    void legacyNexusProtocolRemainsSupportedAlongsideDetailZoomProtocol() {
+        assertEquals(3, ObserverOwnedScreenProtocols.expected("nexus"));
+        assertEquals(java.util.Set.of(3, 4), ObserverOwnedScreenProtocols.supported("nexus"));
+        assertTrue(ObserverOwnedScreenProtocols.accepts("nexus", 3));
         assertTrue(ObserverOwnedScreenProtocols.accepts("nexus", 4));
-        assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 3));
+        assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 2));
         assertFalse(ObserverOwnedScreenProtocols.accepts("alchemy_cauldron", 1));
     }
 }
