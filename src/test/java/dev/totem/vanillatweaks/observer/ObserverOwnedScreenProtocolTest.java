@@ -73,9 +73,9 @@ class ObserverOwnedScreenProtocolTest {
 
     @Test
     void legacyFamilyProtocolTableRemainsOnlyForV4CompatibilityPaths() {
-        assertEquals(3, ObserverOwnedScreenProtocols.expected("nexus"));
-        assertTrue(ObserverOwnedScreenProtocols.accepts("nexus", 3));
-        assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 2));
+        assertEquals(4, ObserverOwnedScreenProtocols.expected("nexus"));
+        assertTrue(ObserverOwnedScreenProtocols.accepts("nexus", 4));
+        assertFalse(ObserverOwnedScreenProtocols.accepts("nexus", 3));
         assertFalse(ObserverOwnedScreenProtocols.accepts("alchemy_cauldron", 1));
     }
 }
