@@ -169,27 +169,37 @@ final class ObserverOwnedE2eSnapshots {
 
     static ObserverOwnedScreenPayloads.State close(String family, String variant, long sequence) {
         return new ObserverOwnedScreenPayloads.State(false, ObserverOwnedScreenPayloads.closed(
-                family, variant, ObserverOwnedScreenProtocols.expected(family), sequence));
+                family, variant, protocol(family), sequence));
     }
 
     static ObserverRemoteCursorPayloads.State cursor(String family, String variant, long sequence) {
         return new ObserverRemoteCursorPayloads.State(ObserverRemoteCursorPayloads.PROTOCOL_VERSION, sequence,
-                family, variant, ObserverOwnedScreenProtocols.expected(family), 88, 83, 176, 166, ItemStack.EMPTY);
+                family, variant, protocol(family), 88, 83, 176, 166, ItemStack.EMPTY);
     }
 
     static ObserverRemoteCursorPayloads.State namedCursor(String family, String variant, long sequence) {
         ItemStack carried = new ItemStack(Items.DIAMOND, 5);
         carried.set(DataComponents.CUSTOM_NAME, Component.literal("Remote Cursor Diamond"));
         return new ObserverRemoteCursorPayloads.State(ObserverRemoteCursorPayloads.PROTOCOL_VERSION, sequence,
-                family, variant, ObserverOwnedScreenProtocols.expected(family), 88, 83, 176, 166, carried);
+                family, variant, protocol(family), 88, 83, 176, 166, carried);
     }
 
     private static ObserverOwnedScreenPayloads.State open(String family, String variant, long sequence, String title,
                                                            List<ItemStack> slots, int[] data, Map<String, String> metadata,
                                                            byte[] ownerPayload) {
         return new ObserverOwnedScreenPayloads.State(true, new ObserverScreenSnapshot(family, variant,
-                ObserverOwnedScreenProtocols.expected(family), sequence,
+                protocol(family), sequence,
                 Component.literal(title), slots, data, metadata, ownerPayload));
+    }
+
+    private static int protocol(String family) {
+        int expected = ObserverOwnedScreenProtocols.expected(family);
+        if (!"nexus".equals(family)) return expected;
+        int selected = Integer.getInteger("totem.observer.e2e.nexus.protocol", expected);
+        if (!ObserverOwnedScreenProtocols.accepts(family, selected)) {
+            throw new IllegalStateException("Unsupported Nexus Observer E2E protocol " + selected);
+        }
+        return selected;
     }
 
     private static List<ItemStack> emptySlots(int size) {
