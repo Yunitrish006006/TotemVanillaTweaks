@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import dev.totem.vanillatweaks.client.ObserverNativeScreenClient;
 import dev.totem.vanillatweaks.network.ObserverNativeScreenPayloads;
 import dev.totem.vanillatweaks.network.ObserverNexusScreenPayloads;
+import dev.totem.vanillatweaks.network.ObserverOwnedScreenProtocols;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -133,7 +134,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
         }
         if (recoverySaved && !recoveryClosed
                 && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
-                        "nexus", "recovery_compass", 3)
+                        "nexus", "recovery_compass", nexusProtocol())
                 && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.hasRemoteCursor()
                 && minecraft.gui.screen() == null) {
             recoveryClosed = true;
@@ -227,7 +228,7 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
 
         if (registrationSaved && !observerClosed
                 && !dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
-                "nexus", "registration", 3)
+                "nexus", "registration", nexusProtocol())
                 && minecraft.gui.screen() == null) {
             observerClosed = true;
             ObserverE2eCommon.marker("observer-native-nexus-closed.txt",
@@ -342,8 +343,18 @@ public final class ObserverNexusE2eBridge implements ClientModInitializer {
                 List.of(), 0, List.of(), "minecraft:overworld", 120, 72, -40, 3, 84, 92, 7, 20);
     }
 
+    private static int nexusProtocol() {
+        int expected = ObserverOwnedScreenProtocols.expected("nexus");
+        int selected = Integer.getInteger("totem.observer.e2e.nexus.protocol", expected);
+        if (!ObserverOwnedScreenProtocols.accepts("nexus", selected)) {
+            throw new IllegalStateException("Unsupported Nexus Observer E2E protocol " + selected);
+        }
+        return selected;
+    }
+
     private static RenderBarrier observeVariant(String variant, RenderBarrier current) {
-        if (!dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive("nexus", variant, 3)) {
+        if (!dev.totem.vanillatweaks.client.ObserverOwnedScreenCoordinator.isActive(
+                "nexus", variant, nexusProtocol())) {
             return current;
         }
         long sequence = ObserverE2eSequenceEvidence.accepted(ObserverNativeScreenPayloads.FAMILY_NEXUS);
