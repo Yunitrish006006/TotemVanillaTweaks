@@ -7,7 +7,7 @@ TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整。自 
 Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
-2. TotemCore `0.7.18`（`>=0.7.18 <0.8.0`）
+2. TotemCore `0.7.18`（`>=0.7.21 <0.8.0`）
 3. TotemVanillaTweaks `0.1.28`
 
 | 項目 | 需求 |
@@ -16,7 +16,7 @@ Client 與 Server 都放入：
 | Fabric Loader | 0.19.3+ |
 | Java | 25+ |
 | Fabric API | 0.154.2+26.2 |
-| 必要 Totem 模組 | `totem-core >=0.7.18 <0.8.0` |
+| 必要 Totem 模組 | `totem-core >=0.7.21 <0.8.0` |
 
 需要管理員 Spectator 觀察功能時，另外安裝 **TotemObserver**。TotemVanillaTweaks 與 TotemObserver 不互相承擔對方的功能 ownership。
 

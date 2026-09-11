@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: f87cd10fe8aefce77925b9e75dad237f17f38966
+          ref: 077924318bf85fa5de7cda73ed0e96abe5df803b
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -47,29 +47,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
           ./gradlew -PtotemCoreJar="$core_jar" clean test assemble compileGametestJava --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
 
       - name: Run gameplay client GameTest
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
           xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
 
       - name: Enforce VanillaTweaks ownership boundary
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.28'
-          test -f build/libs/totem-vanilla-tweaks-0.1.28.jar
+          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.29'
+          test -f build/libs/totem-vanilla-tweaks-0.1.29.jar
           ! find src/main/java -type f -name 'Observer*.java' | grep -q .
           ! grep -R -n -E '/observeui|Observer(Server|Client)Runtime|dev\.totem\.vanillatweaks\.observer' src/main
           test ! -d src/integrationGametest

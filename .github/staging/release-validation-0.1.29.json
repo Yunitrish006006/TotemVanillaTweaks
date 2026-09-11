@@ -1,0 +1,11 @@
+{
+  "version": "0.1.29",
+  "java": 25,
+  "minecraft": "26.2",
+  "artifact": "totem-vanilla-tweaks-0.1.29.jar",
+  "sha512": "5ffe88436210b723bb6d62f96606352844a50032193a6cafc8182ba9915b9cad00d1a17226ab37f4eaf8519c5e5f5ffcfc2d996bddca46642d29c3f3ef66cffd",
+  "unit_tests": 9,
+  "core_dependency": ">=0.7.21 <0.8.0",
+  "validation": "Versioned test, assemble and compileGametestJava passed locally. Previous source validation includes Nexus 108 server GameTests and VanillaTweaks/Alchemy en_us and zh_tw client tests, plus Alchemy/Core localized manual screenshots. Exact release commit CI is required by the publisher.",
+  "independent_review": "Independent source, localization and release workflow reviews completed; reported filename and whitespace fixes applied."
+}

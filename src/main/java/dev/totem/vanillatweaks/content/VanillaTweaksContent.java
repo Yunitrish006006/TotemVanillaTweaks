@@ -1,6 +1,10 @@
 package dev.totem.vanillatweaks.content;
 
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
+import net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -83,6 +87,18 @@ public final class VanillaTweaksContent {
     }
 
     private static void registerCreativeOutputs() {
+        ResourceKey<CreativeModeTab> key = ResourceKey.create(
+                Registries.CREATIVE_MODE_TAB, totemId("vanilla_tweaks/main"));
+        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, key,
+                FabricCreativeModeTab.builder()
+                        .title(Component.translatable("itemGroup.totem.vanilla_tweaks.main"))
+                        .icon(() -> new ItemStack(GRAVEL_IRON_ORE_ITEM))
+                        .build());
+        CreativeModeTabEvents.modifyOutputEvent(key).register(output -> {
+            output.accept(COOKED_PUFFERFISH);
+            output.accept(SMOKED_ROTTEN_FLESH);
+            output.accept(GRAVEL_IRON_ORE_ITEM);
+        });
         CreativeModeTabEvents.MODIFY_OUTPUT_ALL.register((tab, output) -> {
             Identifier id = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab);
             if (Identifier.withDefaultNamespace("food_and_drinks").equals(id)) {

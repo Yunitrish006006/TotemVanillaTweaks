@@ -32,12 +32,12 @@ concurrency:
 env:
   MODULE_ID: totem-vanilla-tweaks
   # Match the gameplay Build and Production Runtime dependency.
-  CORE_REF: f87cd10fe8aefce77925b9e75dad237f17f38966
+  CORE_REF: 077924318bf85fa5de7cda73ed0e96abe5df803b
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # The former first-party TotemCore project/version IDs are no longer public.
   # Keep this an exact external dependency instead of guessing a same-name project.
-  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.18.jar
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.21.jar
 
 jobs:
   publish:
@@ -215,8 +215,8 @@ jobs:
             || fail_release_build 'checked-out mod_version does not match the resolved release version.'
           chmod +x gradlew .lockstep/TotemCore/gradlew
           core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          [[ "$core" == 0.7.18 ]] \
-            || fail_release_build 'pinned TotemCore checkout is not version 0.7.18.'
+          [[ "$core" == 0.7.21 ]] \
+            || fail_release_build 'pinned TotemCore checkout is not version 0.7.21.'
           core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
           [[ -f "$core_jar" ]] \
             || fail_release_build 'pinned TotemCore production JAR is missing.'
@@ -235,7 +235,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.18.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
           xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
           ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace
@@ -295,7 +295,7 @@ jobs:
           if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
             fail_release 'release JAR has no readable fabric.mod.json.'
           fi
-          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.18 <0.8.0' \
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.21 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
             /tmp/fabric.mod.json >/dev/null; then
             fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
@@ -359,7 +359,7 @@ jobs:
           core_dependency_file="${core_archive}-${core_version}.jar"
           core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
           if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
-            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.18.jar.'
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.21.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"

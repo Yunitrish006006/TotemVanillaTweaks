@@ -15,6 +15,7 @@
       "dev.totem.vanillatweaks.gametest.VanillaTweaksManualGameTest"
     ],
     "fabric-client-gametest": [
+      "dev.totem.vanillatweaks.gametest.VanillaTweaksCreativeTabVisualGameTest",
       "dev.totem.vanillatweaks.gametest.SkeletonAmmoRuntimeClientGameTest"
     ]
   },
