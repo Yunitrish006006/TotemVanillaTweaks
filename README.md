@@ -1,18 +1,6 @@
 # TotemVanillaTweaks
 
-TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整：容器整理、
-講台／書櫃規則、混凝土粉末硬化、漏斗取出熔爐成品時釋放經驗，以及
-管理員用的 Spectator Observer View。
-
-目前的 module-owned Observer 版本需要 TotemCore **>=0.7.18 <0.8.0**；
-0.7.18 保留 owner provider、bounded semantic snapshot 與 remote cursor contract。
-
-> **0.1.26 Observer 更新：** protocol-native v4／screen protocol v2 現在有
-> 25 個 negotiated semantic family capability。production 路徑仍維持 framebuffer-free；
-> 世界使用 Minecraft 原生 spectator camera，HUD 與支援的 GUI family 在 Observer Client
-> 以結構化資料本地重建。TotemNexus 0.3.17 的 owned provider 使用 protocol v3，
-> 分別支援普通羅盤與回生羅盤目的地清單、地圖標記與書本 management-only 介面；地圖縮放、平移及選點
-> 以有界語意同步，不傳送地圖像素。
+TotemVanillaTweaks 收納不屬於單一大型功能的原版玩法調整。自 **0.1.28** 起，Observer View 已完整移至獨立的 **TotemObserver**；本模組不再註冊 `/observeui`、Observer session、semantic relay 或 Observer Screen adapters。
 
 ## 安裝
 
@@ -20,7 +8,7 @@ Client 與 Server 都放入：
 
 1. Fabric API `0.154.2+26.2`
 2. TotemCore `0.7.18`（`>=0.7.18 <0.8.0`）
-3. TotemVanillaTweaks `0.1.26`
+3. TotemVanillaTweaks `0.1.28`
 
 | 項目 | 需求 |
 | --- | --- |
@@ -30,80 +18,7 @@ Client 與 Server 都放入：
 | Fabric API | 0.154.2+26.2 |
 | 必要 Totem 模組 | `totem-core >=0.7.18 <0.8.0` |
 
-Server 負責規則、整理 transaction 與 Observer session authority；Client 模組
-提供整理按鍵、目標選擇，以及 Observer 的 protocol-native state relay／本地重建。
-舊整合 JAR 不應再與獨立 TotemVanillaTweaks 並用。
-
-## Spectator Observer View（protocol v4）
-
-管理員可在 Spectator 模式使用：
-
-```text
-/observeui <player>
-/observeui stop
-```
-
-Observer View 使用 **protocol-native v4**；semantic screen transport 使用
-**screen protocol v2**。Dedicated Server 負責 session、權限、Target／Observer
-capability negotiation 與 cleanup；Target Client 只傳送版本化的結構化玩家、HUD、
-container／screen 狀態，Observer Client 以 Minecraft 原生渲染與本地 UI 重建觀察畫面。
-
-screen protocol v2 使用 stable screen-family capability mask。目前 main 共定義 25 個
-negotiated semantic family capability：
-
-> 下一版 Observer UI 架構要求原版 family 直接使用相符的 Minecraft Screen/Menu，
-> 合作模組 family 則由 owning module 透過 TotemCore provider 建立正式 Screen 的唯讀
-> 模式。TotemVanillaTweaks 不再擁有或維護手繪替代畫面；缺少或不相容的
-> provider 會明確標示不支援。獨立 remote cursor capability 使用 bit 24，
-> `horse_inventory` 使用 bit 25；下一個 capability 從 bit 26 開始。
-
-- 基礎與原版：`container_slots`、`furnace`、`book`、`crafting`、`merchant`、
-  `anvil`、`enchanting`、`brewing`、`smithing`、`stonecutter`、`grindstone`、
-  `loom`、`cartography`、`beacon`、`sign`、`crafter`、`advancements`、`stats`、
-  `horse_inventory`。
-- Totem 整合：`remnant_backpack`、`automata_copper_golem`、`nexus`
-  （compass／recovery_compass／map／management／friends／registration variants）、`nexus_death_node_admin`、
-  `locksmith_management`、`villagers_woodcutter`。
-
-`container_slots` 仍負責可以由通用 `AbstractContainerScreen` 槽位資料充分表達的畫面；
-其餘 family 傳送各自需要的結構化狀態。Recipe Book 不另占 capability bit，而是由
-`crafting` family 傳送開關、寬度模式、過濾、「是否正在搜尋」、分頁與類別等語意狀態；
-玩家輸入的搜尋文字不會傳送。Death、Sleep、Chat 與 Social Interactions 依明確的
-metadata-only 規則處理。Chat metadata 不包含玩家尚未送出的聊天或指令文字；
-Discord 設定與 Nexus 改名／權限對話框同樣只傳去識別 metadata，不讀取 URL、金鑰、
-token、credentials 或輸入草稿。
-
-Server 會為每個 Observer 記錄 negotiated capability，把同一 Target 所需 capability 的
-聯集下發給 Target，再按每個 Observer 的 mask 個別過濾 semantic relay。若某個 screen
-family 沒有被雙方共同支援，該畫面走 metadata-only placeholder，不會中止整個
-Observer session，也不會傳送 Target 像素。
-
-production 路徑已完全移除整張 framebuffer／PNG 傳輸，不再存在 `FrameChunk`、
-`FrameRelay`、`CaptureControl`、frame texture 或 `DynamicTexture` 安裝 fallback。
-如果 Target 或 Observer Client 不支援目前的 protocol-native session capability，
-`/observeui` 會拒絕建立 session，而不是退回截圖傳輸；個別 semantic screen family
-不支援時則只降級該 GUI 為 metadata-only。
-
-目前經測試的觀察面包含正常世界／HUD、上述 25 個 negotiated family、PauseScreen 的
-metadata reconstruction，以及 unsupported／unnegotiated Screen 的 metadata placeholder。
-完整架構與剩餘相容性工作見
-[`OBSERVER_ROADMAP.md`](OBSERVER_ROADMAP.md)。
-
-Observer 由 CI 驗證真正的三 JVM 路徑：
-
-```text
-Dedicated Server JVM
-        +
-Target Minecraft Client JVM
-        +
-Observer Minecraft Client JVM
-```
-
-三 JVM E2E 會逐一驗證已註冊 family 的 semantic relay、unsupported-screen metadata、
-Stop 與 server/client cleanup；Client GameTests 會驗證 capability negotiation、
-metadata-only fallback 與本地 semantic reconstruction，並保存 native-scale PNG 證據。
-另有 source-level gate，若 `src/main` 再出現舊的 framebuffer transport surface，CI
-會直接失敗。
+需要管理員 Spectator 觀察功能時，另外安裝 **TotemObserver**。TotemVanillaTweaks 與 TotemObserver 不互相承擔對方的功能 ownership。
 
 ## 容器整理
 
@@ -119,15 +34,11 @@ metadata-only fallback 與本地 semantic reconstruction，並保存 native-scal
 | 原版箱子、漏斗、發射器／投擲器、界伏盒的容器一側 | 當前容器 |
 | 單純玩家物品欄畫面 | 玩家主背包 |
 
-整理會合併相同 Item 與 Data Components，再依穩定順序排列。整理玩家
-物品欄時不移動快捷列、盔甲、副手或其他裝備欄。Server 會驗證目前
-開啟的 menu、使用權限及所有目的格限制，驗證完成後才寫入，Client 不能指定任意 inventory。
-工作台合成區、熔爐、鐵砧等功能格不支援整理，避免繞過合成扣料或產物領取流程；這些原版 GUI 的玩家主背包仍可整理。
-自訂 menu（包含模組背包）兩側均不支援此通用整理，以免搬動開啟中的背包或破壞其儲存狀態。
+整理會合併相同 Item 與 Data Components，再依穩定順序排列。玩家物品欄整理不移動快捷列、盔甲、副手或其他裝備欄。Server 會驗證目前 menu、使用權限與目的格限制後才寫入；工作台合成區、熔爐、鐵砧等功能格不支援通用整理，自訂 menu 也不由此功能處理。
 
 ## 講台配方
 
-模組以較直接的配方覆寫 `minecraft:lectern`：
+模組覆寫 `minecraft:lectern`：
 
 ```text
 S S S
@@ -135,41 +46,31 @@ _ B _
 _ S _
 ```
 
-`S` 是任意木製半磚，`B` 是書；總共 4 個半磚與 1 本書。
+`S` 是任意木製半磚，`B` 是書；共 4 個半磚與 1 本書。
 
 ## 書櫃生存規則
 
 - 移除原版普通書櫃工作台配方。
-- 生存玩家物品欄中的普通書櫃會轉換成每個 3 本書。
-- 物品欄空間不足時，多出的書會安全掉在玩家附近。
+- 生存玩家物品欄中的普通書櫃轉換成每個 3 本書；空間不足的書安全掉落。
 - 創造模式玩家不受物品欄轉換影響。
 - 結構生成中的普通書櫃與空雕紋書櫃會成為裝有書本的雕紋書櫃。
 
-此規則與 TotemEnchanting 搭配時，可讓探索取得的雕紋書櫃直接參與
-加權附魔力。
-
 ## 混凝土粉末
 
-所有 16 色混凝土粉末 ItemEntity 實際接觸水時會原地硬化成對應混凝土：
-
-- 保留數量與 Data Components。
-- 不建立替代 ItemEntity。
-- 僅靠近水、下雨但未浸水時不會硬化。
-- 流動水與水源都可生效。
+16 色混凝土粉末 ItemEntity 實際接觸水時原地硬化成對應混凝土，保留數量與 Data Components；僅靠近水或下雨不觸發，流動水與水源都可生效。
 
 ## 熔爐與漏斗經驗
 
-漏斗從熔爐、煙燻爐或高爐的結果槽取出成品時，應得的配方經驗會在
-漏斗附近釋放，並清除已結算 recipe bookkeeping，避免自動化吞掉經驗
-或重複領取。
+漏斗從熔爐、煙燻爐或高爐結果槽取出成品時，應得配方經驗會在漏斗附近釋放，並清除已結算 recipe bookkeeping，避免自動化吞掉經驗或重複領取。
 
 ## 模組邊界
 
-- 背包與 Shulker／Bundle 的巢狀安全屬於 **TotemRemnant**。
-- 缽與燧石、煉金材料及煉藥鍋屬於 **TotemAlchemy**。
-- 雕紋書櫃的加權附魔力屬於 **TotemEnchanting**。
+- Observer session、semantic relay、vanilla Screen adapters 與 `/observeui`：**TotemObserver**。
+- 背包與 Shulker／Bundle 巢狀安全：**TotemRemnant**。
+- 缽、燧石、煉金材料與煉藥鍋：**TotemAlchemy**。
+- 雕紋書櫃加權附魔力：**TotemEnchanting**。
 
-Vanilla Tweaks 不直接依賴這些功能模組。
+VanillaTweaks 不直接依賴這些功能模組。
 
 ## 開發與驗證
 
@@ -177,8 +78,4 @@ Vanilla Tweaks 不直接依賴這些功能模組。
 ./gradlew build
 ```
 
-CI 會另外執行 Server GameTests、Client GameTests、production-runtime Client GameTests，
-以及 Observer 的 Dedicated Server + Target Client + Observer Client 三 JVM E2E。
-Observer 另有 framebuffer-free production source gate；production-runtime gate 使用實際
-distribution namespace 啟動單人世界並召喚骷髏，專門攔截開發環境可能看不到的
-ABI/remapping 問題。所有權與驗證契約見 [`EXTRACTION.md`](EXTRACTION.md)。
+CI 驗證 Java 25 compile/test、Server GameTests、gameplay Client GameTest，以及 built-artifact production-namespace Client GameTest。Observer 的 protocol、cross-module、GameTest 與三 JVM E2E 驗證由 TotemObserver 自己負責。所有權與 gameplay 驗證契約見 [`EXTRACTION.md`](EXTRACTION.md)。
