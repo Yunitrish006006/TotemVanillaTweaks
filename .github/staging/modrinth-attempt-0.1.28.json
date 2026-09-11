@@ -1,8 +1,8 @@
 {
   "version": "0.1.28",
-  "release_ref": "0360c3f513fe1247f1c4fd96c7d3af7e22365803",
+  "release_ref": "0b004f99dfc5a098a29cab425f1d6a83dd29f2fd",
   "release_type": "release",
-  "run": "34561327291",
-  "status": "failure",
-  "publish_step": "skipped"
+  "run": "34585862486",
+  "status": "success",
+  "publish_step": "success"
 }
