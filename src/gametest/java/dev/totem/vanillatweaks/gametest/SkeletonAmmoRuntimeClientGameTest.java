@@ -17,7 +17,7 @@ public final class SkeletonAmmoRuntimeClientGameTest implements FabricClientGame
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
-            singleplayer.getClientLevel().waitForChunksRender();
+            singleplayer.getConnection().waitForChunksRender();
 
             // Summon in the loaded player chunk so entity tracking and the
             // finite-ammunition ENTITY_LOAD callback happen synchronously.

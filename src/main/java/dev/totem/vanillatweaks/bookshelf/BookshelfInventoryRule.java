@@ -2,6 +2,7 @@ package dev.totem.vanillatweaks.bookshelf;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Prediction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -43,7 +44,7 @@ public final class BookshelfInventoryRule {
                 int batch = Math.min(booksToGive, Items.BOOK.getDefaultMaxStackSize());
                 ItemStack books = new ItemStack(Items.BOOK, batch);
                 if (!player.getInventory().add(books)) {
-                    player.drop(books, false);
+                    player.drop(books, false, Prediction.SERVER_ONLY);
                 }
                 booksToGive -= batch;
             }

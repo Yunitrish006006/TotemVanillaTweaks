@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 077924318bf85fa5de7cda73ed0e96abe5df803b
+          ref: 58deabdd4a81bc751679876f202a3fa062729c58
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -47,29 +47,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
           ./gradlew -PtotemCoreJar="$core_jar" clean test assemble compileGametestJava --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
 
       - name: Run gameplay client GameTest
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
           xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
 
       - name: Enforce VanillaTweaks ownership boundary
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.29'
-          test -f build/libs/totem-vanilla-tweaks-0.1.29.jar
+          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.30'
+          test -f build/libs/totem-vanilla-tweaks-0.1.30.jar
           ! find src/main/java -type f -name 'Observer*.java' | grep -q .
           ! grep -R -n -E '/observeui|Observer(Server|Client)Runtime|dev\.totem\.vanillatweaks\.observer' src/main
           test ! -d src/integrationGametest
@@ -78,3 +78,47 @@ jobs:
           grep -Fq '"AbstractContainerScreenMixin"' src/main/resources/totem-vanilla-tweaks.client.mixins.json
           test "$(jq '.client | length' src/main/resources/totem-vanilla-tweaks.client.mixins.json)" = '2'
           ! grep -R -n 'Observer' src/main/resources/totem-vanilla-tweaks.mixins.json
+
+      - name: Inspect release artifact ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          jar_file="build/libs/totem-vanilla-tweaks-${version}.jar"
+          unzip -Z1 "$jar_file" > build/release-jar-entries.txt
+          if grep -E 'dev/totem/vanillatweaks/(observer/|network/Observer|client/Observer|mixin/.*/?Observer|mixin/Observer)' build/release-jar-entries.txt; then
+            echo 'Embedded Observer classes remain in the VanillaTweaks artifact.' >&2
+            exit 1
+          fi
+          for member in fabric.mod.json totem-vanilla-tweaks.mixins.json totem-vanilla-tweaks.client.mixins.json; do
+            unzip -p "$jar_file" "$member" > build/release-jar-metadata.json
+            if grep -q 'Observer' build/release-jar-metadata.json; then
+              echo "Embedded Observer metadata remains in ${member}." >&2
+              exit 1
+            fi
+          done
+
+      - name: Bind validated release artifact to this Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          archive="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          artifact="${archive}-${version}.jar"
+          core_source="$(git -C .lockstep/TotemCore rev-parse HEAD)"
+          test "$core_source" = 58deabdd4a81bc751679876f202a3fa062729c58
+          core_sha="$(sha512sum .lockstep/TotemCore/build/libs/totem-core-0.7.22.jar | awk '{print $1}')"
+          test "$core_sha" = "$(jq -er .core_artifact_sha512 ".github/staging/release-validation-${version}.json")"
+          sha="$(sha512sum "build/libs/${artifact}" | awk '{print $1}')"
+          test "$sha" = "$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
+          mkdir -p build/release-artifact
+          cp "build/libs/${artifact}" build/release-artifact/
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg source "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core_source "$core_source" --arg core_sha "$core_sha" '{repository:$repository,source_commit:$source,run_id:$run,run_attempt:$attempt,version:$version,artifact:$artifact,sha512:$sha,core_version:"0.7.22",core_source_commit:$core_source,core_artifact_sha512:$core_sha}' > build/release-artifact/build-provenance.json
+
+      - name: Upload immutable validated release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/release-artifact/
+          if-no-files-found: error
+          retention-days: 14

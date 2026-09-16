@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -14,6 +15,7 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
@@ -82,15 +84,24 @@ public final class CanonicalContentGameTest {
             player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.IRON_SHOVEL));
             require(helper, player.getMainHandItem().isCorrectToolForDrops(helper.getLevel().getBlockState(absolutePos)),
                     "An iron shovel was not recognized as the correct tool for canonical gravel iron ore");
-            require(helper, Block.getDrops(
+            var ordinaryDrops = Block.getDrops(
                     helper.getLevel().getBlockState(absolutePos),
                     helper.getLevel(),
                     absolutePos,
                     null,
                     player,
                     player.getMainHandItem()
-            ).stream().anyMatch(drop -> drop.is(Items.RAW_IRON) && drop.getCount() >= 1),
+            );
+            require(helper, ordinaryDrops.size() == 1 && ordinaryDrops.getFirst().is(Items.RAW_IRON)
+                            && ordinaryDrops.getFirst().getCount() >= 1 && ordinaryDrops.getFirst().getCount() <= 3,
                     "Canonical gravel iron ore did not return raw iron from its mining loot table");
+            player.getMainHandItem().enchant(helper.getLevel().registryAccess()
+                    .lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SILK_TOUCH), 1);
+            var silkDrops = Block.getDrops(helper.getLevel().getBlockState(absolutePos),
+                    helper.getLevel(), absolutePos, null, player, player.getMainHandItem());
+            require(helper, silkDrops.size() == 1 && silkDrops.getFirst().is(VanillaTweaksContent.GRAVEL_IRON_ORE_ITEM)
+                            && silkDrops.getFirst().getCount() == 1,
+                    "Silk Touch did not preserve canonical gravel iron ore");
             helper.succeed();
         } finally {
             player.discard();

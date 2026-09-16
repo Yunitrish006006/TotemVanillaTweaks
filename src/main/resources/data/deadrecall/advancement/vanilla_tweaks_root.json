@@ -7,7 +7,6 @@
   },
   "display": {
     "announce_to_chat": false,
-    "background": "minecraft:gui/advancements/backgrounds/stone",
     "description": {
       "translate": "advancements.totem.vanilla_tweaks_root.description"
     },

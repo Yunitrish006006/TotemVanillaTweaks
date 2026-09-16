@@ -14,7 +14,7 @@
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
-        "recipe": "totem:vanilla_tweaks/iron_ingot_from_blasting_gravel_iron_ore"
+        "recipes": "totem:vanilla_tweaks/iron_ingot_from_blasting_gravel_iron_ore"
       }
     }
   },

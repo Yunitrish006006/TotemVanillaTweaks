@@ -1,0 +1,20 @@
+{
+  "version": "0.1.30",
+  "java": 25,
+  "minecraft": "26.3",
+  "artifact": "totem-vanilla-tweaks-0.1.30.jar",
+  "sha512": "59fc7638e5e32d7031a2a777663ed5e57b52c7ad93b1b7df8f5b735775f5d9a41a163a8e724e9891a5bcae51c11c989924a05d9c44a6c07fce191e8f1d8e61d8",
+  "core_version": "0.7.22",
+  "core_source_commit": "58deabdd4a81bc751679876f202a3fa062729c58",
+  "core_artifact_sha512": "35e4382fef9b5c5e68db3e67c887391256bb13fc7216c4e7f3d7a42242565e3a5c51d20e8f94671274132d89698e21b81f8e1242301d9c8994c328339b239fcd",
+  "local_unit_report_totals": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "local_unit_report_files": 4,
+  "local_server_gametests_passed": 24,
+  "local_build_log": "/tmp/TotemVanillaTweaks-263-build.log",
+  "validation_scope": "Local working-tree evidence only: the referenced Java 25 / Minecraft 26.3 build log reports success, and the available unit XML reports have no failures or errors. The artifact SHA512 was computed from the current versioned local JAR. Core source commit records the intended release dependency pin; these local reports do not establish an exact-source remote run or independently bind their tested bytes to this JAR. Exact release-source CI, dependency verification, required client/runtime gates and publisher SHA512/read-back remain pending."
+}

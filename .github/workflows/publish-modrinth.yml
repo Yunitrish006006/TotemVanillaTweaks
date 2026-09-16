@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: 'modrinth-${{ github.workflow }}-${{ github.ref }}'
@@ -32,12 +33,12 @@ concurrency:
 env:
   MODULE_ID: totem-vanilla-tweaks
   # Match the gameplay Build and Production Runtime dependency.
-  CORE_REF: 077924318bf85fa5de7cda73ed0e96abe5df803b
+  CORE_REF: 58deabdd4a81bc751679876f202a3fa062729c58
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # The former first-party TotemCore project/version IDs are no longer public.
   # Keep this an exact external dependency instead of guessing a same-name project.
-  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.21.jar
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.22.jar
 
 jobs:
   publish:
@@ -161,19 +162,6 @@ jobs:
           echo 'Manual Modrinth publication/verification requires both MODRINTH_TOKEN and MODRINTH_PROJECT_ID.' >&2
           exit 1
 
-      - if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          # Release artifacts must never reuse historical dependency jars that
-          # were mutated by the retired named-namespace normalization task.
-          cache-disabled: true
-
       - name: Check out pinned release source
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
         uses: actions/checkout@v4
@@ -181,86 +169,78 @@ jobs:
           ref: '${{ steps.release.outputs.release_ref }}'
           fetch-depth: 0
 
-      - name: Check out pinned TotemCore
-        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: Yunitrish006006/TotemCore
-          ref: '${{ env.CORE_REF }}'
-          path: .lockstep/TotemCore
-          persist-credentials: false
-
-      - name: Build pinned TotemCore
-        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd .lockstep/TotemCore && ./gradlew assemble --no-daemon --stacktrace)
-
-      - name: Build release JAR
+      - name: Require exact-source release gates
+        id: gates
         if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
         shell: bash
         env:
-          EXPECTED_VERSION: '${{ steps.release.outputs.version }}'
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          fail_release_build() {
-            echo "Release JAR validation failed: $1" >&2
-            exit 1
-          }
-
-          actual_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
-          [[ -n "$actual_version" ]] || fail_release_build 'gradle.properties has no mod_version.'
-          [[ "$actual_version" == "$EXPECTED_VERSION" ]] \
-            || fail_release_build 'checked-out mod_version does not match the resolved release version.'
-          chmod +x gradlew .lockstep/TotemCore/gradlew
-          core="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          [[ "$core" == 0.7.21 ]] \
-            || fail_release_build 'pinned TotemCore checkout is not version 0.7.21.'
-          core_jar="$GITHUB_WORKSPACE/.lockstep/TotemCore/build/libs/totem-core-${core}.jar"
-          [[ -f "$core_jar" ]] \
-            || fail_release_build 'pinned TotemCore production JAR is missing.'
-
-          # Never accept a formal JAR left by an earlier task or retry. Minecraft
-          # 26.2 uses the non-remapping Loom plugin, so `jar` is the production JAR.
-          ./gradlew -PtotemCoreJar="$core_jar" clean test assemble compileGametestJava --no-daemon --stacktrace
-          a="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
-          [[ -n "$a" ]] || fail_release_build 'gradle.properties has no archives_base_name.'
-          artifact="build/libs/${a}-${EXPECTED_VERSION}.jar"
-          [[ -f "$artifact" ]] \
-            || fail_release_build 'clean Gradle jar build did not produce the expected release artifact.'
-
-      - name: Run release gameplay GameTests
-        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.21.jar"
-          ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
-          xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
-          ./gradlew -PtotemCoreJar="$core_jar" runProductionClientGameTest --no-daemon --stacktrace
-
-      - name: Inspect release artifact ownership
-        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
-        shell: bash
-        env:
-          EXPECTED_VERSION: '${{ steps.release.outputs.version }}'
-        run: |
-          set -euo pipefail
-          jar_file="build/libs/totem-vanilla-tweaks-${EXPECTED_VERSION}.jar"
-          test -f "$jar_file"
-          jar tf "$jar_file" > build/release-jar-entries.txt
-          if grep -E 'dev/totem/vanillatweaks/(observer/|network/Observer|client/Observer|mixin/.*/?Observer|mixin/Observer)' build/release-jar-entries.txt; then
-            echo 'Embedded Observer classes remain in the VanillaTweaks artifact.' >&2
-            exit 1
-          fi
-          for member in fabric.mod.json totem-vanilla-tweaks.mixins.json totem-vanilla-tweaks.client.mixins.json; do
-            unzip -p "$jar_file" "$member" > build/release-jar-metadata.json
-            if grep -q 'Observer' build/release-jar-metadata.json; then
-              echo "Embedded Observer metadata remains in ${member}." >&2
-              exit 1
-            fi
+          release_sha="$(git rev-parse HEAD)"
+          echo "source=$release_sha" >> "$GITHUB_OUTPUT"
+          for workflow in build.yml production-runtime.yml; do
+            passed=false
+            for attempt in {1..120}; do
+              runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${release_sha}&event=push&per_page=10")"
+              latest="$(jq -c '.workflow_runs | sort_by(.run_number) | last // null' <<<"$runs")"
+              if [[ "$(jq -r '.status // empty' <<<"$latest")" == completed ]]; then
+                jq -e --arg sha "$release_sha" --arg repo "$GITHUB_REPOSITORY" '.conclusion=="success" and .head_sha==$sha and .event=="push" and .repository.full_name==$repo' <<<"$latest" >/dev/null
+                if [[ "$workflow" == build.yml ]]; then
+                  echo "run_id=$(jq -er .id <<<"$latest")" >> "$GITHUB_OUTPUT"
+                  echo "run_attempt=$(jq -er .run_attempt <<<"$latest")" >> "$GITHUB_OUTPUT"
+                fi
+                passed=true
+                break
+              fi
+              sleep 10
+            done
+            test "$passed" = true || { echo "Timed out waiting for ${workflow}; refusing publication." >&2; exit 1; }
           done
+
+      - name: Resolve immutable artifact identity
+        id: artifact
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ steps.gates.outputs.run_id }}
+          BUILD_RUN_ATTEMPT: ${{ steps.gates.outputs.run_attempt }}
+          RELEASE_SHA: ${{ steps.gates.outputs.source }}
+        run: |
+          set -euo pipefail
+          artifacts="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100")"
+          artifact_id="$(jq -er --arg name "release-${RELEASE_SHA}-${BUILD_RUN_ATTEMPT}" --arg run "$BUILD_RUN_ID" --arg source "$RELEASE_SHA" '[.[].artifacts[] | select(.name==$name)] | select(length==1) | .[0] | select(.expired==false and .size_in_bytes>0 and .workflow_run.id==($run|tonumber) and .workflow_run.head_sha==$source) | .id' <<<"$artifacts")"
+          echo "id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact Build artifact
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.artifact.outputs.id }}
+          merge-multiple: true
+          path: build/libs
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.gates.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify immutable artifact provenance and SHA512
+        if: steps.release.outputs.should_publish == 'true' && steps.publisher.outputs.available == 'true'
+        shell: bash
+        env:
+          BUILD_RUN_ID: ${{ steps.gates.outputs.run_id }}
+          BUILD_RUN_ATTEMPT: ${{ steps.gates.outputs.run_attempt }}
+          RELEASE_SHA: ${{ steps.gates.outputs.source }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          archive="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
+          artifact="${archive}-${version}.jar"
+          sha="$(sha512sum "build/libs/${artifact}" | awk '{print $1}')"
+          expected_sha="$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
+          core_sha="$(jq -er .core_artifact_sha512 ".github/staging/release-validation-${version}.json")"
+          test "$sha" = "$expected_sha"
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg source "$RELEASE_SHA" --arg run "$BUILD_RUN_ID" --arg attempt "$BUILD_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core "$CORE_REF" --arg core_sha "$core_sha" '.repository==$repo and .source_commit==$source and .run_id==$run and .run_attempt==$attempt and .version==$version and .artifact==$artifact and .sha512==$sha and .core_version=="0.7.22" and .core_source_commit==$core and .core_artifact_sha512==$core_sha' build/libs/build-provenance.json >/dev/null
 
       - name: Publish and verify
         id: modrinth
@@ -295,7 +275,7 @@ jobs:
           if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
             fail_release 'release JAR has no readable fabric.mod.json.'
           fi
-          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.21 <0.8.0' \
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.22 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
             /tmp/fabric.mod.json >/dev/null; then
             fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
@@ -352,14 +332,10 @@ jobs:
             fail_release 'could not calculate a valid SHA-512 for the release JAR.'
           fi
 
-          core_version="$(sed -n 's/^mod_version=//p' .lockstep/TotemCore/gradle.properties)"
-          core_archive="$(sed -n 's/^archives_base_name=//p' .lockstep/TotemCore/gradle.properties)"
-          [[ -n "$core_version" ]] || fail_release 'pinned TotemCore metadata has no mod_version.'
-          [[ -n "$core_archive" ]] || fail_release 'pinned TotemCore metadata has no archives_base_name.'
-          core_dependency_file="${core_archive}-${core_version}.jar"
-          core_artifact=".lockstep/TotemCore/build/libs/${core_dependency_file}"
-          if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" || ! -f "$core_artifact" ]]; then
-            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.21.jar.'
+          core_version="$(jq -er .core_version build/libs/build-provenance.json)"
+          core_dependency_file="totem-core-${core_version}.jar"
+          if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" ]]; then
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.22.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"
@@ -367,6 +343,9 @@ jobs:
               '[{project_id:$fabric,dependency_type:"required"},{file_name:$core_file,dependency_type:"required"}]')"; then
             fail_release 'could not construct the exact Fabric API and TotemCore dependency metadata.'
           fi
+
+          expected_sha="$(jq -er .sha512 ".github/staging/release-validation-${v}.json")"
+          [[ "$sha" == "$expected_sha" ]] || fail_release 'release JAR differs from staged SHA512.'
 
           changelog_file=".github/staging/modrinth-changelog-${v}.md"
           if [[ -f "$changelog_file" ]]; then

@@ -14,7 +14,7 @@
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
-        "recipe": "totem:vanilla_tweaks/cooked_pufferfish_from_smoker"
+        "recipes": "totem:vanilla_tweaks/cooked_pufferfish_from_smoker"
       }
     }
   },

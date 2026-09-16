@@ -3,7 +3,7 @@
   "criteria": {
     "crafted_lectern": {
       "conditions": {
-        "recipe_id": "minecraft:lectern"
+        "recipes": "minecraft:lectern"
       },
       "trigger": "minecraft:recipe_crafted"
     }

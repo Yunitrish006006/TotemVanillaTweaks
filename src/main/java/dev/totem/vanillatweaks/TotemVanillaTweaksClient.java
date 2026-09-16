@@ -5,7 +5,6 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class TotemVanillaTweaksClient implements ClientModInitializer {
     private static KeyMapping sortBackpackKey;
@@ -22,7 +21,7 @@ public final class TotemVanillaTweaksClient implements ClientModInitializer {
         sortBackpackKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.totem.sort_backpack",
                 InputConstants.Type.MOUSE,
-                GLFW.GLFW_MOUSE_BUTTON_MIDDLE,
+                InputConstants.MOUSE_BUTTON_MIDDLE,
                 category
         ));
     }

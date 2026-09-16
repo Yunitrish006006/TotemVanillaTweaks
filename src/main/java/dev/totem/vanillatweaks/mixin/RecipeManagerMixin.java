@@ -1,17 +1,18 @@
 package dev.totem.vanillatweaks.mixin;
 
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeMap;
-import net.minecraft.world.item.crafting.RecipeManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-import java.util.List;
+import java.util.stream.Stream;
 
-@Mixin(RecipeManager.class)
+@Mixin(RecipeMap.class)
 public abstract class RecipeManagerMixin {
 
     @Unique
@@ -20,20 +21,11 @@ public abstract class RecipeManagerMixin {
     /**
      * 在配方套用時移除原版書櫃配方（minecraft:bookshelf）。
      */
-    @ModifyVariable(
-            method = "apply(Lnet/minecraft/world/item/crafting/RecipeMap;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V",
-            at = @At("HEAD"),
-            argsOnly = true
+    @Redirect(
+            method = "create",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/core/HolderLookup;listElements()Ljava/util/stream/Stream;")
     )
-    private RecipeMap totem$removeVanillaBookshelfRecipe(RecipeMap recipes) {
-        List<RecipeHolder<?>> filtered = recipes.values().stream()
-                .filter(holder -> !totem$isVanillaBookshelfRecipe(holder))
-                .toList();
-        return RecipeMap.create(filtered);
-    }
-
-    @Unique
-    private boolean totem$isVanillaBookshelfRecipe(RecipeHolder<?> holder) {
-        return holder.id().identifier().equals(totem$vanillaBookshelfRecipe);
+    private static Stream<Holder.Reference<Recipe<?>>> totem$removeVanillaBookshelfRecipe(HolderLookup<Recipe<?>> recipes) {
+        return recipes.listElements().filter(holder -> !holder.key().identifier().equals(totem$vanillaBookshelfRecipe));
     }
 }
