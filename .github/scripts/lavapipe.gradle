@@ -1,8 +1,8 @@
 allprojects {
     afterEvaluate {
         tasks.matching { it.name in ['runClientGameTest', 'runClientGametest', 'runProductionClientGameTest', 'runIntegrationClientGametest'] }.configureEach {
-            if (it.hasProperty('programArgs')) programArgs.addAll(['--graphicsBackend', 'VULKAN'])
-            else if (it.hasProperty('args')) args('--graphicsBackend', 'VULKAN')
+            if (it.hasProperty('programArgs')) programArgs.addAll(['--graphicsBackend', 'OPENGL'])
+            else if (it.hasProperty('args')) args('--graphicsBackend', 'OPENGL')
         }
     }
 }
