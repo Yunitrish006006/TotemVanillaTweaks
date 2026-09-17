@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -58,6 +62,7 @@ jobs:
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --init-script ${GITHUB_WORKSPACE}/.github/scripts/lavapipe.gradle --no-daemon --stacktrace
 
       - name: Run gameplay client GameTest
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail

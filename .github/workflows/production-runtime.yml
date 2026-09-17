@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   production-runtime:
     runs-on: ubuntu-latest
@@ -44,6 +48,7 @@ jobs:
           (cd .lockstep/TotemCore && ./gradlew assemble --init-script ${GITHUB_WORKSPACE}/.github/scripts/lavapipe.gradle --no-daemon --stacktrace)
 
       - name: Run built-artifact gameplay Client GameTest
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail
