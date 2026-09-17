@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 58deabdd4a81bc751679876f202a3fa062729c58
+          ref: 424b90dc3929caa8c1afcfca7e63c50a64bde669
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -47,21 +47,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.23.jar"
           ./gradlew -PtotemCoreJar="$core_jar" clean test assemble compileGametestJava --no-daemon --stacktrace
 
       - name: Run server GameTests
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.23.jar"
           ./gradlew -PtotemCoreJar="$core_jar" runGameTest --no-daemon --stacktrace
 
       - name: Run gameplay client GameTest
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.23.jar"
           xvfb-run -a ./gradlew -PtotemCoreJar="$core_jar" runClientGametest --no-daemon --stacktrace
 
       - name: Enforce VanillaTweaks ownership boundary
@@ -106,14 +106,14 @@ jobs:
           archive="$(sed -n 's/^archives_base_name=//p' gradle.properties)"
           artifact="${archive}-${version}.jar"
           core_source="$(git -C .lockstep/TotemCore rev-parse HEAD)"
-          test "$core_source" = 58deabdd4a81bc751679876f202a3fa062729c58
-          core_sha="$(sha512sum .lockstep/TotemCore/build/libs/totem-core-0.7.22.jar | awk '{print $1}')"
+          test "$core_source" = 424b90dc3929caa8c1afcfca7e63c50a64bde669
+          core_sha="$(sha512sum .lockstep/TotemCore/build/libs/totem-core-0.7.23.jar | awk '{print $1}')"
           test "$core_sha" = "$(jq -er .core_artifact_sha512 ".github/staging/release-validation-${version}.json")"
           sha="$(sha512sum "build/libs/${artifact}" | awk '{print $1}')"
           test "$sha" = "$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
           mkdir -p build/release-artifact
           cp "build/libs/${artifact}" build/release-artifact/
-          jq -n --arg repository "$GITHUB_REPOSITORY" --arg source "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core_source "$core_source" --arg core_sha "$core_sha" '{repository:$repository,source_commit:$source,run_id:$run,run_attempt:$attempt,version:$version,artifact:$artifact,sha512:$sha,core_version:"0.7.22",core_source_commit:$core_source,core_artifact_sha512:$core_sha}' > build/release-artifact/build-provenance.json
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg source "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core_source "$core_source" --arg core_sha "$core_sha" '{repository:$repository,source_commit:$source,run_id:$run,run_attempt:$attempt,version:$version,artifact:$artifact,sha512:$sha,core_version:"0.7.23",core_source_commit:$core_source,core_artifact_sha512:$core_sha}' > build/release-artifact/build-provenance.json
 
       - name: Upload immutable validated release artifact
         uses: actions/upload-artifact@v4

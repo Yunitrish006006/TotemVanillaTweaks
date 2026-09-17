@@ -33,12 +33,12 @@ concurrency:
 env:
   MODULE_ID: totem-vanilla-tweaks
   # Match the gameplay Build and Production Runtime dependency.
-  CORE_REF: 58deabdd4a81bc751679876f202a3fa062729c58
+  CORE_REF: 424b90dc3929caa8c1afcfca7e63c50a64bde669
   RELEASE_REQUEST: .github/staging/modrinth-release-request.json
   FABRIC_API_PROJECT_ID: P7dR8mSH
   # The former first-party TotemCore project/version IDs are no longer public.
   # Keep this an exact external dependency instead of guessing a same-name project.
-  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.22.jar
+  TOTEM_CORE_DEPENDENCY_FILE: totem-core-0.7.23.jar
 
 jobs:
   publish:
@@ -240,7 +240,7 @@ jobs:
           expected_sha="$(jq -er .sha512 ".github/staging/release-validation-${version}.json")"
           core_sha="$(jq -er .core_artifact_sha512 ".github/staging/release-validation-${version}.json")"
           test "$sha" = "$expected_sha"
-          jq -e --arg repo "$GITHUB_REPOSITORY" --arg source "$RELEASE_SHA" --arg run "$BUILD_RUN_ID" --arg attempt "$BUILD_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core "$CORE_REF" --arg core_sha "$core_sha" '.repository==$repo and .source_commit==$source and .run_id==$run and .run_attempt==$attempt and .version==$version and .artifact==$artifact and .sha512==$sha and .core_version=="0.7.22" and .core_source_commit==$core and .core_artifact_sha512==$core_sha' build/libs/build-provenance.json >/dev/null
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg source "$RELEASE_SHA" --arg run "$BUILD_RUN_ID" --arg attempt "$BUILD_RUN_ATTEMPT" --arg version "$version" --arg artifact "$artifact" --arg sha "$sha" --arg core "$CORE_REF" --arg core_sha "$core_sha" '.repository==$repo and .source_commit==$source and .run_id==$run and .run_attempt==$attempt and .version==$version and .artifact==$artifact and .sha512==$sha and .core_version=="0.7.23" and .core_source_commit==$core and .core_artifact_sha512==$core_sha' build/libs/build-provenance.json >/dev/null
 
       - name: Publish and verify
         id: modrinth
@@ -275,7 +275,7 @@ jobs:
           if ! unzip -p "$artifact" fabric.mod.json >/tmp/fabric.mod.json; then
             fail_release 'release JAR has no readable fabric.mod.json.'
           fi
-          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.22 <0.8.0' \
+          if ! jq -e --arg id "$MODULE_ID" --arg v "$v" --arg mc "~${mc}" --arg core '>=0.7.23 <0.8.0' \
             '.id==$id and .version==$v and .depends.minecraft==$mc and .depends["totem-core"]==$core' \
             /tmp/fabric.mod.json >/dev/null; then
             fail_release 'release JAR Fabric metadata does not match module, version, Minecraft, or TotemCore requirements.'
@@ -335,7 +335,7 @@ jobs:
           core_version="$(jq -er .core_version build/libs/build-provenance.json)"
           core_dependency_file="totem-core-${core_version}.jar"
           if [[ "$core_dependency_file" != "$TOTEM_CORE_DEPENDENCY_FILE" ]]; then
-            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.22.jar.'
+            fail_release 'pinned TotemCore artifact does not match required external file totem-core-0.7.23.jar.'
           fi
 
           fabric_project="$FABRIC_API_PROJECT_ID"

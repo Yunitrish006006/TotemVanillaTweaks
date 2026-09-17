@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Yunitrish006006/TotemCore
-          ref: 58deabdd4a81bc751679876f202a3fa062729c58
+          ref: 424b90dc3929caa8c1afcfca7e63c50a64bde669
           path: .lockstep/TotemCore
           persist-credentials: false
 
@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.22.jar"
+          core_jar="${GITHUB_WORKSPACE}/.lockstep/TotemCore/build/libs/totem-core-0.7.23.jar"
           ./gradlew -PtotemCoreJar="$core_jar" clean assemble runProductionClientGameTest --no-daemon --stacktrace
 
       - name: Inspect production artifact ownership
