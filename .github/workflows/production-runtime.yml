@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  LIBGL_ALWAYS_SOFTWARE: '1'
+  MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
+
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -37,7 +41,7 @@ jobs:
           java-version: '25'
 
       - name: Install Mesa software rendering
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dri libglx-mesa0 mesa-utils
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dri libgl1-mesa-glx libglx-mesa0 mesa-utils xserver-xorg-core xserver-xorg-video-dummy
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
