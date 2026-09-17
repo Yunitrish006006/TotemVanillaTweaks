@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd .lockstep/TotemCore && ./gradlew assemble --no-daemon --stacktrace)
+          (cd .lockstep/TotemCore && ./gradlew assemble --init-script ${GITHUB_WORKSPACE}/.github/scripts/lavapipe.gradle --no-daemon --stacktrace)
 
       - name: Run built-artifact gameplay Client GameTest
         shell: bash
@@ -51,7 +51,7 @@ jobs:
           export SDL_VIDEO_DRIVER=x11
           export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
           export VK_ICD_FILENAMES="$VK_DRIVER_FILES"
-          ./gradlew -PtotemCoreJar="$core_jar" clean assemble runProductionClientGameTest --no-daemon --stacktrace
+          ./gradlew -PtotemCoreJar="$core_jar" clean assemble runProductionClientGameTest --init-script ${GITHUB_WORKSPACE}/.github/scripts/lavapipe.gradle --no-daemon --stacktrace
 
       - name: Inspect production artifact ownership
         shell: bash
