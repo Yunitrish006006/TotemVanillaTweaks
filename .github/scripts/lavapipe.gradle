@@ -1,6 +1,7 @@
 allprojects {
     afterEvaluate {
         tasks.matching { it.name in ['runClientGameTest', 'runClientGametest', 'runProductionClientGameTest', 'runIntegrationClientGametest'] }.configureEach {
+            if (it.hasProperty('useXvfb')) it.useXvfb.set(false)
             if (it.hasProperty('programArgs')) programArgs.addAll(['--graphicsBackend', 'OPENGL'])
             else if (it.hasProperty('args')) args('--graphicsBackend', 'OPENGL')
         }
