@@ -6,6 +6,12 @@ config_dir="$(mktemp -d)"
 config="$config_dir/xorg.conf"
 log="$config_dir/xorg.log"
 cat >"$config" <<'EOF'
+Section "ServerFlags"
+    Option "AutoAddDevices" "false"
+    Option "AutoEnableDevices" "false"
+    Option "AllowMouseOpenFail" "true"
+EndSection
+
 Section "ServerLayout"
     Identifier "TotemLayout"
     Screen 0 "TotemScreen"
@@ -15,12 +21,13 @@ Section "Device"
     Identifier "TotemDummy"
     Driver "dummy"
     VideoRam 256000
+    Option "ConstantDPI" "true"
 EndSection
 
 Section "Monitor"
     Identifier "TotemMonitor"
-    HorizSync 30-80
-    VertRefresh 50-75
+    HorizSync 5-1000
+    VertRefresh 5-200
 EndSection
 
 Section "Screen"
@@ -33,12 +40,13 @@ Section "Screen"
     SubSection "Display"
         Depth 24
         Visual "TrueColor"
+        Virtual 1280 720
         Modes "1280x720"
     EndSubSection
 EndSection
 EOF
 
-sudo Xorg "$display" -ac -noreset -config "$config" +extension GLX +extension RANDR +iglx >"$log" 2>&1 &
+sudo Xorg "$display" -ac -noreset -config "$config" +extension GLX +extension RANDR +extension RENDER +iglx >"$log" 2>&1 &
 xorg_pid=$!
 cleanup() {
     set +e
