@@ -65,5 +65,4 @@ if [[ "$ready" != true ]]; then
     exit 1
 fi
 
-export LIBGL_ALWAYS_INDIRECT="${LIBGL_ALWAYS_INDIRECT:-1}"
 DISPLAY="$display" "$@"
