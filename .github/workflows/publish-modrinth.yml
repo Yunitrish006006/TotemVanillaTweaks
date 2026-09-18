@@ -179,7 +179,9 @@ jobs:
           set -euo pipefail
           release_sha="$(git rev-parse HEAD)"
           echo "source=$release_sha" >> "$GITHUB_OUTPUT"
-          for workflow in build.yml production-runtime.yml; do
+          # Client/visual production runtime is manual/local validation and is
+          # intentionally not a release gate.
+          for workflow in build.yml; do
             passed=false
             for attempt in {1..120}; do
               runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${release_sha}&event=push&per_page=10")"
