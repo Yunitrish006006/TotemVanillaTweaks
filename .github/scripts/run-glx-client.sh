@@ -38,7 +38,7 @@ Section "Screen"
 EndSection
 EOF
 
-sudo Xorg "$display" -ac -noreset -config "$config" +extension GLX +extension RANDR >"$log" 2>&1 &
+sudo Xorg "$display" -ac -noreset -config "$config" +extension GLX +extension RANDR +iglx >"$log" 2>&1 &
 xorg_pid=$!
 cleanup() {
     set +e
@@ -65,4 +65,5 @@ if [[ "$ready" != true ]]; then
     exit 1
 fi
 
+export LIBGL_ALWAYS_INDIRECT="${LIBGL_ALWAYS_INDIRECT:-1}"
 DISPLAY="$display" "$@"
