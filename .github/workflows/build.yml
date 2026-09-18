@@ -72,8 +72,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.30'
-          test -f build/libs/totem-vanilla-tweaks-0.1.30.jar
+          test "$(sed -n 's/^mod_version=//p' gradle.properties)" = '0.1.31'
+          test -f build/libs/totem-vanilla-tweaks-0.1.31.jar
           ! find src/main/java -type f -name 'Observer*.java' | grep -q .
           ! grep -R -n -E '/observeui|Observer(Server|Client)Runtime|dev\.totem\.vanillatweaks\.observer' src/main
           test ! -d src/integrationGametest
