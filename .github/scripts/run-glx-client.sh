@@ -28,8 +28,11 @@ Section "Screen"
     Device "TotemDummy"
     Monitor "TotemMonitor"
     DefaultDepth 24
+    DefaultFbBpp 32
+    Option "AllowEmptyInitialConfiguration" "true"
     SubSection "Display"
         Depth 24
+        Visual "TrueColor"
         Modes "1280x720"
     EndSubSection
 EndSection
@@ -63,4 +66,3 @@ if [[ "$ready" != true ]]; then
 fi
 
 DISPLAY="$display" "$@"
-
