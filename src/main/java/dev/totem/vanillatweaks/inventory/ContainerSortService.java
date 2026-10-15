@@ -46,10 +46,17 @@ public final class ContainerSortService {
     private ContainerSortService() {
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public static boolean sortOpenContainer(ServerPlayer player, SortBackpackPayload.Target target) {
         AbstractContainerMenu menu = player.containerMenu;
         if (menu == null || !menu.stillValid(player)) {
             return false;
+        }
+
+        for (java.util.function.BiFunction provider : net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("totem:container_sort_server_v1", java.util.function.BiFunction.class)) {
+            Boolean result = (Boolean) provider.apply(player, target == SortBackpackPayload.Target.PLAYER);
+            if (result != null) return result;
         }
 
         if (target == SortBackpackPayload.Target.PLAYER) {

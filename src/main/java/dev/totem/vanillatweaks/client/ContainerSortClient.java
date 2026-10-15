@@ -11,6 +11,20 @@ public final class ContainerSortClient {
     private ContainerSortClient() {
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static boolean requestSortForScreen(AbstractContainerScreen<?> screen, Slot hoveredSlot) {
+        if (screen instanceof dev.totem.core.api.v1.client.observer.ObserverReadOnlyScreen readOnly
+                && readOnly.totem$isObserverReadOnly()) return true;
+        for (java.util.function.BiFunction provider : net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getEntrypoints("totem:container_sort_client_v1", java.util.function.BiFunction.class)) {
+            if (Boolean.TRUE.equals(provider.apply(screen, hoveredSlot))) return true;
+        }
+        var target = resolveTarget(screen, hoveredSlot, Minecraft.getInstance());
+        if (target == null) return false;
+        requestSort(Minecraft.getInstance(), target);
+        return true;
+    }
+
     public static void requestSort(Minecraft minecraft, SortBackpackPayload.Target target) {
         if (minecraft.player != null && ClientPlayNetworking.canSend(SortBackpackPayload.TYPE)) {
             ClientPlayNetworking.send(new SortBackpackPayload(target));

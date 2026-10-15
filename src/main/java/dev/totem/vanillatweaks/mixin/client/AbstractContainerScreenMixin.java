@@ -36,15 +36,7 @@ public abstract class AbstractContainerScreenMixin {
         }
 
         if (TotemVanillaTweaksClient.sortBackpackKey().matches(event)) {
-            SortBackpackPayload.Target target = ContainerSortClient.resolveTarget(
-                    screen,
-                    hoveredSlot,
-                    Minecraft.getInstance()
-            );
-            if (target != null) {
-                ContainerSortClient.requestSort(Minecraft.getInstance(), target);
-                callback.setReturnValue(true);
-            }
+            if (ContainerSortClient.requestSortForScreen(screen, hoveredSlot)) callback.setReturnValue(true);
         }
     }
 
@@ -55,15 +47,8 @@ public abstract class AbstractContainerScreenMixin {
             CallbackInfoReturnable<Boolean> callback
     ) {
         if (TotemVanillaTweaksClient.sortBackpackKey().matchesMouse(event)) {
-            SortBackpackPayload.Target target = ContainerSortClient.resolveTarget(
-                    (AbstractContainerScreen<?>) (Object) this,
-                    hoveredSlot,
-                    Minecraft.getInstance()
-            );
-            if (target != null) {
-                ContainerSortClient.requestSort(Minecraft.getInstance(), target);
+            if (ContainerSortClient.requestSortForScreen((AbstractContainerScreen<?>) (Object) this, hoveredSlot))
                 callback.setReturnValue(true);
-            }
         }
     }
 }
