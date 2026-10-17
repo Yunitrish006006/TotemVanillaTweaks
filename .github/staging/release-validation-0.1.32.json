@@ -1,0 +1,12 @@
+{
+  "version": "0.1.32",
+  "java": 25,
+  "minecraft": "26.3",
+  "artifact": "totem-vanilla-tweaks-0.1.32.jar",
+  "sha512": "1bf1ca73870a6a6da8cef1b51f911150f3ceaeacc1a60bced82ac1679bd56a36d54adcff423f242e4ea0267889d8f2a7ed3f438ccbb8c2f5de886f2422aa2508",
+  "core_version": "0.7.23",
+  "core_source_commit": "424b90dc3929caa8c1afcfca7e63c50a64bde669",
+  "core_artifact_sha512": "c3d2f88252ee23500d91f7d49a742f47ae981f25acf1e3cdfcf76c81aa36319943ea92f7aa0a7caf1685d89cb765a1e83ac6a0ee1f1af00cec9ea071cdbe923d",
+  "validation_scope": "Published0.1.31 SHA512cb1ff45... independently inspected: InventoryMenu unconditionally PLAYER, no owner-provider dispatch. Prior local integration test JAR was a different same-version binary SHA512758ee4a3cea1f05be641fed41e1f14d58bc78dc39e4f17f883b32a6c51b30a0c44ad214507a14787299a865385a06b2979cc5e297e641b49cfbf94581b2a62a3. New0.1.32 has all23 production classes/resources identical to that tested integration candidate except fabric.mod.json version. Reuse Remnant0.2.32 native client VT-present suite and314-marker scoped owner-UI E2E for exact matching integration classes. Old official JAR fails new packaged integration validator; new JAR passes, including both mouse/key dispatch paths. Exact-source CI Build/ProductionRuntime and immutable artifact/publisher readback pending.",
+  "independent_review": "Official binary root cause, packaged integration validator, release workflows,23-class/version-only artifact equivalence, hash and preflight independently reviewed with no blockers. Exact-source Build/ProductionRuntime, publisher dry run and immutable artifact/readback remain required."
+}

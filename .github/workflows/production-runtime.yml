@@ -69,7 +69,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jar_file="build/libs/totem-vanilla-tweaks-0.1.30.jar"
+          version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          jar_file="build/libs/totem-vanilla-tweaks-${version}.jar"
+          python3 .github/scripts/verify-sort-integration.py "$jar_file"
           test -f "$jar_file"
           if jar tf "$jar_file" | grep -E 'dev/totem/vanillatweaks/(observer/|network/Observer|client/Observer|mixin/.*/?Observer|mixin/Observer)'; then
             echo 'Embedded Observer classes remain in the VanillaTweaks artifact.' >&2
